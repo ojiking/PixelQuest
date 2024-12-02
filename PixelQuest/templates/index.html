@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pixel Quest</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            text-align: center;
+            background-color: #f4f4f4;
+            background-image: url("{{ url_for('static', filename='image/pixel_back.jpg') }}");
+            background-repeat: repeat; /* 배경 이미지 반복 */
+            background-size: 211px 211px; /* 타일 크기 조정 */
+        }
+        header {
+            background-color: #333;
+            padding: 10px 0;
+        }
+        header img {
+            max-width: 100%;
+            height: auto;
+        }
+        .container {
+            margin: 20px auto;
+            max-width: 800px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        img.result {
+            max-width: 100%;
+            border: 1px solid #ccc;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <img src="{{ url_for('static', filename='image/rogo.png') }}" alt="Pixel Quest Logo">
+    </header>
+    <div class="container">
+        <h1>Pixel Art Converter</h1>
+        <form id="pixel-form" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="image">Upload Image:</label>
+                <input type="file" id="image" name="image" accept="image/*"><br><br>
+            </div>
+            <div class="form-group">
+                <label for="pixel_size">Pixel Size:</label>
+                <input type="range" id="pixel_size" name="pixel_size" min="1" max="50" value="8">
+                <span id="pixel_size_value">8</span><br><br>
+            </div>
+            <div class="form-group">
+                <label for="gap">Pixel Gap:</label>
+                <input type="range" id="gap" name="gap" min="0" max="20" value="0">
+                <span id="gap_value">0</span><br><br>
+            </div>
+            <div class="form-group">
+                <label for="shape">Pixel Shape:</label>
+                <select id="shape" name="shape">
+                    <option value="square">Square</option>
+                    <option value="circle">Circle</option>
+                    <option value="diamond">Diamond</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="color_filter">Color Filter:</label>
+                <select id="color_filter" name="color_filter">
+                    <option value="original">Original</option>
+                    <option value="grayscale">Grayscale</option>
+                    <option value="sepia">Sepia</option>
+                    <option value="palette">16 Colors</option>
+                    <option value="256colors">256 Colors</option>
+                    <option value="8bit_green">8bit Green</option>
+                </select>
+            </div>
+        </form>
+        <h2>Result:</h2>
+        <img id="result-image" class="result" src="" alt="Converted Image">
+        <br>
+        <a id="download-btn" href="#" style="display:none;">Download</a>
+    </div>
+    <script>
+        const form = document.getElementById('pixel-form');
+        const imageInput = document.getElementById('image');
+        const pixelSizeSlider = document.getElementById('pixel_size');
+        const gapSlider = document.getElementById('gap');
+        const shapeSelect = document.getElementById('shape');
+        const colorFilterSelect = document.getElementById('color_filter');
+        const resultImage = document.getElementById('result-image');
+        const downloadBtn = document.getElementById('download-btn');
+
+        [pixelSizeSlider, gapSlider, shapeSelect, colorFilterSelect].forEach(element => {
+            element.addEventListener('input', () => {
+                if (imageInput.files.length > 0) processImage();
+            });
+        });
+
+        imageInput.addEventListener('change', () => {
+            if (imageInput.files.length > 0) processImage();
+        });
+
+        async function processImage() {
+            const formData = new FormData();
+            formData.append('image', imageInput.files[0]);
+            formData.append('pixel_size', pixelSizeSlider.value);
+            formData.append('gap', gapSlider.value);
+            formData.append('shape', shapeSelect.value);
+            formData.append('color_filter', colorFilterSelect.value);
+
+            const response = await fetch('/process', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                resultImage.src = url;
+                downloadBtn.style.display = 'block';
+                downloadBtn.href = url;
+                downloadBtn.download = 'pixel-art.png';
+            } else {
+                alert('Error processing image!');
+            }
+        }
+    </script>
+</body>
+</html>
