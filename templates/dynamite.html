@@ -302,7 +302,8 @@ function startDay() {
   while (schools.length < maxSchools()) spawnSchool(pickKind(), false);
   for (const sc of schools) sc.mult = daySpeed(day);
   banner = { str: `${day}일차 · 목표 ${target}점`, t: 2.8 };
-  tunaT = rand(10, 18); swimT = rand(16, 28); swimmer = null; fatal = null;
+  tunaT = rand(10, 18); swimT = firstSwimDelay(); swimmer = null; fatal = null;
+  if (day === SWIM_DAY) banner = { str: `${day}일차 · 목표 ${target}점 · 오늘부터 수영객이 나옵니다`, t: 3.4 };
 }
 const maxSchools = () => 6 + Math.min(3, day - 1);
 function pickKind() {
@@ -345,6 +346,9 @@ function spawnTuna() {
 }
 
 // ===== 튜브 탄 수영객 =====
+const SWIM_DAY = 3;   // 이 날부터 등장
+// 등장 첫날 이전에는 나오지 않고, 나오는 날도 하루가 어느 정도 지난 뒤에 처음 나타난다
+const firstSwimDelay = () => day < SWIM_DAY ? Infinity : rand(28, 42) * Math.max(0.6, 1 - (day - SWIM_DAY) * 0.1);
 function spawnSwimmer() {
   const left = Math.random() < 0.5;
   swimmer = { x: left ? -10 : VW + 10, y: rand(28, SHORE - 60), dir: left ? 1 : -1, sp: rand(6, 9), t: 0, kick: 0 };
@@ -367,7 +371,7 @@ function updateSwimmer(dt) {
     for (let i = 0; i < 3; i++) parts.push({ x: w.x - w.dir * 7, y: w.y + 1, z: 0, vx: -w.dir * rand(4, 12), vy: rand(-4, 4), vz: rand(12, 25), life: 0.4, max: 0.4, type: 'drop' });
     ripples.push({ x: w.x, y: w.y, r: 6, max: 11, life: 0.8 });
   }
-  if (w.x < -30 || w.x > VW + 30) { swimmer = null; swimT = rand(25, 45); }
+  if (w.x < -30 || w.x > VW + 30) { swimmer = null; swimT = rand(30, 50) * Math.max(0.6, 1 - (day - SWIM_DAY) * 0.1); }
 }
 function swimmerHit(ex) {
   if (!swimmer || swimmer.dead || fatal) return;
@@ -1510,7 +1514,7 @@ const RULES = [
   ['📅', '하루와 목표', '하루에 다이너마이트 <b>6개</b>. 그날 <b>목표 점수</b>를 넘기면 다음 날로. 넘긴 점수 <b>100점마다</b> 내일 다이너마이트 +1.'],
   ['🎯', '실력 보상', '한 방에 <b>6마리 이상</b>이면 다이너마이트 환급(12마리 이상 2개). 3마리 이상을 <b>연속</b>으로 잡으면 점수가 최대 2배.'],
   ['⚡', '황다랑어', '가끔 <b>아주 빠른 그림자</b>가 호수를 가로지릅니다. 황다랑어 한 마리 <b>150점</b>. 지나갈 길목을 미리 노리세요.'],
-  ['🛟', '튜브 탄 수영객', '가끔 튜브를 타고 떠다니는 사람이 나타납니다. 폭발에 휘말리면 <b>살인자</b>가 되어 그대로 게임 오버. 깊게 터뜨리면 수면 위 피해가 줄어듭니다.'],
+  ['🛟', '튜브 탄 수영객', '<b>3일차부터</b> 가끔 튜브를 타고 떠다니는 사람이 나타납니다. 폭발에 휘말리면 <b>살인자</b>가 되어 그대로 게임 오버. 깊게 터뜨리면 수면 위 피해가 줄어듭니다.'],
   ['🪙', '동전과 가게', '점수만큼 <b>동전</b>이 쌓입니다. 가게 장비(가방 · 화약 · 긴 도화선 · 부적)는 게임이 끝나도 계속 남습니다.'],
 ];
 let rulePage = 0;
@@ -1619,7 +1623,7 @@ requestAnimationFrame(frame);
 
 // 디버그/테스트용 훅
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; },
-  get fish() { return fish.length; }, spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
+  get fish() { return fish.length; }, spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
 </script>
 </body>
