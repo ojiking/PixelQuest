@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>다이너마이트 낚시</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #0b1d26; overflow: hidden;
+  html, body { margin: 0; height: 100%; color-scheme: dark; background: #0b1d26; overflow: hidden;
     touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
     font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
-  canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; cursor: crosshair; }
+  canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; cursor: crosshair; }
   .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
     background: rgba(5, 15, 20, .74); color: #f4ead2; z-index: 5; }
   .overlay.hidden { display: none; }
@@ -93,10 +93,11 @@ let S = 3, VW = 200, VH = 300, SHORE = 270;
 const player = { x: 100, y: 280, stun: 0, throwAnim: 0 };
 
 function resize() {
-  S = Math.max(2, Math.floor(Math.min(innerWidth, innerHeight) / 200));
-  VW = Math.ceil(innerWidth / S); VH = Math.ceil(innerHeight / S);
+  const W = cvs.clientWidth || innerWidth, H = cvs.clientHeight || innerHeight;
+  S = Math.max(2, Math.floor(Math.min(W, H) / 200));
+  VW = Math.ceil(W / S); VH = Math.ceil(H / S);
   SHORE = VH - 26;
-  cvs.width = innerWidth; cvs.height = innerHeight;
+  cvs.width = W; cvs.height = H;
   for (const c of [buf, deepC, shC]) { c.width = VW; c.height = VH; }
   player.x = Math.round(VW / 2); player.y = SHORE + 12;
 }
@@ -444,7 +445,7 @@ function aimInfo(h) {
   return { len, p, ang, lx, ly, hx, hy, fd, flight, pdepth };
 }
 
-function ptr(e) { return { x: e.clientX / S, y: e.clientY / S }; }
+function ptr(e) { const r = cvs.getBoundingClientRect(); return { x: (e.clientX - r.left) / S, y: (e.clientY - r.top) / S }; }
 cvs.addEventListener('pointerdown', e => {
   e.preventDefault();
   if (state !== 'play') return;
