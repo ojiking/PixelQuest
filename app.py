@@ -9,6 +9,11 @@ app = Flask(__name__)
 def home():
     return render_template('index.html')  # HTML 파일 연결
 
+# 원숭이 똥 피하기 게임
+@app.route('/monkey')
+def monkey_game():
+    return render_template('monkey.html')
+
 # 색상 조정 함수
 def apply_color_filter(image, filter_type):
     if filter_type == "grayscale":
