@@ -27,6 +27,20 @@
   .bigscore { font-size: 42px; font-weight: 800; color: #f2c14e; line-height: 1.1; }
   .newbest { color: #7fffb0; font-weight: 700; }
   a.home { display: inline-block; margin-top: 12px; color: #9cc; font-size: 12px; }
+  .btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  button.ghost { background: #24505e; box-shadow: 0 4px 0 #0e2a33; }
+  button.ghost:active { box-shadow: 0 1px 0 #0e2a33; }
+  button.charm { background: #7b5cd6; box-shadow: 0 4px 0 #3e2a80; }
+  button:disabled { opacity: .4; cursor: default; }
+  .coins { color: #ffd76a; font-weight: 800; font-size: 15px; margin: 4px 0 12px; }
+  .panel { max-height: calc(100% - 32px); overflow-y: auto; box-sizing: border-box; }
+  .item { display: flex; gap: 10px; align-items: center; text-align: left; background: #0d2530; padding: 9px 10px; margin-bottom: 8px; }
+  .item .info { flex: 1; min-width: 0; }
+  .item .nm { font-weight: 800; font-size: 14.5px; }
+  .item .ds { font-size: 12px; opacity: .8; line-height: 1.45; }
+  .item .lv { color: #f2c14e; font-size: 12px; letter-spacing: 2px; }
+  .item button { font-size: 13.5px; padding: 7px 10px; white-space: nowrap; }
+  .earn { color: #ffd76a; }
 </style>
 </head>
 <body>
@@ -45,10 +59,14 @@
       🔥 도화선은 <b>깊게 → 중간 → 얕게 → 공중</b> 순서로 타 들어가고, 구간이 바뀔 때마다 <b>딸깍</b> 소리가 납니다.<br>
       🐟 진한 그림자는 얕은 곳, 흐린 그림자는 깊은 곳에 있습니다. 깊을수록 비싼 물고기가 있습니다.<br>
       💥 너무 오래 들고 있으면 손에서 터집니다!<br>
-      📅 하루에 다이너마이트 <b>6개</b>. 그날 <b>목표 점수</b>를 넘기면 다음 날로 넘어갑니다. 날이 갈수록 목표가 오르고 물고기가 빨라집니다.<br>
+      📅 하루에 다이너마이트 <b>6개</b>. 그날 <b>목표 점수</b>를 넘기면 다음 날로 넘어갑니다.<br>
+      🎯 <b>한 방에 6마리 이상</b> 잡으면 다이너마이트를 돌려받습니다. 연속으로 잘 맞히면 점수 배율이 오릅니다.<br>
+      📦 목표를 넘긴 점수 <b>100점마다</b> 다음 날 다이너마이트 +1.<br>
+      🪙 잡은 만큼 <b>동전</b>이 쌓이고, 가게 장비는 게임이 끝나도 남습니다.<br>
       ⚠ 거대한 그림자: 상어(2발), 대왕오징어(촉수 3발)는 잡고, 고래는 보호종이니 <b>맞히지 마세요</b>.
     </div>
-    <button id="startBtn">시작</button><br>
+    <div class="coins" id="startCoins"></div>
+    <div class="btns"><button id="startBtn">시작</button><button class="ghost" data-shop>🪙 가게</button></div>
     <a class="home" href="/">← PixelQuest로 돌아가기</a>
   </div>
 </div>
@@ -58,7 +76,7 @@
     <h1 id="clearTitle">1일차 성공!</h1>
     <div class="bigscore" id="clearScore">0</div>
     <div class="stats" id="clearStats"></div>
-    <button id="nextBtn">다음 날</button>
+    <div class="btns"><button id="nextBtn">다음 날</button><button class="ghost" data-shop>🪙 가게</button></div>
   </div>
 </div>
 
@@ -67,8 +85,21 @@
     <h1 id="endTitle">오늘의 조과</h1>
     <div class="bigscore" id="endScore">0</div>
     <div class="stats" id="endStats"></div>
-    <button id="againBtn">다시 하기</button><br>
+    <div class="btns">
+      <button class="charm" id="charmBtn" hidden>🧿 부적 사용: 오늘 다시</button>
+      <button id="againBtn">다시 하기</button><button class="ghost" data-shop>🪙 가게</button>
+    </div>
     <a class="home" href="/">← PixelQuest로 돌아가기</a>
+  </div>
+</div>
+
+<div class="overlay hidden" id="shopOv">
+  <div class="panel">
+    <h1>낚시 가게</h1>
+    <div class="sub">산 장비는 게임이 끝나도 계속 남습니다</div>
+    <div class="coins" id="shopCoins"></div>
+    <div id="shopList"></div>
+    <button class="ghost" id="shopClose">닫기</button>
   </div>
 </div>
 
@@ -83,8 +114,8 @@ const buf = document.createElement('canvas'), b = buf.getContext('2d');         
 const deepC = document.createElement('canvas'), dctx = deepC.getContext('2d');   // 깊은 그림자 (블러)
 const shC = document.createElement('canvas'), sctx = shC.getContext('2d');       // 얕은 그림자
 
-const FUSE = 4.0;        // 도화선 총 길이(초)
-const R = 30;            // 폭발 치명 반경(px, 가상 해상도)
+let FUSE = 4.0;          // 도화선 총 길이(초) — 장비로 늘어남
+let R = 30;              // 폭발 치명 반경(px, 가상 해상도) — 장비로 늘어남
 const DZ = 70;           // 깊이 1.0 = 70px 거리로 환산
 const SINK = 0.45;       // 초당 가라앉는 깊이
 const START_DYN = 6;                 // 하루에 받는 다이너마이트
@@ -195,6 +226,22 @@ const SHADOW = '#05202a';
 let state = 'menu';
 let time = 0, score = 0, dyn = START_DYN, best = 0, bestDay = 0;
 let day = 1, dayScore = 0, target = 250, nextBonus = 0;
+let streak = 0, charmsLeft = 0;
+
+// ===== 영구 성장: 동전 + 장비 =====
+const UPGRADES = [
+  { id: 'bag',   name: '다이너마이트 가방', desc: '매일 받는 다이너마이트 +1', costs: [60, 160, 320] },
+  { id: 'power', name: '화약 강화',         desc: '폭발 범위 +10%',            costs: [80, 200, 400] },
+  { id: 'fuse',  name: '긴 도화선',         desc: '도화선 +0.6초 (구간이 넓어져 조절이 쉬움)', costs: [50, 150] },
+  { id: 'charm', name: '재기의 부적',       desc: '목표 미달 때 그날을 한 번 더 (판마다)', costs: [250, 600] },
+];
+let meta = { coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0 } };
+try { const m = JSON.parse(localStorage.getItem('dynfish_meta') || 'null'); if (m && m.up) meta = { coins: m.coins | 0, up: Object.assign(meta.up, m.up) }; } catch (e) {}
+function saveMeta() { try { localStorage.setItem('dynfish_meta', JSON.stringify(meta)); } catch (e) {} }
+function applyUpgrades() { R = 30 * (1 + 0.1 * meta.up.power); FUSE = 4.0 + 0.6 * meta.up.fuse; }
+const dailyDyn = () => START_DYN + meta.up.bag;
+const streakMult = n => 1 + 0.25 * Math.min(n, 4);   // 연속 명중 점수 배율 (최대 x2)
+applyUpgrades();
 let schools = [], fish = [], bombs = [], parts = [], ripples = [], blasts = [], combos = [], texts = [];
 let big = null, nextBig = 15, schoolSpawnT = 0;
 let hold = null, shake = 0, flash = 0, ink = 0, endT = 0, banner = null;
@@ -203,7 +250,8 @@ let stats = {};
 try { best = +localStorage.getItem('dynfish_best') || 0; bestDay = +localStorage.getItem('dynfish_bestday') || 0; } catch (e) {}
 
 function newGame() {
-  time = 0; score = 0; day = 1; nextBonus = 0;
+  time = 0; score = 0; day = 1; nextBonus = 0; streak = 0;
+  applyUpgrades(); charmsLeft = meta.up.charm;
   schools = []; fish = []; parts = []; ripples = []; blasts = []; texts = [];
   stats = { fish: 0, bestCombo: 0, catches: [], whaleHits: 0, kinds: { crucian: 0, carp: 0, catfish: 0 } };
   ['crucian', 'crucian', 'carp', 'carp', 'catfish'].forEach(k => spawnSchool(k, false));
@@ -211,7 +259,7 @@ function newGame() {
 }
 
 function startDay() {
-  dyn = START_DYN + nextBonus; nextBonus = 0;
+  dyn = dailyDyn() + nextBonus; nextBonus = 0;
   dayScore = 0; target = dayTarget(day);
   bombs = []; combos = [];
   big = null; nextBig = bigDelay(14, 18); schoolSpawnT = 4;
@@ -384,7 +432,7 @@ function bigHit(ex) {
     if (big.type === 'shark') {
       big.hp--;
       if (big.hp <= 0) {
-        big.dead = true; ex.kills += 3;
+        big.dead = true; ex.kills += 3; ex.bigKill = true;
         texts.push(mkText(big.x, big.y, '상어 포획!', '#ff8a5b', 2, true));
       } else {
         big.flee = 2.5; big.ang = Math.atan2(big.y - ex.y, big.x - ex.x);
@@ -405,7 +453,7 @@ function bigHit(ex) {
     }
     if (!hit) return;
     big.hp--;
-    if (big.hp <= 0) { big.dead = true; ex.kills += 5; texts.push(mkText(big.x, big.y, '대왕오징어 격파!', '#c9a6ff', 2.2, true)); }
+    if (big.hp <= 0) { big.dead = true; ex.kills += 5; ex.bigKill = true; texts.push(mkText(big.x, big.y, '대왕오징어 격파!', '#c9a6ff', 2.2, true)); }
     else texts.push(mkText(big.x, big.y - 6, `촉수 명중! (${3 - big.hp}/3)`, '#c9a6ff', 1.6));
   }
 }
@@ -416,7 +464,7 @@ function addScore(n) { score = Math.max(0, score + n); dayScore += n; }
 
 // ===== 폭발 =====
 function explode(x, y, depth) {
-  const ex = { x, y, depth, kills: 0, pts: 0, t: 0 };
+  const ex = { x, y, depth, kills: 0, pts: 0, t: 0, mult: streakMult(streak) };
   combos.push(ex);
   const ed = Math.max(0, depth), rr = depth < 0 ? R * 0.7 : R;
   for (const f of fish) {
@@ -451,6 +499,7 @@ function explode(x, y, depth) {
 }
 
 function handBlast() {
+  streak = 0;
   const hx = player.x, hy = player.y - 6;
   player.stun = 1.4;
   shake = 7; flash = 0.8;
@@ -605,9 +654,19 @@ function update(dt) {
       else if (c.kills >= 4) { msg = `좋아! x${c.kills}`; col = '#8fe3ff'; }
       else if (c.kills === 0 && c.depth >= 0) { msg = '꽝…'; col = '#9aa'; }
       if (msg) texts.push(mkText(c.x, c.y - 14, msg, col, c.kills >= 9 ? 1.8 : 1.3, c.kills >= 4));
-      if (c.kills >= 10) {
-        dyn++; sfx.bonus();
-        texts.push(mkText(c.x, c.y + 4, '+1 다이너마이트!', '#ff9f43', 1.3, true));
+      // 실력 보상: 한 방에 많이 잡으면 다이너마이트 환급
+      const refund = (c.kills >= 12 ? 2 : c.kills >= 6 ? 1 : 0) + (c.bigKill ? 2 : 0);
+      if (refund) {
+        dyn += refund; sfx.bonus();
+        texts.push(mkText(c.x, c.y + 4, `+${refund} 다이너마이트!`, '#ff9f43', 1.3, true));
+      }
+      // 연속 명중: 3마리 이상이면 이어지고, 아니면 끊긴다
+      if (c.kills >= 3) {
+        streak++;
+        if (streak >= 2) texts.push(mkText(c.x, c.y + 14, `연속 ${streak}! 점수 x${streakMult(streak)}`, '#ffb3e6', 1.05));
+      } else if (streak > 0) {
+        if (streak >= 2) texts.push(mkText(c.x, c.y + 14, '연속 끊김', '#9aa', 0.95));
+        streak = 0;
       }
     }
   }
@@ -679,8 +738,9 @@ function updateFish(dt) {
       f.ft += dt;
       if (f.ft > 0.9) {
         f.state = 'got';
-        addScore(f.sp.pts); stats.fish++; stats.kinds[f.kind]++;
-        texts.push(mkText(f.x, f.y - 3, '+' + f.sp.pts, f.sp.pts >= 80 ? '#ffe066' : f.sp.pts >= 30 ? '#ffc58f' : '#e8f4f8', f.sp.pts >= 80 ? 1.1 : 0.85));
+        const pts = Math.round(f.sp.pts * (f.ex ? f.ex.mult : 1));
+        addScore(pts); stats.fish++; stats.kinds[f.kind]++;
+        texts.push(mkText(f.x, f.y - 3, '+' + pts, f.sp.pts >= 80 ? '#ffe066' : f.sp.pts >= 30 ? '#ffc58f' : '#e8f4f8', f.sp.pts >= 80 ? 1.1 : 0.85));
         sfx.collect(ci++);
       }
     }
@@ -1160,6 +1220,8 @@ function drawHUD() {
   ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(bx - 2, by - 2, bw + 4, bh + 4);
   ctx.fillStyle = ok ? '#5fe08a' : '#f2c14e'; ctx.fillRect(bx, by, bw * pr, bh);
   txt(ok ? `목표 달성! ${dayScore} / ${target}` : `오늘 ${dayScore} / ${target}`, bx, by + bh + u * 0.9, u * 1.05, ok ? '#8ff0ad' : '#dde');
+  if (ok && dayScore - target >= 100) txt(`내일 보너스 +${Math.min(3, Math.floor((dayScore - target) / 100))}`, bx, by + bh + u * 2.1, u * 1.0, '#ffb347');
+  if (streak >= 1) txt(`🔥 연속 ${streak} · 점수 x${streakMult(streak)}`, W / 2, 20, u * 1.2, '#ffb3e6', 'center');
   // 다이너마이트 개수
   for (let i = 0; i < dyn; i++) {
     const x = W - 18 - i * u * 1.6, y = 12;
@@ -1198,12 +1260,14 @@ function dayClear() {
   if (hiss) hiss.g.gain.setTargetAtTime(0, ac.currentTime, 0.03);
   sfx.bonus();
   const extra = dayScore - target;
-  nextBonus = dayScore >= target * 1.5 ? 1 : 0;
+  nextBonus = Math.min(3, Math.floor(extra / 100));
+  const earned = earnCoins();
   document.getElementById('clearTitle').textContent = `${day}일차 성공!`;
   document.getElementById('clearScore').textContent = dayScore;
   document.getElementById('clearStats').innerHTML =
     `목표 ${target}점 · <b>+${extra}</b> 초과<br>총점 ${score}` +
-    (nextBonus ? `<br><span class="newbest">목표의 1.5배 달성! 내일 다이너마이트 +1</span>` : '') +
+    (nextBonus ? `<br><span class="newbest">초과 점수 보너스! 내일 다이너마이트 +${nextBonus}</span>` : `<br><span style="opacity:.75">100점 더 넘겼으면 내일 다이너마이트 +1</span>`) +
+    `<br><span class="earn">🪙 +${earned} (보유 ${meta.coins})</span>` +
     `<br><span style="opacity:.8">내일 목표: ${dayTarget(day + 1)}점</span>`;
   document.getElementById('nextBtn').textContent = `${day + 1}일차 시작`;
   clearOv.classList.remove('hidden');
@@ -1213,8 +1277,22 @@ function nextDay() {
   day++; startDay(); state = 'play';
   clearOv.classList.add('hidden');
 }
+function earnCoins() {
+  const c = Math.max(0, Math.floor(dayScore / 5));
+  meta.coins += c; saveMeta();
+  return c;
+}
+function retryDay() {
+  if (charmsLeft <= 0) return;
+  charmsLeft--;
+  score = Math.max(0, score - dayScore); // 그날 점수는 다시
+  startDay(); state = 'play';
+  banner = { str: `🧿 부적의 힘! ${day}일차 다시 · 목표 ${target}점`, t: 2.8 };
+  endOv.classList.add('hidden');
+}
 function endGame() {
   state = 'end';
+  const earned = earnCoins();
   if (hiss) hiss.g.gain.setTargetAtTime(0, ac.currentTime, 0.03);
   const nb = score > best;
   if (nb) best = score;
@@ -1229,12 +1307,57 @@ function endGame() {
     `잡은 물고기 <b>${stats.fish}</b>마리 (붕어 ${k.crucian} · 잉어 ${k.carp} · 메기 ${k.catfish})<br>` +
     `한 방 최다 <b>${stats.bestCombo}</b>마리` +
     (stats.catches.length ? `<br>대어: <b>${stats.catches.join(', ')}</b>` : '') +
-    (stats.whaleHits ? `<br><span style="color:#ff8a8a">고래 오폭 ${stats.whaleHits}회</span>` : '');
+    (stats.whaleHits ? `<br><span style="color:#ff8a8a">고래 오폭 ${stats.whaleHits}회</span>` : '') +
+    `<br><span class="earn">🪙 +${earned} (보유 ${meta.coins}) · 가게에서 장비를 사면 다음 판이 길어집니다</span>`;
+  const cb = document.getElementById('charmBtn');
+  cb.hidden = charmsLeft <= 0;
+  cb.textContent = `🧿 부적 사용: ${day}일차 다시 (${charmsLeft}개)`;
   endOv.classList.remove('hidden');
 }
 document.getElementById('startBtn').addEventListener('click', startGame);
 document.getElementById('againBtn').addEventListener('click', startGame);
 document.getElementById('nextBtn').addEventListener('click', nextDay);
+document.getElementById('charmBtn').addEventListener('click', retryDay);
+
+// ===== 가게 =====
+const shopOv = document.getElementById('shopOv');
+let shopBack = null;
+function renderShop() {
+  document.getElementById('shopCoins').textContent = `🪙 ${meta.coins}`;
+  document.getElementById('startCoins').textContent = `🪙 ${meta.coins}`;
+  const list = document.getElementById('shopList');
+  list.innerHTML = '';
+  for (const u of UPGRADES) {
+    const lv = meta.up[u.id], max = u.costs.length, cost = u.costs[lv];
+    const row = document.createElement('div'); row.className = 'item';
+    row.innerHTML = `<div class="info"><div class="nm">${u.name}</div><div class="ds">${u.desc}</div>` +
+      `<div class="lv">${'■'.repeat(lv)}${'□'.repeat(max - lv)}</div></div>`;
+    const bt = document.createElement('button');
+    bt.id = 'buy-' + u.id;
+    if (lv >= max) { bt.textContent = '최대'; bt.disabled = true; }
+    else { bt.textContent = `🪙 ${cost}`; bt.disabled = meta.coins < cost; }
+    bt.addEventListener('click', () => {
+      if (meta.up[u.id] >= max || meta.coins < cost) return;
+      meta.coins -= cost; meta.up[u.id]++; saveMeta();
+      ensureAudio(); sfx.bonus();
+      // 진행 중인 판에도 바로 적용 (부적은 다음 판부터)
+      applyUpgrades();
+      renderShop();
+    });
+    row.appendChild(bt); list.appendChild(row);
+  }
+}
+document.querySelectorAll('[data-shop]').forEach(btn => btn.addEventListener('click', () => {
+  shopBack = btn.closest('.overlay');
+  shopBack.classList.add('hidden');
+  renderShop(); shopOv.classList.remove('hidden');
+}));
+document.getElementById('shopClose').addEventListener('click', () => {
+  shopOv.classList.add('hidden');
+  if (shopBack) shopBack.classList.remove('hidden');
+  if (shopBack === endOv) { const cb = document.getElementById('charmBtn'); cb.hidden = charmsLeft <= 0; }
+});
+renderShop();
 
 // 메뉴 배경용으로 물고기 떼를 미리 띄워둔다
 newGame();
