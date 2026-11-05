@@ -36,9 +36,26 @@
   /* 설명 패널: 모바일에서 손가락으로 위아래 스크롤 */
   .overlay { touch-action: pan-y; padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); box-sizing: border-box; }
   .panel { max-height: calc(100% - 32px); overflow-y: auto; box-sizing: border-box;
-    touch-action: pan-y; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-    user-select: text; -webkit-user-select: text; }
-  .panel button { user-select: none; -webkit-user-select: none; }
+    touch-action: pan-y; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  button.link { background: none; box-shadow: none; color: #9fd6e0; font-size: 14px; padding: 10px 8px 2px; text-decoration: underline; text-underline-offset: 3px; }
+  button.link:active { transform: none; }
+  .rule { min-height: 150px; display: flex; flex-direction: column; justify-content: center; gap: 8px; text-align: left;
+    background: #0d2530; padding: 14px 14px; margin-bottom: 12px; font-size: 14px; line-height: 1.6; }
+  .rule .big { font-size: 34px; text-align: center; line-height: 1; }
+  .rule .hd { font-weight: 800; font-size: 16px; color: #f2c14e; text-align: center; }
+  .rule b { color: #ffb347; }
+  .dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 12px; }
+  .dots span { width: 8px; height: 8px; background: #24505e; }
+  .dots span.on { background: #f2c14e; }
+  .pager { display: flex; gap: 10px; justify-content: center; }
+  .pager button { font-size: 15px; padding: 9px 16px; }
+  @media (max-height: 440px) {
+    .panel { margin: 8px; padding: 12px 14px; }
+    h1 { font-size: 19px; }
+    .rule { min-height: 0; padding: 10px 12px; gap: 4px; margin-bottom: 8px; font-size: 13px; }
+    .rule .big { font-size: 24px; }
+    .dots { margin-bottom: 8px; }
+  }
   @media (max-width: 480px) {
     .panel { margin: 12px; padding: 18px 16px 16px; }
     h1 { font-size: 22px; }
@@ -60,24 +77,15 @@
 <div class="overlay" id="startOv">
   <div class="panel">
     <h1>💣 다이너마이트 낚시</h1>
-    <div class="sub">프로토타입: 던지기 손맛 테스트</div>
+    <div class="sub">물속 그림자를 읽고, 한 방에 터뜨려라</div>
     <ol>
       <li><b>누르면</b> 도화선에 불이 붙습니다</li>
-      <li>누른 채 <b>뒤로 당겨</b> 방향과 힘을 정합니다</li>
-      <li><b>놓으면</b> 던집니다</li>
+      <li>누른 채 <b>뒤로 당겨</b> 조준합니다</li>
+      <li><b>놓으면</b> 던집니다. 늦게 놓을수록 얕은 곳에서 터집니다</li>
     </ol>
-    <div class="tip">
-      🔥 도화선은 <b>깊게 → 중간 → 얕게 → 공중</b> 순서로 타 들어가고, 구간이 바뀔 때마다 <b>딸깍</b> 소리가 납니다.<br>
-      🐟 진한 그림자는 얕은 곳, 흐린 그림자는 깊은 곳에 있습니다. 깊을수록 비싼 물고기가 있습니다.<br>
-      💀 너무 오래 들고 있으면 <b>손에서 터져 그대로 게임 오버</b>입니다!<br>
-      📅 하루에 다이너마이트 <b>6개</b>. 그날 <b>목표 점수</b>를 넘기면 다음 날로 넘어갑니다.<br>
-      🎯 <b>한 방에 6마리 이상</b> 잡으면 다이너마이트를 돌려받습니다. 연속으로 잘 맞히면 점수 배율이 오릅니다.<br>
-      📦 목표를 넘긴 점수 <b>100점마다</b> 다음 날 다이너마이트 +1.<br>
-      🪙 잡은 만큼 <b>동전</b>이 쌓이고, 가게 장비는 게임이 끝나도 남습니다.<br>
-      ⚠ 거대한 그림자: 상어(2발), 대왕오징어(촉수 3발)는 잡고, 고래는 보호종이니 <b>맞히지 마세요</b>.
-    </div>
     <div class="coins" id="startCoins"></div>
     <div class="btns"><button id="startBtn">시작</button><button class="ghost" data-shop>🪙 가게</button></div>
+    <button class="link" id="rulesBtn">📖 자세한 규칙 보기</button>
     <a class="home" href="/">← PixelQuest로 돌아가기</a>
   </div>
 </div>
@@ -101,6 +109,18 @@
       <button id="againBtn">다시 하기</button><button class="ghost" data-shop>🪙 가게</button>
     </div>
     <a class="home" href="/">← PixelQuest로 돌아가기</a>
+  </div>
+</div>
+
+<div class="overlay hidden" id="rulesOv">
+  <div class="panel">
+    <h1>게임 규칙</h1>
+    <div class="rule" id="ruleBody"></div>
+    <div class="dots" id="ruleDots"></div>
+    <div class="pager">
+      <button class="ghost" id="rulePrev">‹ 이전</button>
+      <button id="ruleNext">다음 ›</button>
+    </div>
   </div>
 </div>
 
@@ -1377,6 +1397,67 @@ document.getElementById('startBtn').addEventListener('click', startGame);
 document.getElementById('againBtn').addEventListener('click', startGame);
 document.getElementById('nextBtn').addEventListener('click', nextDay);
 document.getElementById('charmBtn').addEventListener('click', retryDay);
+
+// ===== 규칙 (한 장씩 넘겨 보기: 스크롤 없이 읽힌다) =====
+const RULES = [
+  ['🧨', '던지는 법', '화면을 <b>누르면</b> 도화선에 불이 붙고, 누른 채 <b>뒤로 당기면</b> 조준, <b>놓으면</b> 던집니다. 조금만 당기고 놓으면 불이 꺼집니다.'],
+  ['🔥', '도화선 = 폭발 깊이', '도화선은 <b>깊게 → 중간 → 얕게 → 공중</b> 순서로 타 들어가고, 구간이 바뀔 때마다 <b>딸깍</b> 소리가 납니다. 멀리 던질수록 날아가는 동안 더 타니 일찍 놓으세요.'],
+  ['🐟', '그림자 읽기', '<b>진한</b> 그림자는 얕은 곳, <b>흐린</b> 그림자는 깊은 곳. 붕어 10점 · 잉어 30점 · 메기 80점, 깊을수록 비쌉니다.'],
+  ['💀', '손에서 터지면 끝', '도화선을 끝까지 쥐고 있으면 <b>손에서 터져 그대로 게임 오버</b>. 부적으로도 못 살립니다.'],
+  ['🦈', '거대한 그림자', '<b>상어</b> 2발 = +500 · <b>대왕오징어</b> 촉수 3발 = +1000. <b>고래</b>는 보호종이라 맞히면 -300. 물을 뿜으면 고래입니다.'],
+  ['📅', '하루와 목표', '하루에 다이너마이트 <b>6개</b>. 그날 <b>목표 점수</b>를 넘기면 다음 날로. 넘긴 점수 <b>100점마다</b> 내일 다이너마이트 +1.'],
+  ['🎯', '실력 보상', '한 방에 <b>6마리 이상</b>이면 다이너마이트 환급(12마리 이상 2개). 3마리 이상을 <b>연속</b>으로 잡으면 점수가 최대 2배.'],
+  ['🪙', '동전과 가게', '점수만큼 <b>동전</b>이 쌓입니다. 가게 장비(가방 · 화약 · 긴 도화선 · 부적)는 게임이 끝나도 계속 남습니다.'],
+];
+let rulePage = 0;
+const rulesOv = document.getElementById('rulesOv');
+function renderRule() {
+  const [ic, hd, tx] = RULES[rulePage];
+  document.getElementById('ruleBody').innerHTML = `<div class="big">${ic}</div><div class="hd">${hd}</div><div>${tx}</div>`;
+  document.getElementById('ruleDots').innerHTML = RULES.map((_, i) => `<span class="${i === rulePage ? 'on' : ''}"></span>`).join('');
+  document.getElementById('rulePrev').textContent = rulePage === 0 ? '닫기' : '‹ 이전';
+  document.getElementById('ruleNext').textContent = rulePage === RULES.length - 1 ? '알겠어요' : '다음 ›';
+}
+function closeRules() { rulesOv.classList.add('hidden'); startOv.classList.remove('hidden'); }
+document.getElementById('rulesBtn').addEventListener('click', () => { rulePage = 0; renderRule(); startOv.classList.add('hidden'); rulesOv.classList.remove('hidden'); });
+document.getElementById('rulePrev').addEventListener('click', () => { if (rulePage === 0) closeRules(); else { rulePage--; renderRule(); } });
+document.getElementById('ruleNext').addEventListener('click', () => { if (rulePage === RULES.length - 1) closeRules(); else { rulePage++; renderRule(); } });
+// 규칙 카드 좌우로 밀어서 넘기기
+(() => {
+  const body = document.getElementById('ruleBody'); let x0 = null;
+  body.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true });
+  body.addEventListener('touchend', e => {
+    if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null;
+    if (dx < -40 && rulePage < RULES.length - 1) { rulePage++; renderRule(); }
+    else if (dx > 40 && rulePage > 0) { rulePage--; renderRule(); }
+  });
+})();
+
+// ===== 패널 터치 스크롤 (기본 스크롤이 막히는 환경에서도 손가락으로 밀어 올리기) =====
+document.querySelectorAll('.panel').forEach(pn => {
+  let y0 = null, st0 = 0, lastY = 0, lastT = 0, v = 0, raf = 0, moved = false;
+  pn.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1) { y0 = null; return; }
+    cancelAnimationFrame(raf);
+    y0 = lastY = e.touches[0].clientY; st0 = pn.scrollTop; lastT = performance.now(); v = 0; moved = false;
+  }, { passive: true });
+  pn.addEventListener('touchmove', e => {
+    if (y0 === null || pn.scrollHeight <= pn.clientHeight + 1) return;
+    const y = e.touches[0].clientY;
+    if (!moved && Math.abs(y - y0) < 4) return;
+    moved = true;
+    e.preventDefault();
+    pn.scrollTop = st0 - (y - y0);
+    const now = performance.now();
+    v = (lastY - y) / Math.max(1, now - lastT) * 16; lastY = y; lastT = now;
+  }, { passive: false });
+  pn.addEventListener('touchend', () => {
+    if (y0 === null) return; y0 = null;
+    if (!moved) return;
+    const step = () => { if (Math.abs(v) < 0.4) return; pn.scrollTop += v; v *= 0.94; raf = requestAnimationFrame(step); };
+    step();
+  });
+});
 
 // ===== 가게 =====
 const shopOv = document.getElementById('shopOv');
