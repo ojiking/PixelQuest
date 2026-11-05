@@ -42,7 +42,8 @@
       <li><b>놓으면</b> 던집니다</li>
     </ol>
     <div class="tip">
-      🔥 <b>빨리 던지면</b> 깊이 가라앉아서 터지고, <b>늦게 던지면</b> 얕은 곳에서 터집니다.<br>
+      🔥 도화선은 <b>깊게 → 중간 → 얕게 → 공중</b> 순서로 타 들어가고, 구간이 바뀔 때마다 <b>딸깍</b> 소리가 납니다.<br>
+      ✨ 조준 원 안에서 <b>노랗게 빛나는 물고기</b>가 지금 놓으면 잡히는 녀석들입니다.<br>
       🐟 진한 그림자는 얕은 곳, 흐린 그림자는 깊은 곳에 있습니다. 깊을수록 비싼 물고기가 있습니다.<br>
       💥 너무 오래 들고 있으면 손에서 터집니다!<br>
       ⚠ 거대한 그림자: 상어(2발), 대왕오징어(촉수 3발)는 잡고, 고래는 보호종이니 <b>맞히지 마세요</b>.
@@ -163,6 +164,10 @@ const sfx = {
   collect(i) { tone(660 + Math.min(i, 12) * 60, 0.07, 0.06, 'square', null, i * 0.035); },
   bad() { tone(220, 0.25, 0.15, 'square', 110); },
   rumble() { tone(46, 1.8, 0.45, 'sine', 30); noiseBurst(1.6, 200, 0.25); },
+  click(z) {
+    if (z === 0) { tone(320, 0.09, 0.14, 'square', 220); tone(320, 0.09, 0.14, 'square', 220, 0.11); }
+    else tone(900 + (3 - z) * 260, 0.035, 0.14, 'square');
+  },
   bonus() { [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.12, 0.08, 'square', null, i * 0.08)); },
 };
 function vibrate(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} }
@@ -425,6 +430,43 @@ function handBlast() {
   sfx.boom(0); vibrate([120, 40, 120]);
 }
 
+// ===== 도화선 구간 =====
+const ZONES = [
+  { name: '공중!', col: '#ff4b3a' },
+  { name: '얕게', col: '#ffe066' },
+  { name: '중간', col: '#ffa53a' },
+  { name: '깊게', col: '#6fb6ff' },
+];
+const zoneOf = pd => pd < 0 ? 0 : pd < 0.4 ? 1 : pd < 0.7 ? 2 : 3;
+
+// 지금 그 자리, 그 깊이에서 터지면 무엇이 맞는지 (상태 변경 없음)
+function predictHits(x, y, depth) {
+  const ed = Math.max(0, depth), rr = depth < 0 ? R * 0.7 : R;
+  const hits = [], near = [];
+  for (const f of fish) {
+    if (f.state !== 'swim') continue;
+    const d = Math.hypot(f.x - x, f.y - y, (f.depth - ed) * DZ);
+    if (d < rr) hits.push(f); else if (d < rr * 1.3) near.push(f);
+  }
+  let bigType = null;
+  if (big && !big.dead) {
+    if (big.type === 'squid') {
+      let h = Math.hypot(Math.hypot(x - big.x, y - big.y) - 6, (big.depth - ed) * DZ) < rr;
+      for (const t of big.tents) {
+        if (t.rise < 0.4) continue;
+        const p = tentTip(t);
+        if (Math.hypot(Math.max(0, segDist(x, y, big.x, big.y, p.x, p.y) - 2), (p.depth - ed) * DZ) < rr) h = true;
+      }
+      if (h) bigType = 'squid';
+    } else {
+      const [ax, ay, bx, by] = bigBody();
+      const hd = Math.max(0, segDist(x, y, ax, ay, bx, by) - big.wid / 2);
+      if (Math.hypot(hd, (big.depth - ed) * DZ) < rr) bigType = big.type;
+    }
+  }
+  return { hits, near, bigType };
+}
+
 // ===== 입력 =====
 function aimInfo(h) {
   const dx = h.sx - h.cx, dy = h.sy - h.cy;
@@ -442,7 +484,10 @@ function aimInfo(h) {
   const flight = 0.35 + fd / 230;
   const rem = h.fuse - flight;
   const pdepth = rem < 0 ? -0.05 : Math.min(1, rem * SINK);
-  return { len, p, ang, lx, ly, hx, hy, fd, flight, pdepth };
+  const flightEff = len < 4 ? 0.9 : flight; // 아직 안 당겼으면 중간 거리 기준
+  const remEff = h.fuse - flightEff;
+  const zone = zoneOf(remEff < 0 ? -0.05 : remEff * SINK);
+  return { len, p, ang, lx, ly, hx, hy, fd, flight, flightEff, pdepth, zone };
 }
 
 function ptr(e) { const r = cvs.getBoundingClientRect(); return { x: (e.clientX - r.left) / S, y: (e.clientY - r.top) / S }; }
@@ -490,6 +535,15 @@ function update(dt) {
   if (hold) {
     hold.fuse -= dt;
     if (hold.fuse <= 0) { hold = null; handBlast(); }
+    else {
+      const z = aimInfo(hold).zone;
+      if (hold.zone !== undefined && z !== hold.zone) {
+        sfx.click(z); vibrate(z === 0 ? [30, 30, 30] : 18);
+        hold.zonePop = 0.25;
+      }
+      hold.zone = z;
+      if (hold.zonePop > 0) hold.zonePop -= dt;
+    }
   }
 
   // 다이너마이트
@@ -519,7 +573,7 @@ function update(dt) {
   if (hiss && !muted) {
     const anyAir = bombs.some(b2 => b2.state === 'air'), anyWater = bombs.some(b2 => b2.state === 'water');
     let g = 0, f = 3200;
-    if (hold) { g = 0.07; f = 2600 + (1 - hold.fuse / FUSE) * 3500; }
+    if (hold) { const z = hold.zone ?? 3; g = z === 0 ? 0.1 : 0.07; f = 2600 + (1 - hold.fuse / FUSE) * 3500 + (z === 0 ? Math.sin(time * 40) * 900 : 0); }
     else if (anyAir) { g = 0.04; f = 3000; }
     else if (anyWater) { g = 0.02; f = 700; }
     hiss.g.gain.setTargetAtTime(g, ac.currentTime, 0.03);
@@ -829,11 +883,26 @@ function drawAimGuide() {
     const x = lerp(a.hx, a.lx, t), y = lerp(a.hy, a.ly, t) - arc * 4 * t * (1 - t);
     b.fillRect(Math.round(x), Math.round(y), 1, 1);
   }
-  const col = a.pdepth < 0 ? '255,90,60' : a.pdepth < 0.4 ? '255,230,120' : a.pdepth < 0.7 ? '255,170,80' : '160,200,255';
-  const pulse = 0.55 + Math.sin(time * 10) * 0.2;
-  b.strokeStyle = `rgba(${col},${pulse})`; b.lineWidth = 1;
+  const zc = ZONES[zoneOf(a.pdepth)].col;
+  const pr = predictHits(a.lx, a.ly, a.pdepth);
+  hold.pred = pr;
+  // 지금 놓으면 잡히는 물고기: 그림자가 노랗게 또렷해진다
+  const pulse = 0.6 + Math.sin(time * 9) * 0.25;
+  for (const f of pr.near) {
+    const sc = 1 - f.depth * 0.32;
+    b.globalAlpha = 0.22; fishShape(b, f.x, f.y, f.ang, f.sp.len * sc, f.sp.wid * sc, f.ph, '#fff3b0');
+  }
+  for (const f of pr.hits) {
+    const sc = 1 - f.depth * 0.32;
+    b.globalAlpha = pulse * 0.45; fishShape(b, f.x, f.y, f.ang, f.sp.len * sc + 2, f.sp.wid * sc + 2, f.ph, '#ffffff');
+    b.globalAlpha = pulse; fishShape(b, f.x, f.y, f.ang, f.sp.len * sc, f.sp.wid * sc, f.ph, '#ffd84a');
+  }
+  b.globalAlpha = 1;
+  b.strokeStyle = pr.bigType === 'whale' ? '#ff3b3b' : zc; b.lineWidth = 1;
+  b.globalAlpha = 0.5 + Math.sin(time * 10) * 0.2;
   b.beginPath(); b.ellipse(a.lx, a.ly, R, R * 0.8, 0, 0, TAU); b.stroke();
-  b.fillStyle = `rgba(${col},0.9)`; b.fillRect(Math.round(a.lx) - 1, Math.round(a.ly), 3, 1); b.fillRect(Math.round(a.lx), Math.round(a.ly) - 1, 1, 3);
+  b.globalAlpha = 1;
+  b.fillStyle = zc; b.fillRect(Math.round(a.lx) - 1, Math.round(a.ly), 3, 1); b.fillRect(Math.round(a.lx), Math.round(a.ly) - 1, 1, 3);
 }
 
 function drawBombs(under) {
@@ -842,8 +911,12 @@ function drawBombs(under) {
       const al = 1 - bm.depth * 0.75, sc = 1 - bm.depth * 0.3;
       b.globalAlpha = al;
       b.fillStyle = '#7a1f17'; b.fillRect(Math.round(bm.x - 1), Math.round(bm.y - 2 * sc), 3, Math.max(2, Math.round(4 * sc)));
-      const blink = (time * (6 + (1 - bm.fuse / FUSE) * 14) | 0) % 2;
-      if (blink) { b.fillStyle = 'rgba(255,170,60,0.55)'; b.beginPath(); b.arc(bm.x, bm.y - 2, 2.5 * sc, 0, TAU); b.fill(); }
+      const blink = (time * (4 + 16 / (bm.fuse + 0.3)) | 0) % 2;
+      if (blink) { b.fillStyle = 'rgba(255,170,60,0.6)'; b.beginPath(); b.arc(bm.x, bm.y - 2, 2.5 * sc, 0, TAU); b.fill(); }
+      if (bm.fuse < 0.3) { // 폭발 직전 예고 섬광
+        const k = 1 - bm.fuse / 0.3;
+        b.fillStyle = `rgba(255,245,200,${0.25 + k * 0.5})`; b.beginPath(); b.arc(bm.x, bm.y, 3 + k * 10, 0, TAU); b.fill();
+      }
       b.globalAlpha = 1;
     } else if (!under && bm.state === 'air') {
       b.fillStyle = 'rgba(0,0,0,0.25)'; b.fillRect(Math.round(bm.x - 2), Math.round(bm.y), 4, 1);
@@ -943,6 +1016,76 @@ function txt(str, x, y, size, col, align = 'left', stroke = true) {
   ctx.fillStyle = col; ctx.fillText(str, x, y);
 }
 
+function drawFuseStick(u) {
+  const a = aimInfo(hold), W = cvs.width, H = cvs.height;
+  const fs = Math.max(12, u * 1.05);
+  // 착탄 지점 라벨: 구간 + 잡힐 마릿수
+  const pr = hold.pred;
+  if (a.len >= 4 && pr) {
+    const z = ZONES[zoneOf(a.pdepth)];
+    let lab = z.name, col = z.col;
+    if (pr.hits.length) lab += ` · ${pr.hits.length}마리`;
+    if (pr.bigType === 'whale') { lab = '⚠ 고래!'; col = '#ff5b5b'; }
+    else if (pr.bigType === 'shark') lab += ' · 상어';
+    else if (pr.bigType === 'squid') lab += ' · 오징어';
+    txt(lab, a.lx * S, (a.ly + R * 0.8 + 6) * S, fs * 1.15, col, 'center');
+  }
+  // 손가락 옆 큼직한 다이너마이트 + 구간별로 칠한 도화선
+  const k = clamp(Math.min(W, H) / 480, 0.95, 1.35);
+  const FL = 150 * k, sw = 20 * k, sh = 44 * k;
+  const fx = hold.cx * S, fy = hold.cy * S;
+  let ix = fx + (fx > W * 0.4 ? -80 * k : 80 * k);
+  let iy = clamp(fy - 40 * k, FL + sh / 2 + 40 * k, H - sh / 2 - 10);
+  if (a.zone === 0) { ix += rand(-2, 2) * k; iy += rand(-2, 2) * k; }
+  if (hold.zonePop > 0) { const p = hold.zonePop / 0.25; ix += Math.sin(p * 20) * 3 * k; }
+  const top = iy - sh / 2;                       // 도화선이 시작되는 막대 꼭대기
+  const yAt = r => top - FL * clamp(r / FUSE, 0, 1); // 남은 시간 r초 위치
+  const fl = a.flightEff;
+  const bounds = [0, fl, fl + 0.4 / SINK, fl + 0.7 / SINK, FUSE].map(v => Math.min(FUSE, v));
+  // 탄 부분 (재)
+  ctx.strokeStyle = 'rgba(60,60,60,0.5)'; ctx.lineWidth = 2 * k; ctx.setLineDash([3 * k, 4 * k]);
+  ctx.beginPath(); ctx.moveTo(ix, yAt(FUSE)); ctx.lineTo(ix, yAt(hold.fuse)); ctx.stroke(); ctx.setLineDash([]);
+  // 남은 도화선
+  ctx.lineCap = 'butt';
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 9 * k;
+  ctx.beginPath(); ctx.moveTo(ix, top + 2); ctx.lineTo(ix, yAt(hold.fuse)); ctx.stroke();
+  for (let zi = 0; zi < 4; zi++) {
+    const r0 = bounds[zi], r1 = Math.min(bounds[zi + 1], hold.fuse);
+    if (r1 <= r0) continue;
+    ctx.strokeStyle = ZONES[zi].col; ctx.lineWidth = 6 * k;
+    ctx.beginPath(); ctx.moveTo(ix, yAt(r0)); ctx.lineTo(ix, yAt(r1)); ctx.stroke();
+    // 구간 이름 (아직 안 탄 구간만)
+    const ym = (yAt(r0) + yAt(Math.min(bounds[zi + 1], FUSE))) / 2;
+    if (yAt(r0) - yAt(bounds[zi + 1]) > 14 * k && zi !== a.zone) {
+      ctx.globalAlpha = 0.75; txt(ZONES[zi].name, ix + 10 * k, ym, fs * 0.85, ZONES[zi].col); ctx.globalAlpha = 1;
+    }
+  }
+  // 구간 경계 눈금
+  ctx.fillStyle = '#000';
+  for (let zi = 1; zi < 4; zi++) if (bounds[zi] < hold.fuse) ctx.fillRect(ix - 6 * k, yAt(bounds[zi]) - 1, 12 * k, 2 * k);
+  // 막대
+  ctx.fillStyle = '#000'; ctx.fillRect(ix - sw / 2 - 2, top - 2, sw + 4, sh + 4);
+  ctx.fillStyle = '#d0362a'; ctx.fillRect(ix - sw / 2, top, sw, sh);
+  ctx.fillStyle = '#f4ead2'; ctx.fillRect(ix - sw / 2, top + sh * 0.38, sw, sh * 0.22);
+  ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(ix - sw / 2 + 2 * k, top + 2 * k, 3 * k, sh - 4 * k);
+  // 불꽃
+  const sy = yAt(hold.fuse), zc = ZONES[a.zone].col;
+  const gr = ctx.createRadialGradient(ix, sy, 0, ix, sy, 22 * k);
+  gr.addColorStop(0, 'rgba(255,255,220,0.95)'); gr.addColorStop(0.3, 'rgba(255,190,60,0.7)'); gr.addColorStop(1, 'rgba(255,120,0,0)');
+  ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(ix, sy, 22 * k * (0.8 + Math.random() * 0.4), 0, TAU); ctx.fill();
+  for (let i = 0; i < 5; i++) { ctx.fillStyle = Math.random() < 0.5 ? '#fff6b0' : '#ffb03a'; ctx.fillRect(ix + rand(-12, 12) * k, sy + rand(-12, 8) * k, 2 * k, 2 * k); }
+  // 현재 구간 큰 글씨
+  const pop = hold.zonePop > 0 ? 1 + hold.zonePop * 1.6 : 1;
+  txt(ZONES[a.zone].name, ix - 14 * k, sy - 4 * k, fs * 1.5 * pop, zc, 'right');
+  // 위험 구간: 화면 가장자리 붉은 맥박
+  if (a.zone === 0) {
+    const al = 0.25 + Math.sin(time * 18) * 0.15;
+    const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
+    vg.addColorStop(0, 'rgba(255,0,0,0)'); vg.addColorStop(1, `rgba(255,30,10,${al})`);
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+  }
+}
+
 function drawHUD() {
   const u = S * 3.2, W = cvs.width;
   txt(`점수 ${score}`, 12, 22, u * 2, '#fff');
@@ -956,40 +1099,7 @@ function drawHUD() {
   }
   if (dyn === 0 && !hold) txt('다이너마이트 소진', W - 14, 22, u * 1.1, '#f88', 'right');
 
-  // 깊이 게이지
-  const gx = 14, gy = Math.round(cvs.height * 0.3), gh = Math.round(cvs.height * 0.36), gw = Math.max(8, S * 3);
-  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(gx - 3, gy - 3, gw + 6, gh + 6);
-  const gg = ctx.createLinearGradient(0, gy, 0, gy + gh); gg.addColorStop(0, '#5fc6c6'); gg.addColorStop(1, '#0c2a3a');
-  ctx.fillStyle = gg; ctx.fillRect(gx, gy, gw, gh);
-  const fs = Math.max(10, u * 0.95);
-  txt('수면', gx + gw + 6, gy, fs, '#cde');
-  txt('바닥', gx + gw + 6, gy + gh, fs, '#cde');
-  for (const k of ['crucian', 'carp', 'catfish']) {
-    const sp = SPECIES[k], y0 = gy + sp.depth[0] * gh, y1 = gy + sp.depth[1] * gh;
-    ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(gx + gw + 2, y0, 2, y1 - y0);
-    txt(sp.name, gx + gw + 6, (y0 + y1) / 2, fs * 0.9, 'rgba(220,235,240,0.75)');
-  }
-  for (const bm of bombs) if (bm.state === 'water') {
-    const y = gy + bm.depth * gh;
-    ctx.fillStyle = '#ff4b3a'; ctx.fillRect(gx - 4, y - 2, gw + 8, 4);
-  }
-  if (hold) {
-    const a = aimInfo(hold);
-    if (a.len >= 4) {
-      const y = gy + Math.max(0, a.pdepth) * gh;
-      ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2; ctx.strokeRect(gx - 5, y - 3, gw + 10, 6);
-      txt(a.pdepth < 0 ? '공중 폭발!' : '예상 폭발', gx + gw + 6, y - fs * 1.1, fs, '#ffe066');
-      // 착탄 지점 옆 라벨
-      const lab = a.pdepth < 0 ? '공중!' : a.pdepth < 0.12 ? '수면' : a.pdepth < 0.4 ? '얕게' : a.pdepth < 0.7 ? '중간' : '깊게';
-      txt(lab, a.lx * S, (a.ly + R * 0.8 + 6) * S, fs * 1.1, '#ffe066', 'center');
-    }
-    // 도화선 바
-    const fl = clamp(hold.fuse / FUSE, 0, 1);
-    const bw = 60 * S / 3 * 2, bx = player.x * S - bw / 2, by = (player.y + 11) * S;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(bx - 2, by - 2, bw + 4, S * 2 + 4);
-    ctx.fillStyle = fl < 0.3 ? ((time * 10 | 0) % 2 ? '#ff3b2f' : '#ffe066') : '#ff9f1a';
-    ctx.fillRect(bx, by, bw * fl, S * 2);
-  }
+  if (hold) drawFuseStick(u);
 
   // 팝업 텍스트
   for (const t of texts) {
@@ -1046,7 +1156,7 @@ requestAnimationFrame(frame);
 
 // 디버그/테스트용 훅
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; },
-  get fish() { return fish.length; }, get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
+  get fish() { return fish.length; }, get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
 </script>
 </body>
