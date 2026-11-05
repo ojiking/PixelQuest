@@ -43,7 +43,6 @@
     </ol>
     <div class="tip">
       🔥 도화선은 <b>깊게 → 중간 → 얕게 → 공중</b> 순서로 타 들어가고, 구간이 바뀔 때마다 <b>딸깍</b> 소리가 납니다.<br>
-      ✨ 조준 원 안에서 <b>노랗게 빛나는 물고기</b>가 지금 놓으면 잡히는 녀석들입니다.<br>
       🐟 진한 그림자는 얕은 곳, 흐린 그림자는 깊은 곳에 있습니다. 깊을수록 비싼 물고기가 있습니다.<br>
       💥 너무 오래 들고 있으면 손에서 터집니다!<br>
       ⚠ 거대한 그림자: 상어(2발), 대왕오징어(촉수 3발)는 잡고, 고래는 보호종이니 <b>맞히지 마세요</b>.
@@ -439,34 +438,6 @@ const ZONES = [
 ];
 const zoneOf = pd => pd < 0 ? 0 : pd < 0.4 ? 1 : pd < 0.7 ? 2 : 3;
 
-// 지금 그 자리, 그 깊이에서 터지면 무엇이 맞는지 (상태 변경 없음)
-function predictHits(x, y, depth) {
-  const ed = Math.max(0, depth), rr = depth < 0 ? R * 0.7 : R;
-  const hits = [], near = [];
-  for (const f of fish) {
-    if (f.state !== 'swim') continue;
-    const d = Math.hypot(f.x - x, f.y - y, (f.depth - ed) * DZ);
-    if (d < rr) hits.push(f); else if (d < rr * 1.3) near.push(f);
-  }
-  let bigType = null;
-  if (big && !big.dead) {
-    if (big.type === 'squid') {
-      let h = Math.hypot(Math.hypot(x - big.x, y - big.y) - 6, (big.depth - ed) * DZ) < rr;
-      for (const t of big.tents) {
-        if (t.rise < 0.4) continue;
-        const p = tentTip(t);
-        if (Math.hypot(Math.max(0, segDist(x, y, big.x, big.y, p.x, p.y) - 2), (p.depth - ed) * DZ) < rr) h = true;
-      }
-      if (h) bigType = 'squid';
-    } else {
-      const [ax, ay, bx, by] = bigBody();
-      const hd = Math.max(0, segDist(x, y, ax, ay, bx, by) - big.wid / 2);
-      if (Math.hypot(hd, (big.depth - ed) * DZ) < rr) bigType = big.type;
-    }
-  }
-  return { hits, near, bigType };
-}
-
 // ===== 입력 =====
 function aimInfo(h) {
   const dx = h.sx - h.cx, dy = h.sy - h.cy;
@@ -553,7 +524,8 @@ function update(dt) {
       bm.t += dt; bm.spin += dt * 14;
       const u = Math.min(1, bm.t / bm.flight);
       bm.x = lerp(bm.sx, bm.tx, u); bm.y = lerp(bm.sy, bm.ty, u); bm.z = bm.arc * 4 * u * (1 - u);
-      if (Math.random() < dt * 30) parts.push({ x: bm.x, y: bm.y, z: bm.z + 2, vx: rand(-8, 8), vy: rand(-8, 8), vz: rand(-5, 10), life: 0.25, max: 0.25, type: 'spark' });
+      for (let i = 0; i < 2; i++) if (Math.random() < dt * 40) { const a = rand(0, TAU), sp = rand(8, 26); parts.push({ x: bm.x, y: bm.y, z: bm.z + 3, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.6, vz: rand(0, 25), life: rand(0.15, 0.35), max: 0.35, type: 'spark' }); }
+      if (Math.random() < dt * 25) parts.push({ x: bm.x, y: bm.y, z: bm.z + 3, vx: rand(-2, 2), vy: 0, vz: 0, life: 0.6, max: 0.6, type: 'wisp' });
       if (u >= 1 && bm.fuse > 0) {
         bm.state = 'water'; bm.z = 0;
         ripples.push({ x: bm.x, y: bm.y, r: 1, max: 14, life: 0.9 }, { x: bm.x, y: bm.y, r: 1, max: 8, life: 0.6 });
@@ -574,7 +546,7 @@ function update(dt) {
     const anyAir = bombs.some(b2 => b2.state === 'air'), anyWater = bombs.some(b2 => b2.state === 'water');
     let g = 0, f = 3200;
     if (hold) { const z = hold.zone ?? 3; g = z === 0 ? 0.1 : 0.07; f = 2600 + (1 - hold.fuse / FUSE) * 3500 + (z === 0 ? Math.sin(time * 40) * 900 : 0); }
-    else if (anyAir) { g = 0.04; f = 3000; }
+    else if (anyAir) { g = 0.04; f = 3000; if (Math.random() < dt * 6) noiseBurst(0.02, 6500, 0.06, 'highpass'); }
     else if (anyWater) { g = 0.02; f = 700; }
     hiss.g.gain.setTargetAtTime(g, ac.currentTime, 0.03);
     hiss.bp.frequency.setTargetAtTime(f, ac.currentTime, 0.05);
@@ -694,7 +666,9 @@ function updateAmbient(dt) {
     p.life -= dt;
     p.x += p.vx * dt; p.y += p.vy * dt;
     if (p.type === 'drop') { p.vz -= 160 * dt; p.z += p.vz * dt; if (p.z < 0) { p.life = 0; if (Math.random() < 0.15) ripples.push({ x: p.x, y: p.y, r: 0, max: 3, life: 0.4 }); } }
-    else if (p.type === 'fire' || p.type === 'spark') { p.z += p.vz * dt; p.vx *= 0.92; p.vy *= 0.92; }
+    else if (p.type === 'fire') { p.z += p.vz * dt; p.vx *= 0.92; p.vy *= 0.92; }
+    else if (p.type === 'spark') { p.vz -= 90 * dt; p.z += p.vz * dt; p.vx *= 0.96; p.vy *= 0.96; if (p.z < -2) p.life = 0; }
+    else if (p.type === 'wisp') { p.z += 10 * dt; p.vx *= 0.97; }
     else if (p.type === 'smoke') { p.z += 12 * dt; p.vx *= 0.95; p.vy *= 0.95; }
   }
   parts = parts.filter(p => p.life > 0);
@@ -866,9 +840,16 @@ function drawPlayer() {
   if (hold) {
     b.fillStyle = '#c0392b'; b.fillRect(Math.round(ax) - 1, Math.round(ay) - 3, 3, 5);
     const fl = hold.fuse / FUSE;
-    b.fillStyle = (time * 20 | 0) % 2 ? '#ffe066' : '#ff8c1a';
-    b.fillRect(Math.round(ax), Math.round(ay) - 3 - Math.round(fl * 3) - 1, 2, 2);
-    if (Math.random() < 0.6) parts.push({ x: ax, y: ay - 4, z: 0, vx: rand(-10, 10), vy: rand(-12, 2), vz: 0, life: 0.2, max: 0.2, type: 'spark' });
+    const tx = Math.round(ax) + 1, ty = Math.round(ay) - 3 - Math.round(fl * 3) - 1;
+    b.fillStyle = '#9b7442'; b.fillRect(tx, ty + 1, 1, Math.round(fl * 3) + 1);
+    b.save(); b.globalCompositeOperation = 'lighter';
+    const gl = b.createRadialGradient(tx, ty, 0, tx, ty, 6 * fuseFx.flick);
+    gl.addColorStop(0, 'rgba(255,220,140,0.6)'); gl.addColorStop(1, 'rgba(255,120,20,0)');
+    b.fillStyle = gl; b.beginPath(); b.arc(tx, ty, 6, 0, TAU); b.fill();
+    b.restore();
+    b.fillStyle = '#fffbe0'; b.fillRect(tx, ty, 1, 1);
+    for (let i = 0; i < 2; i++) if (Math.random() < 0.7) { const a = rand(0, TAU), sp = rand(10, 30); parts.push({ x: tx, y: ty + 4, z: 4, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.6, vz: rand(0, 30), life: rand(0.12, 0.3), max: 0.3, type: 'spark' }); }
+    if (Math.random() < 0.25) parts.push({ x: tx, y: ty + 4, z: 4, vx: rand(-2, 2), vy: 0, vz: 0, life: 0.7, max: 0.7, type: 'wisp' });
   }
   if (burnt && Math.random() < 0.3) parts.push({ x: px + rand(-3, 3), y: py - 12, z: 0, vx: rand(-3, 3), vy: -6, vz: 0, life: 0.8, max: 0.8, type: 'smoke' });
 }
@@ -884,21 +865,7 @@ function drawAimGuide() {
     b.fillRect(Math.round(x), Math.round(y), 1, 1);
   }
   const zc = ZONES[zoneOf(a.pdepth)].col;
-  const pr = predictHits(a.lx, a.ly, a.pdepth);
-  hold.pred = pr;
-  // 지금 놓으면 잡히는 물고기: 그림자가 노랗게 또렷해진다
-  const pulse = 0.6 + Math.sin(time * 9) * 0.25;
-  for (const f of pr.near) {
-    const sc = 1 - f.depth * 0.32;
-    b.globalAlpha = 0.22; fishShape(b, f.x, f.y, f.ang, f.sp.len * sc, f.sp.wid * sc, f.ph, '#fff3b0');
-  }
-  for (const f of pr.hits) {
-    const sc = 1 - f.depth * 0.32;
-    b.globalAlpha = pulse * 0.45; fishShape(b, f.x, f.y, f.ang, f.sp.len * sc + 2, f.sp.wid * sc + 2, f.ph, '#ffffff');
-    b.globalAlpha = pulse; fishShape(b, f.x, f.y, f.ang, f.sp.len * sc, f.sp.wid * sc, f.ph, '#ffd84a');
-  }
-  b.globalAlpha = 1;
-  b.strokeStyle = pr.bigType === 'whale' ? '#ff3b3b' : zc; b.lineWidth = 1;
+  b.strokeStyle = zc; b.lineWidth = 1;
   b.globalAlpha = 0.5 + Math.sin(time * 10) * 0.2;
   b.beginPath(); b.ellipse(a.lx, a.ly, R, R * 0.8, 0, 0, TAU); b.stroke();
   b.globalAlpha = 1;
@@ -958,7 +925,8 @@ function drawParts() {
     if (p.type === 'drop') { b.fillStyle = `rgba(225,248,255,${0.5 + k * 0.5})`; b.fillRect(x, y, 1, p.vz > 0 ? 2 : 1); }
     else if (p.type === 'bubble') { b.fillStyle = `rgba(220,250,255,${k * 0.6})`; b.fillRect(x, y, 1, 1); }
     else if (p.type === 'fire') { b.fillStyle = k > 0.5 ? '#ffe066' : '#ff7b2a'; b.fillRect(x, y, 2, 2); }
-    else if (p.type === 'spark') { b.fillStyle = Math.random() < 0.5 ? '#ffe066' : '#ffa53a'; b.fillRect(x, y, 1, 1); }
+    else if (p.type === 'spark') { b.fillStyle = k > 0.65 ? '#fffbe0' : k > 0.35 ? '#ffd45a' : '#ff7a24'; b.fillRect(x, y, 1, 1); }
+    else if (p.type === 'wisp') { b.fillStyle = `rgba(210,210,205,${k * 0.35})`; b.fillRect(x, y, 2, 1); }
     else if (p.type === 'smoke') { b.fillStyle = `rgba(60,60,60,${k * 0.6})`; b.fillRect(x - 1, y - 1, 3, 3); }
   }
 }
@@ -1016,20 +984,76 @@ function txt(str, x, y, size, col, align = 'left', stroke = true) {
   ctx.fillStyle = col; ctx.fillText(str, x, y);
 }
 
+// ===== 도화선 불꽃 이펙트 (화면 좌표) =====
+const fuseFx = { sparks: [], smoke: [], on: false, lightX: 0, lightY: 0, k: 1, flick: 1 };
+let frameDt = 1 / 60;
+function emitFuseFx(x, y, k, intensity) {
+  const dt = frameDt;
+  // 사방으로 튀는 불티
+  let n = 150 * intensity * dt;
+  while (n > 0) {
+    if (Math.random() < n) {
+      const a = rand(0, TAU), sp = rand(60, 230) * k * (Math.random() < 0.15 ? 1.6 : 1);
+      fuseFx.sparks.push({ x, y, px: x, py: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40 * k, life: rand(0.1, 0.38), max: 0.38, w: rand(0.8, 1.8) * k });
+    }
+    n -= 1;
+  }
+  // 가끔 터지듯 한 움큼
+  if (Math.random() < dt * 4 * intensity) {
+    for (let i = 0; i < 10; i++) {
+      const a = rand(-Math.PI, 0), sp = rand(150, 320) * k;
+      fuseFx.sparks.push({ x, y, px: x, py: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.2, 0.45), max: 0.45, w: rand(1, 2) * k });
+    }
+    if (ac && !muted) noiseBurst(0.03, 6500, 0.12, 'highpass');
+  }
+  // 연기
+  if (Math.random() < dt * 22) fuseFx.smoke.push({ x: x + rand(-2, 2) * k, y: y - 4 * k, vx: rand(-8, 8) * k, vy: rand(-45, -25) * k, r: rand(2, 4) * k, life: rand(0.7, 1.2), max: 1.2 });
+}
+function updateFuseFx(dt) {
+  const g = 520 * fuseFx.k;
+  for (const p of fuseFx.sparks) { p.px = p.x; p.py = p.y; p.vy += g * dt; p.vx *= 1 - dt * 1.5; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; }
+  fuseFx.sparks = fuseFx.sparks.filter(p => p.life > 0);
+  for (const s2 of fuseFx.smoke) { s2.x += s2.vx * dt + Math.sin(time * 3 + s2.r) * 6 * fuseFx.k * dt; s2.y += s2.vy * dt; s2.vy *= 1 - dt * 0.8; s2.r += 9 * fuseFx.k * dt; s2.life -= dt; }
+  fuseFx.smoke = fuseFx.smoke.filter(s2 => s2.life > 0);
+  // 불빛 깜빡임: 부드러운 노이즈
+  fuseFx.flick = lerp(fuseFx.flick, rand(0.7, 1.25), dt * 25);
+  if (!hold) fuseFx.on = false;
+}
+function drawFuseFx() {
+  const k = fuseFx.k;
+  // 연기 (일반 합성)
+  for (const s2 of fuseFx.smoke) {
+    const t = s2.life / s2.max;
+    ctx.fillStyle = `rgba(190,190,185,${0.28 * t})`;
+    ctx.beginPath(); ctx.arc(s2.x, s2.y, s2.r, 0, TAU); ctx.fill();
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  if (fuseFx.on) {
+    const x = fuseFx.lightX, y = fuseFx.lightY, f = fuseFx.flick;
+    // 넓은 주변광
+    let gr = ctx.createRadialGradient(x, y, 0, x, y, 48 * k * f);
+    gr.addColorStop(0, 'rgba(255,170,70,0.35)'); gr.addColorStop(1, 'rgba(255,90,0,0)');
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, 48 * k * f, 0, TAU); ctx.fill();
+    // 뜨거운 중심
+    gr = ctx.createRadialGradient(x, y, 0, x, y, 9 * k * f);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,240,170,0.9)'); gr.addColorStop(1, 'rgba(255,150,40,0)');
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, 9 * k * f, 0, TAU); ctx.fill();
+  }
+  // 불티: 꼬리를 끄는 선, 식으면서 흰색→노랑→주황→빨강
+  ctx.lineCap = 'round';
+  for (const p of fuseFx.sparks) {
+    const t = p.life / p.max;
+    const col = t > 0.7 ? '255,250,225' : t > 0.45 ? '255,215,110' : t > 0.2 ? '255,140,40' : '220,60,20';
+    ctx.strokeStyle = `rgba(${col},${Math.min(1, t * 1.6)})`; ctx.lineWidth = p.w;
+    ctx.beginPath(); ctx.moveTo(p.px - (p.x - p.px) * 1.5, p.py - (p.y - p.py) * 1.5); ctx.lineTo(p.x, p.y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawFuseStick(u) {
   const a = aimInfo(hold), W = cvs.width, H = cvs.height;
   const fs = Math.max(12, u * 1.05);
-  // 착탄 지점 라벨: 구간 + 잡힐 마릿수
-  const pr = hold.pred;
-  if (a.len >= 4 && pr) {
-    const z = ZONES[zoneOf(a.pdepth)];
-    let lab = z.name, col = z.col;
-    if (pr.hits.length) lab += ` · ${pr.hits.length}마리`;
-    if (pr.bigType === 'whale') { lab = '⚠ 고래!'; col = '#ff5b5b'; }
-    else if (pr.bigType === 'shark') lab += ' · 상어';
-    else if (pr.bigType === 'squid') lab += ' · 오징어';
-    txt(lab, a.lx * S, (a.ly + R * 0.8 + 6) * S, fs * 1.15, col, 'center');
-  }
   // 손가락 옆 큼직한 다이너마이트 + 구간별로 칠한 도화선
   const k = clamp(Math.min(W, H) / 480, 0.95, 1.35);
   const FL = 150 * k, sw = 20 * k, sh = 44 * k;
@@ -1042,38 +1066,51 @@ function drawFuseStick(u) {
   const yAt = r => top - FL * clamp(r / FUSE, 0, 1); // 남은 시간 r초 위치
   const fl = a.flightEff;
   const bounds = [0, fl, fl + 0.4 / SINK, fl + 0.7 / SINK, FUSE].map(v => Math.min(FUSE, v));
-  // 탄 부분 (재)
-  ctx.strokeStyle = 'rgba(60,60,60,0.5)'; ctx.lineWidth = 2 * k; ctx.setLineDash([3 * k, 4 * k]);
-  ctx.beginPath(); ctx.moveTo(ix, yAt(FUSE)); ctx.lineTo(ix, yAt(hold.fuse)); ctx.stroke(); ctx.setLineDash([]);
-  // 남은 도화선
+  const sy = yAt(hold.fuse);
+  // 구간 눈금자 (도화선 오른쪽의 얇은 색 띠)
+  const rx = ix + 9 * k;
   ctx.lineCap = 'butt';
-  ctx.strokeStyle = '#000'; ctx.lineWidth = 9 * k;
-  ctx.beginPath(); ctx.moveTo(ix, top + 2); ctx.lineTo(ix, yAt(hold.fuse)); ctx.stroke();
   for (let zi = 0; zi < 4; zi++) {
     const r0 = bounds[zi], r1 = Math.min(bounds[zi + 1], hold.fuse);
     if (r1 <= r0) continue;
-    ctx.strokeStyle = ZONES[zi].col; ctx.lineWidth = 6 * k;
-    ctx.beginPath(); ctx.moveTo(ix, yAt(r0)); ctx.lineTo(ix, yAt(r1)); ctx.stroke();
-    // 구간 이름 (아직 안 탄 구간만)
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 5 * k;
+    ctx.beginPath(); ctx.moveTo(rx, yAt(r0)); ctx.lineTo(rx, yAt(r1)); ctx.stroke();
+    ctx.strokeStyle = ZONES[zi].col; ctx.lineWidth = 3 * k;
+    ctx.beginPath(); ctx.moveTo(rx, yAt(r0) - 1); ctx.lineTo(rx, yAt(r1) + 1); ctx.stroke();
     const ym = (yAt(r0) + yAt(Math.min(bounds[zi + 1], FUSE))) / 2;
-    if (yAt(r0) - yAt(bounds[zi + 1]) > 14 * k && zi !== a.zone) {
-      ctx.globalAlpha = 0.75; txt(ZONES[zi].name, ix + 10 * k, ym, fs * 0.85, ZONES[zi].col); ctx.globalAlpha = 1;
+    if (yAt(r0) - yAt(bounds[zi + 1]) > 14 * k && zi !== a.zone && ym > sy + 8 * k) {
+      ctx.globalAlpha = 0.8; txt(ZONES[zi].name, rx + 6 * k, ym, fs * 0.85, ZONES[zi].col); ctx.globalAlpha = 1;
     }
   }
-  // 구간 경계 눈금
-  ctx.fillStyle = '#000';
-  for (let zi = 1; zi < 4; zi++) if (bounds[zi] < hold.fuse) ctx.fillRect(ix - 6 * k, yAt(bounds[zi]) - 1, 12 * k, 2 * k);
+  for (let zi = 1; zi < 4; zi++) if (bounds[zi] < hold.fuse) { ctx.fillStyle = '#000'; ctx.fillRect(rx - 4 * k, yAt(bounds[zi]) - 1, 8 * k, 2 * k); }
+  // 꼬인 심지 (살짝 휘어짐)
+  const bend = y => Math.sin((top - y) / (FL) * 2.2 + 0.6) * 3 * k;
+  const cordW = 4.5 * k;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#2a1a0c'; ctx.lineWidth = cordW + 3 * k;
+  ctx.beginPath(); for (let y = top; y >= sy; y -= 3) { const x = ix + bend(y); y === top ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } ctx.lineTo(ix + bend(sy), sy); ctx.stroke();
+  ctx.strokeStyle = '#9b7442'; ctx.lineWidth = cordW;
+  ctx.beginPath(); for (let y = top; y >= sy; y -= 3) { const x = ix + bend(y); y === top ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } ctx.lineTo(ix + bend(sy), sy); ctx.stroke();
+  ctx.strokeStyle = '#5e4322'; ctx.lineWidth = 1.2 * k; ctx.lineCap = 'butt';
+  for (let y = top - 2 * k; y > sy + 4 * k; y -= 4 * k) {
+    const x = ix + bend(y);
+    ctx.beginPath(); ctx.moveTo(x - cordW / 2, y + 1.5 * k); ctx.lineTo(x + cordW / 2, y - 1.5 * k); ctx.stroke();
+  }
+  // 타 들어가는 부분: 검게 그을린 끝 + 붉은 불씨
+  const ex = ix + bend(sy);
+  const eg = ctx.createLinearGradient(0, sy, 0, sy + 9 * k);
+  eg.addColorStop(0, '#ffef9a'); eg.addColorStop(0.25, '#ff7a1a'); eg.addColorStop(0.6, '#7a1e08'); eg.addColorStop(1, 'rgba(30,15,5,0)');
+  ctx.fillStyle = eg; ctx.fillRect(ex - cordW / 2 - 0.5, sy, cordW + 1, 9 * k);
   // 막대
   ctx.fillStyle = '#000'; ctx.fillRect(ix - sw / 2 - 2, top - 2, sw + 4, sh + 4);
   ctx.fillStyle = '#d0362a'; ctx.fillRect(ix - sw / 2, top, sw, sh);
   ctx.fillStyle = '#f4ead2'; ctx.fillRect(ix - sw / 2, top + sh * 0.38, sw, sh * 0.22);
   ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(ix - sw / 2 + 2 * k, top + 2 * k, 3 * k, sh - 4 * k);
-  // 불꽃
-  const sy = yAt(hold.fuse), zc = ZONES[a.zone].col;
-  const gr = ctx.createRadialGradient(ix, sy, 0, ix, sy, 22 * k);
-  gr.addColorStop(0, 'rgba(255,255,220,0.95)'); gr.addColorStop(0.3, 'rgba(255,190,60,0.7)'); gr.addColorStop(1, 'rgba(255,120,0,0)');
-  ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(ix, sy, 22 * k * (0.8 + Math.random() * 0.4), 0, TAU); ctx.fill();
-  for (let i = 0; i < 5; i++) { ctx.fillStyle = Math.random() < 0.5 ? '#fff6b0' : '#ffb03a'; ctx.fillRect(ix + rand(-12, 12) * k, sy + rand(-12, 8) * k, 2 * k, 2 * k); }
+  // 불꽃: 파티클 생성 (그리기는 drawFuseFx)
+  const zc = ZONES[a.zone].col;
+  emitFuseFx(ex, sy, k, a.zone === 0 ? 1.6 : 1);
+  fuseFx.lightX = ex; fuseFx.lightY = sy; fuseFx.k = k; fuseFx.on = true;
+  drawFuseFx();
   // 현재 구간 큰 글씨
   const pop = hold.zonePop > 0 ? 1 + hold.zonePop * 1.6 : 1;
   txt(ZONES[a.zone].name, ix - 14 * k, sy - 4 * k, fs * 1.5 * pop, zc, 'right');
@@ -1099,7 +1136,7 @@ function drawHUD() {
   }
   if (dyn === 0 && !hold) txt('다이너마이트 소진', W - 14, 22, u * 1.1, '#f88', 'right');
 
-  if (hold) drawFuseStick(u);
+  if (hold) drawFuseStick(u); else if (fuseFx.sparks.length || fuseFx.smoke.length) drawFuseFx();
 
   // 팝업 텍스트
   for (const t of texts) {
@@ -1147,6 +1184,7 @@ newGame();
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  frameDt = dt; updateFuseFx(dt);
   if (state === 'menu' || state === 'end') { updateSchools(dt); updateFish(dt); }
   update(dt);
   render();
