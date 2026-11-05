@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Monkey Poop Dodge</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1b1b2f;
+    color: #fff;
+    font-family: "Courier New", monospace;
+    overflow: hidden;
+    -webkit-user-select: none; user-select: none;
+  }
+  #wrap {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%;
+  }
+  canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: #000;
+    box-shadow: 0 0 0 4px #333, 0 0 0 8px #111;
+  }
+  canvas { touch-action: none; }
+  #helpBtn {
+    position: fixed; top: 8px; right: 8px;
+    width: 34px; height: 34px;
+    font: bold 18px "Courier New", monospace;
+    color: #1b1b2f; background: #ffd166;
+    border: 0; border-radius: 4px; box-shadow: 0 3px 0 #b8860b;
+    cursor: pointer;
+  }
+  #helpBtn:focus-visible, #helpClose:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  #help {
+    position: fixed; inset: 0;
+    background: rgba(10, 10, 25, 0.82);
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px; box-sizing: border-box;
+    -webkit-user-select: text; user-select: text;
+    touch-action: pan-y;
+  }
+  #help[hidden] { display: none; }
+  #help .panel {
+    width: 100%; max-width: 420px; max-height: 100%; overflow-y: auto;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y;
+    background: #2b2340; border: 4px solid #ffd166; border-radius: 6px;
+    padding: 18px 20px; box-sizing: border-box;
+    font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    font-size: 14px; line-height: 1.55; text-align: left;
+    word-break: keep-all; overflow-wrap: break-word;
+  }
+  #help h2 { margin: 0 0 4px; font: bold 20px "Courier New", monospace; color: #ffd166; letter-spacing: 1px; }
+  #help .goal { margin: 0 0 12px; color: #e8e2f4; }
+  #help h3 { margin: 14px 0 6px; font-size: 13px; color: #52b788; letter-spacing: 1px; }
+  #help ul { margin: 0; padding-left: 18px; }
+  #help li { margin: 2px 0; color: #f1eefa; }
+  #help kbd {
+    display: inline-block; padding: 0 5px; min-width: 12px; text-align: center;
+    font: bold 12px "Courier New", monospace;
+    background: #1b1b2f; color: #ffd166; border: 1px solid #5a4d7a; border-radius: 3px;
+  }
+  #help table { border-collapse: collapse; width: 100%; }
+  #help td { padding: 3px 0; vertical-align: top; }
+  #help td:first-child { width: 34%; color: #c9bfe0; padding-right: 8px; }
+  #helpClose {
+    display: block; width: 100%; margin-top: 16px; padding: 10px;
+    font: bold 15px "Courier New", monospace;
+    color: #1b1b2f; background: #52b788; border: 0; border-radius: 4px; box-shadow: 0 3px 0 #2d6a4f;
+    cursor: pointer;
+  }
+  #back {
+    position: fixed; top: 8px; left: 8px;
+    color: #ffd166; text-decoration: none; font-size: 14px;
+    background: rgba(0,0,0,.5); padding: 4px 8px; border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+<a id="back" href="{{ url_for('home') }}">&larr; Pixel Quest</a>
+<button id="helpBtn" type="button" aria-label="게임 방법 보기" title="게임 방법 (H)">?</button>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="help" role="dialog" aria-modal="true" aria-labelledby="helpTitle" hidden>
+  <div class="panel">
+    <h2 id="helpTitle">HOW TO PLAY</h2>
+    <p class="goal">나무 위 원숭이가 던지는 똥을 피해 최대한 오래 살아남으세요!</p>
+
+    <h3>조작법</h3>
+    <table>
+      <tr><td>PC 이동</td><td><kbd>←</kbd> <kbd>→</kbd> 또는 <kbd>A</kbd> <kbd>D</kbd></td></tr>
+      <tr><td>PC 던지기</td><td><kbd>Space</kbd> <kbd>↑</kbd> <kbd>W</kbd> (장갑 모드)</td></tr>
+      <tr><td>모바일 이동</td><td>한 손가락으로 드래그</td></tr>
+      <tr><td>모바일 던지기</td><td>드래그하면서 <b>두 번째 손가락으로 탭</b>, 또는 하단 THROW 버튼</td></tr>
+      <tr><td>시작 / 재시작</td><td><kbd>Space</kbd> 또는 화면 탭</td></tr>
+      <tr><td>일시정지</td><td><kbd>P</kbd> 또는 <kbd>Esc</kbd></td></tr>
+      <tr><td>이 설명서</td><td><kbd>H</kbd> 또는 오른쪽 위 <kbd>?</kbd></td></tr>
+    </table>
+
+    <h3>규칙</h3>
+    <ul>
+      <li>하트 3개로 시작합니다. 똥에 맞으면 하트 1개, 큰 <b>왕똥</b>은 2개가 깎입니다.</li>
+      <li>바닥의 작은 그림자가 똥이 떨어질 자리입니다.</li>
+      <li>떨어진 똥은 웅덩이로 남고, 밟으면 잠시 느려집니다.</li>
+      <li>15초마다 레벨이 올라 똥이 빨라지고, 여러 개가 한꺼번에 날아오고, 원숭이도 늘어납니다(최대 3마리).</li>
+    </ul>
+
+    <h3>아이템</h3>
+    <ul>
+      <li><b>바나나</b>: 하트 1개 회복. 하트가 가득하면 +100점.</li>
+      <li><b>장갑</b>: 15초 동안 장갑 모드. 바닥 똥 웅덩이를 지나가면 똥을 줍고(최대 3개) 위로 던질 수 있습니다.</li>
+      <li>던진 똥에 맞은 원숭이는 <b>3초 동안 기절</b>하고 <b>바나나 5개</b>를 쏟아냅니다(+200점). 원숭이는 계속 움직이니 앞을 보고 던지세요.</li>
+    </ul>
+
+    <h3>점수</h3>
+    <ul>
+      <li>똥을 피할 때마다 +10점, 10개 연속으로 피할 때마다 보너스가 커집니다(맞으면 콤보 초기화).</li>
+      <li>버티는 시간만큼 점수가 계속 오르고, 최고 기록은 이 브라우저에 저장됩니다.</li>
+    </ul>
+
+    <button id="helpClose" type="button">알겠어요!</button>
+  </div>
+</div>
+<script>
+(() => {
+  // ---------- 기본 설정 ----------
+  const W = 160, H = 240;          // 내부 해상도 (픽셀아트)
+  const GROUND = H - 24;           // 바닥 높이
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  canvas.width = W; canvas.height = H;
+
+  function resize() {
+    const scale = Math.max(1, Math.floor(Math.min(window.innerWidth / W, (window.innerHeight - 16) / H)));
+    canvas.style.width = (W * scale) + 'px';
+    canvas.style.height = (H * scale) + 'px';
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------- 스프라이트 (문자 → 색상) ----------
+  const PAL = {
+    '.': null,
+    'k': '#1a1a1a', 'b': '#7a4a24', 'B': '#a8683a', 'f': '#f2c79b',
+    'w': '#ffffff', 'r': '#e63946', 'y': '#ffd166', 'Y': '#f4a300',
+    'p': '#5c3a1e', 'P': '#8b5a2b', 'g': '#2d6a4f', 'G': '#52b788',
+    'c': '#4cc9f0', 'C': '#277da1', 's': '#f1c0a0', 'h': '#3a2a1a',
+    'o': '#ff8c42'
+  };
+
+  const SPR = {
+    monkey: [
+      "..bbbbbb..",
+      ".bbBBBBbb.",
+      "bfbBBBBbfb",
+      "bfbffffbfb",
+      ".bfwkfwkf.",
+      ".bffffffb.",
+      "..bfrrfb..",
+      "...bffb...",
+      "..bbbbbb..",
+      ".bb.bb.bb.",
+    ],
+    monkeyThrow: [
+      "b.bbbbbb..",
+      "bbbBBBBbb.",
+      ".fbBBBBbfb",
+      "..bffffbfb",
+      ".bfwkfwkf.",
+      ".bffffffb.",
+      "..bfkkfb..",
+      "...bffb...",
+      "..bbbbbb..",
+      ".bb.bb.bb.",
+    ],
+    monkeyDizzy: [
+      "..bbbbbb..",
+      ".bbBBBBbb.",
+      "bfbBBBBbfb",
+      "bfbffffbfb",
+      ".bfkkfkkf.",
+      ".bffffffb.",
+      "..bfwwfb..",
+      "...bffb...",
+      "..bbbbbb..",
+      ".bb.bb.bb.",
+    ],
+    glove: [
+      ".k.k.k..",
+      "kwkwkwk.",
+      "kwkwkwkk",
+      "kwwwwwwk",
+      "kwwwwwk.",
+      ".kwwwk..",
+      ".krrrk..",
+      ".kkkkk..",
+    ],
+    hero: [
+      "...hhhh...",
+      "..hhhhhh..",
+      "..ssssss..",
+      "..skssks..",
+      "..ssssss..",
+      "...srrs...",
+      "..cccccc..",
+      ".scccccs..",
+      "..CCCCCC..",
+      "..C....C..",
+      ".kk....kk.",
+    ],
+    heroHit: [
+      "...hhhh...",
+      "..hhhhhh..",
+      "..ssssss..",
+      "..sxssxs..",
+      "..ssssss..",
+      "...skks...",
+      "..cccccc..",
+      ".scccccs..",
+      "..CCCCCC..",
+      "..C....C..",
+      ".kk....kk.",
+    ],
+    poop: [
+      "..p...",
+      ".pPp..",
+      "pPPPp.",
+      "pPpPPp",
+      ".pppp.",
+    ],
+    banana: [
+      ".....k",
+      "....yY",
+      "...yy.",
+      "yyyy..",
+      ".YYY..",
+    ],
+    heart: [
+      ".rr.rr.",
+      "rrrrrrr",
+      "rrrrrrr",
+      ".rrrrr.",
+      "..rrr..",
+      "...r...",
+    ],
+    heartEmpty: [
+      ".kk.kk.",
+      "k..k..k",
+      "k.....k",
+      ".k...k.",
+      "..k.k..",
+      "...k...",
+    ],
+  };
+  PAL['x'] = '#1a1a1a';
+
+  // 스프라이트를 오프스크린 캔버스로 미리 렌더링
+  const cache = {};
+  function bake(name, flip) {
+    const key = name + (flip ? '_f' : '');
+    if (cache[key]) return cache[key];
+    const rows = SPR[name];
+    const c = document.createElement('canvas');
+    c.width = rows[0].length; c.height = rows.length;
+    const g = c.getContext('2d');
+    rows.forEach((row, y) => {
+      [...row].forEach((ch, x) => {
+        const col = PAL[ch];
+        if (!col) return;
+        g.fillStyle = col;
+        g.fillRect(flip ? c.width - 1 - x : x, y, 1, 1);
+      });
+    });
+    return (cache[key] = c);
+  }
+  function draw(name, x, y, flip) {
+    const img = bake(name, flip);
+    ctx.drawImage(img, Math.round(x - img.width / 2), Math.round(y - img.height / 2));
+  }
+
+  // ---------- 비트맵 폰트 (3x5) ----------
+  const FONT = {
+    '0':'111101101101111','1':'010110010010111','2':'111001111100111','3':'111001111001111',
+    '4':'101101111001001','5':'111100111001111','6':'111100111101111','7':'111001010010010',
+    '8':'111101111101111','9':'111101111001111','A':'010101111101101','B':'110101110101110',
+    'C':'011100100100011','D':'110101101101110','E':'111100110100111','F':'111100110100100',
+    'G':'011100101101011','H':'101101111101101','I':'111010010010111','J':'001001001101010',
+    'K':'101101110101101','L':'100100100100111','M':'101111111101101','N':'110101101101101',
+    'O':'010101101101010','P':'110101110100100','Q':'010101101110011','R':'110101110101101',
+    'S':'011100010001110','T':'111010010010010','U':'101101101101111','V':'101101101101010',
+    'W':'101101111111101','X':'101101010101101','Y':'101101010010010','Z':'111001010100111',
+    ' ':'000000000000000','!':'010010010000010',':':'000010000010000','-':'000000111000000',
+    '.':'000000000000010','/':'001001010100100','?':'111001010000010','+':'000010111010000',
+    'x':'000101010101000','<':'001010100010001','>':'100010001010100','=':'000111000111000'
+  };
+  function text(str, x, y, color = '#fff', align = 'left', scale = 1) {
+    str = String(str).toUpperCase();
+    const w = str.length * 4 * scale - scale;
+    if (align === 'center') x -= Math.floor(w / 2);
+    else if (align === 'right') x -= w;
+    for (const ch of str) {
+      const glyph = FONT[ch] || FONT['?'];
+      for (let i = 0; i < 15; i++) {
+        if (glyph[i] === '1') {
+          const gx = x + (i % 3) * scale, gy = y + Math.floor(i / 3) * scale;
+          ctx.fillStyle = '#000';
+          ctx.fillRect(gx + scale, gy + scale, scale, scale);
+          ctx.fillStyle = color;
+          ctx.fillRect(gx, gy, scale, scale);
+        }
+      }
+      x += 4 * scale;
+    }
+  }
+
+  // ---------- 사운드 ----------
+  let actx = null;
+  function beep(freq, dur = 0.08, type = 'square', vol = 0.06, slide = 0) {
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.value = freq;
+      if (slide) o.frequency.linearRampToValueAtTime(freq + slide, actx.currentTime + dur);
+      g.gain.value = vol;
+      g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur);
+      o.connect(g); g.connect(actx.destination);
+      o.start(); o.stop(actx.currentTime + dur);
+    } catch (e) { /* 사운드 미지원 */ }
+  }
+  const sfx = {
+    throw: () => beep(300, 0.1, 'triangle', 0.05, 200),
+    splat: () => beep(90, 0.15, 'sawtooth', 0.05, -40),
+    hit:   () => beep(140, 0.35, 'square', 0.08, -100),
+    pick:  () => { beep(660, 0.08); setTimeout(() => beep(990, 0.1), 70); },
+    over:  () => { beep(300, 0.2); setTimeout(() => beep(200, 0.2), 200); setTimeout(() => beep(120, 0.4), 400); },
+    bonk:  () => { beep(200, 0.1, 'square', 0.08, 300); setTimeout(() => beep(880, 0.08), 100); setTimeout(() => beep(1100, 0.08), 180); setTimeout(() => beep(1320, 0.12), 260); },
+    grab:  () => beep(440, 0.06, 'triangle', 0.06, 120),
+    glove: () => { beep(392, 0.08); setTimeout(() => beep(523, 0.08), 80); setTimeout(() => beep(784, 0.15), 160); },
+    level: () => { beep(520, 0.08); setTimeout(() => beep(660, 0.08), 80); setTimeout(() => beep(880, 0.12), 160); },
+  };
+
+  // ---------- 입력 ----------
+  const keys = {};
+  let touchX = null;
+  // ---------- 설명서 ----------
+  const helpEl = document.getElementById('help');
+  const helpBtn = document.getElementById('helpBtn');
+  let resumeAfterHelp = false;
+  function openHelp() {
+    if (state === 'play') { state = 'pause'; resumeAfterHelp = true; }
+    helpEl.hidden = false;
+    for (const k in keys) keys[k] = false;
+    helpEl.querySelector('.panel').scrollTop = 0;
+    document.getElementById('helpClose').focus({ preventScroll: true });
+  }
+  function closeHelp() {
+    helpEl.hidden = true;
+    if (resumeAfterHelp && state === 'pause') state = 'play';
+    resumeAfterHelp = false;
+    helpBtn.blur();
+  }
+  helpBtn.addEventListener('click', () => helpEl.hidden ? openHelp() : closeHelp());
+  document.getElementById('helpClose').addEventListener('click', closeHelp);
+  helpEl.addEventListener('click', e => { if (e.target === helpEl) closeHelp(); });
+
+  window.addEventListener('keydown', e => {
+    if (!helpEl.hidden) {
+      if (['Escape', 'KeyH', 'Enter', 'Space'].includes(e.code)) { e.preventDefault(); closeHelp(); }
+      return;
+    }
+    if (e.code === 'KeyH') { openHelp(); return; }
+    keys[e.code] = true;
+    if (['ArrowLeft','ArrowRight','Space','ArrowUp','ArrowDown'].includes(e.code)) e.preventDefault();
+    if (e.code === 'Space' || e.code === 'Enter') onAction();
+    if (state === 'play' && !e.repeat && ['Space', 'ArrowUp', 'KeyW'].includes(e.code)) throwBack();
+    if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+  });
+  window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+  function canvasX(clientX) {
+    const r = canvas.getBoundingClientRect();
+    return (clientX - r.left) / r.width * W;
+  }
+  function canvasY(clientY) {
+    const r = canvas.getBoundingClientRect();
+    return (clientY - r.top) / r.height * H;
+  }
+  // 첫 번째 손가락 = 이동, 두 번째 손가락 탭 = 던지기
+  let movePointer = null;
+  canvas.addEventListener('pointerdown', e => {
+    if (state === 'play') {
+      // 이미 이동 중인 손가락이 있으면 두 번째 손가락은 던지기
+      if (movePointer !== null && e.pointerId !== movePointer && e.pointerType !== 'mouse') {
+        throwBack();
+        return;
+      }
+      // 장갑 모드일 때 하단 바 왼쪽(THROW 버튼)을 누르면 던지기
+      if (glove > 0 && canvasY(e.clientY) >= H - 18 && canvasX(e.clientX) < W * 0.6) {
+        throwBack();
+        return;
+      }
+    }
+    if (e.pointerType !== 'mouse') movePointer = e.pointerId;
+    touchX = canvasX(e.clientX);
+    onAction();
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (e.pointerType === 'mouse' || e.pointerId === movePointer) touchX = canvasX(e.clientX);
+  });
+  function endPointer(e) {
+    if (e.pointerId === movePointer) { movePointer = null; touchX = null; }
+  }
+  window.addEventListener('pointerup', endPointer);
+  window.addEventListener('pointercancel', endPointer);
+  canvas.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') touchX = null; });
+
+  // ---------- 게임 상태 ----------
+  let state = 'title';   // title | play | pause | over
+  let hero, monkeys, poops, splats, items, particles, popups, shots;
+  let score, level, time, lives, dodged, combo, invuln, shake, nextItem;
+  let glove, ammo, nextGlove, monkeyHits;
+  const GLOVE_TIME = 15, MAX_AMMO = 3, STUN_TIME = 3;
+  let best = 0;
+  try { best = +localStorage.getItem('monkeyPoopBest') || 0; } catch (e) {}
+
+  function reset() {
+    hero = { x: W / 2, y: GROUND - 6, vx: 0, face: 1, slow: 0 };
+    monkeys = [makeMonkey(W / 2)];
+    poops = []; splats = []; items = []; particles = []; popups = [];
+    score = 0; level = 1; time = 0; lives = 3; dodged = 0; combo = 0;
+    invuln = 0; shake = 0; nextItem = 8;
+    shots = []; glove = 0; ammo = 0; nextGlove = 10; monkeyHits = 0;
+  }
+
+  function makeMonkey(x) {
+    return { x, y: 30, tx: x, cd: 1.5 + Math.random(), anim: 0, throwT: 0, face: 1, stun: 0 };
+  }
+
+  function onAction() {
+    if (state === 'title' || state === 'over') { reset(); state = 'play'; sfx.level(); }
+    else if (state === 'pause') state = 'play';
+  }
+  function togglePause() {
+    if (state === 'play') state = 'pause';
+    else if (state === 'pause') state = 'play';
+  }
+  document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') state = 'pause'; });
+
+  // ---------- 난이도 ----------
+  function difficulty() {
+    return {
+      throwGap: Math.max(0.35, 1.6 - level * 0.12),   // 던지기 간격
+      speed: 1 + level * 0.08,                         // 투사체 속도 배율
+      spread: level >= 3 ? (level >= 6 ? 3 : 2) : 1,   // 한번에 던지는 개수
+      monkeys: Math.min(3, 1 + Math.floor((level - 1) / 3)),
+    };
+  }
+
+  // ---------- 업데이트 ----------
+  function throwPoop(m) {
+    const d = difficulty();
+    const n = Math.random() < 0.35 ? d.spread : 1;
+    // 플레이어 위치를 예측해서 조준 (약간의 오차 포함)
+    const lead = hero.vx * 0.6;
+    const flight = (0.9 + Math.random() * 0.5) / d.speed;
+    for (let i = 0; i < n; i++) {
+      const offset = (i - (n - 1) / 2) * 22;
+      const targetX = Math.max(4, Math.min(W - 4, hero.x + lead + offset + (Math.random() - 0.5) * 20));
+      const g = 220 * d.speed * d.speed;
+      const dy = GROUND - 2 - (m.y + 2);
+      const vy = (dy - 0.5 * g * flight * flight) / flight;
+      poops.push({
+        x: m.x, y: m.y + 2, vx: (targetX - m.x) / flight, vy, g,
+        rot: 0, big: Math.random() < 0.12 && level >= 2
+      });
+    }
+    m.throwT = 0.25;
+    m.face = hero.x < m.x ? -1 : 1;
+    sfx.throw();
+  }
+
+  // 장갑으로 주운 똥을 위로 던지기
+  function throwBack() {
+    if (glove <= 0 || ammo <= 0) return;
+    ammo--;
+    shots.push({ x: hero.x + hero.face * 3, y: hero.y - 8, vy: -260, rot: 0 });
+    sfx.throw();
+  }
+
+  // 똥에 맞은 원숭이: 기절 + 바나나 5개 쏟아내기
+  function stunMonkey(m) {
+    m.stun = STUN_TIME;
+    m.throwT = 0;
+    monkeyHits++;
+    score += 200;
+    shake = 0.2;
+    popups.push({ x: m.x, y: m.y + 10, t: 1.2, str: 'BULLSEYE! +200', color: '#ffd166' });
+    for (let i = 0; i < 12; i++) {
+      particles.push({ x: m.x, y: m.y, vx: (Math.random() - 0.5) * 100, vy: -Math.random() * 80, t: 0.6, c: Math.random() < 0.5 ? '#5c3a1e' : '#8b5a2b' });
+    }
+    for (let i = 0; i < 5; i++) {
+      items.push({
+        type: 'banana', x: m.x, y: m.y + 4,
+        vx: (i - 2) * 22 + (Math.random() - 0.5) * 10, vy: -60 - Math.random() * 40, g: 200, t: 7
+      });
+    }
+    sfx.bonk();
+  }
+
+  function update(dt) {
+    time += dt;
+    const d = difficulty();
+
+    // 레벨업 (15초마다)
+    const newLevel = 1 + Math.floor(time / 15);
+    if (newLevel > level) {
+      level = newLevel;
+      popups.push({ x: W / 2, y: H / 2 - 20, t: 1.6, str: 'LEVEL ' + level, color: '#ffd166', big: true });
+      sfx.level();
+    }
+    while (monkeys.length < d.monkeys) monkeys.push(makeMonkey(Math.random() * (W - 30) + 15));
+
+    // 플레이어 이동
+    const accel = 900, maxV = hero.slow > 0 ? 45 : 95;
+    let dir = 0;
+    if (keys.ArrowLeft || keys.KeyA) dir -= 1;
+    if (keys.ArrowRight || keys.KeyD) dir += 1;
+    if (touchX !== null && dir === 0) {
+      const diff = touchX - hero.x;
+      if (Math.abs(diff) > 2) dir = Math.sign(diff) * Math.min(1, Math.abs(diff) / 12);
+    }
+    if (dir) {
+      hero.vx += dir * accel * dt;
+      hero.face = Math.sign(dir);
+    } else {
+      hero.vx *= Math.pow(0.0005, dt);
+    }
+    hero.vx = Math.max(-maxV, Math.min(maxV, hero.vx));
+    hero.x += hero.vx * dt;
+    if (hero.x < 6) { hero.x = 6; hero.vx = 0; }
+    if (hero.x > W - 6) { hero.x = W - 6; hero.vx = 0; }
+    hero.slow = Math.max(0, hero.slow - dt);
+
+    // 장갑 모드: 바닥의 똥 줍기
+    glove = Math.max(0, glove - dt);
+    if (glove <= 0) ammo = 0;
+    if (glove > 0 && ammo < MAX_AMMO) {
+      for (let i = splats.length - 1; i >= 0 && ammo < MAX_AMMO; i--) {
+        if (Math.abs(splats[i].x - hero.x) < splats[i].w / 2 + 3) {
+          splats.splice(i, 1);
+          ammo++;
+          sfx.grab();
+          popups.push({ x: hero.x, y: hero.y - 14, t: 0.6, str: 'GOT IT ' + ammo + '/' + MAX_AMMO, color: '#fff' });
+        }
+      }
+    }
+
+    // 똥 웅덩이 밟으면 미끄럽고 느려짐
+    for (const s of splats) {
+      if (Math.abs(s.x - hero.x) < s.w / 2 + 2) hero.slow = 0.15;
+    }
+
+    // 원숭이
+    monkeys.forEach(m => {
+      m.anim += dt;
+      if (m.stun > 0) {
+        m.stun -= dt;
+        if (m.stun <= 0) m.cd = 1 + Math.random();
+        return;
+      }
+      if (Math.abs(m.tx - m.x) < 2) m.tx = 12 + Math.random() * (W - 24);
+      m.x += Math.sign(m.tx - m.x) * Math.min(Math.abs(m.tx - m.x), (30 + level * 3) * dt);
+      m.throwT = Math.max(0, m.throwT - dt);
+      m.cd -= dt;
+      if (m.cd <= 0) {
+        throwPoop(m);
+        m.cd = d.throwGap * (0.7 + Math.random() * 0.6) * monkeys.length;
+      }
+    });
+
+    // 투사체
+    for (let i = poops.length - 1; i >= 0; i--) {
+      const p = poops[i];
+      p.vy += p.g * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.rot += dt * 10;
+      const r = p.big ? 5 : 3;
+      // 충돌
+      if (invuln <= 0 && Math.abs(p.x - hero.x) < r + 3 && Math.abs(p.y - (hero.y - 1)) < r + 5) {
+        poops.splice(i, 1);
+        hurt(p);
+        continue;
+      }
+      if (p.y >= GROUND - 2) {
+        poops.splice(i, 1);
+        splat(p.x, p.big);
+        dodged++; combo++;
+        const gain = 10 * (1 + Math.floor(combo / 10));
+        score += gain;
+        if (combo > 0 && combo % 10 === 0) {
+          popups.push({ x: hero.x, y: hero.y - 16, t: 1, str: combo + ' COMBO!', color: '#52b788' });
+        }
+      }
+    }
+
+    // 플레이어가 던진 똥
+    for (let i = shots.length - 1; i >= 0; i--) {
+      const sh = shots[i];
+      sh.y += sh.vy * dt;
+      sh.rot += dt * 12;
+      const target = monkeys.find(m => m.stun <= 0 && Math.abs(sh.x - m.x) < 8 && Math.abs(sh.y - m.y) < 7);
+      if (target) {
+        shots.splice(i, 1);
+        stunMonkey(target);
+        continue;
+      }
+      if (sh.y < -8) shots.splice(i, 1);
+    }
+
+    // 웅덩이 소멸
+    for (let i = splats.length - 1; i >= 0; i--) {
+      splats[i].t -= dt;
+      if (splats[i].t <= 0) splats.splice(i, 1);
+    }
+
+    // 아이템 (바나나: 체력 회복 / 점수)
+    nextItem -= dt;
+    if (nextItem <= 0) {
+      items.push({ type: 'banana', x: 10 + Math.random() * (W - 20), y: -6, vx: 0, vy: 30, g: 0, t: 6 });
+      nextItem = 10 + Math.random() * 8;
+    }
+    nextGlove -= dt;
+    if (nextGlove <= 0) {
+      if (glove <= 0 && !items.some(it => it.type === 'glove')) {
+        items.push({ type: 'glove', x: 10 + Math.random() * (W - 20), y: -6, vx: 0, vy: 30, g: 0, t: 7 });
+      }
+      nextGlove = 18 + Math.random() * 8;
+    }
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i];
+      if (it.y < GROUND - 4) {
+        it.vy += it.g * dt;
+        it.x = Math.max(4, Math.min(W - 4, it.x + it.vx * dt));
+        it.y = Math.min(GROUND - 4, it.y + it.vy * dt);
+      } else it.t -= dt;
+      if (Math.abs(it.x - hero.x) < 7 && Math.abs(it.y - hero.y) < 9) {
+        items.splice(i, 1);
+        if (it.type === 'glove') {
+          glove = GLOVE_TIME;
+          popups.push({ x: W / 2, y: H / 2 - 30, t: 2, str: 'GLOVE ON!', color: '#ffffff', big: true });
+          popups.push({ x: W / 2, y: H / 2 - 14, t: 2, str: 'GRAB POOP + THROW IT!', color: '#ffd166' });
+          sfx.glove();
+          continue;
+        }
+        if (lives < 3) { lives++; popups.push({ x: it.x, y: it.y - 10, t: 1, str: '+1 LIFE', color: '#e63946' }); }
+        else { score += 100; popups.push({ x: it.x, y: it.y - 10, t: 1, str: '+100', color: '#ffd166' }); }
+        sfx.pick();
+        continue;
+      }
+      if (it.t <= 0) items.splice(i, 1);
+    }
+
+    // 생존 점수
+    score += dt * 5;
+    invuln = Math.max(0, invuln - dt);
+    shake = Math.max(0, shake - dt);
+    updateFx(dt);
+  }
+
+  function splat(x, big) {
+    splats.push({ x, w: big ? 16 : 9, t: big ? 6 : 4 });
+    for (let i = 0; i < (big ? 10 : 5); i++) {
+      particles.push({ x, y: GROUND - 2, vx: (Math.random() - 0.5) * 80, vy: -Math.random() * 70, t: 0.5, c: Math.random() < 0.5 ? '#5c3a1e' : '#8b5a2b' });
+    }
+    sfx.splat();
+  }
+
+  function hurt(p) {
+    lives -= p.big ? 2 : 1;
+    combo = 0;
+    invuln = 1.5;
+    shake = 0.3;
+    for (let i = 0; i < 16; i++) {
+      particles.push({ x: hero.x, y: hero.y - 4, vx: (Math.random() - 0.5) * 120, vy: -Math.random() * 100, t: 0.7, c: Math.random() < 0.5 ? '#5c3a1e' : '#8b5a2b' });
+    }
+    popups.push({ x: hero.x, y: hero.y - 16, t: 1, str: 'EWW!', color: '#ff8c42' });
+    sfx.hit();
+    if (lives <= 0) {
+      lives = 0;
+      state = 'over';
+      score = Math.floor(score);
+      if (score > best) {
+        best = score;
+        try { localStorage.setItem('monkeyPoopBest', best); } catch (e) {}
+      }
+      setTimeout(sfx.over, 200);
+    }
+  }
+
+  function updateFx(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.vy += 300 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.t -= dt;
+      if (p.y > GROUND) { p.y = GROUND; p.vy = 0; p.vx *= 0.5; }
+      if (p.t <= 0) particles.splice(i, 1);
+    }
+    for (let i = popups.length - 1; i >= 0; i--) {
+      popups[i].t -= dt; popups[i].y -= 15 * dt;
+      if (popups[i].t <= 0) popups.splice(i, 1);
+    }
+  }
+
+  // ---------- 렌더 ----------
+  function drawBackground() {
+    // 하늘 그라데이션 (단계별 밴드)
+    const sky = ['#4cc9f0', '#5ccff2', '#6dd5f3', '#80dbf5', '#94e1f7', '#a9e7f9'];
+    const bh = Math.ceil(GROUND / sky.length);
+    sky.forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(0, i * bh, W, bh); });
+
+    // 구름
+    ctx.fillStyle = '#ffffff';
+    const cx = (time * 4) % (W + 40) - 20;
+    [[cx, 70], [(cx + 90) % (W + 40) - 20, 105]].forEach(([x, y]) => {
+      ctx.fillRect(x, y, 18, 4); ctx.fillRect(x + 4, y - 3, 10, 3);
+    });
+
+    // 정글 나무 (뒤)
+    ctx.fillStyle = '#2d6a4f';
+    for (let x = 0; x < W; x += 20) ctx.fillRect(x, GROUND - 30 - ((x * 7) % 13), 14, 40);
+    ctx.fillStyle = '#40916c';
+    for (let x = 8; x < W; x += 24) ctx.fillRect(x, GROUND - 18 - ((x * 5) % 9), 12, 20);
+
+    // 원숭이가 앉은 나뭇가지
+    ctx.fillStyle = '#5c3a1e';
+    ctx.fillRect(0, 36, W, 4);
+    ctx.fillStyle = '#7a4a24';
+    ctx.fillRect(0, 36, W, 1);
+    // 잎사귀 캐노피
+    for (let x = 0; x < W; x += 8) {
+      ctx.fillStyle = (x / 8) % 2 ? '#2d6a4f' : '#52b788';
+      ctx.fillRect(x, 0, 8, 14 + ((x * 3) % 7));
+    }
+    ctx.fillStyle = '#1b4332';
+    for (let x = 4; x < W; x += 16) ctx.fillRect(x, 12 + ((x * 3) % 7), 4, 4);
+    // 덩굴
+    ctx.fillStyle = '#40916c';
+    [14, 58, 112, 146].forEach((x, i) => ctx.fillRect(x, 14, 1, 18 + (i % 2) * 6));
+
+    // 땅
+    ctx.fillStyle = '#6a994e'; ctx.fillRect(0, GROUND, W, 3);
+    ctx.fillStyle = '#9c6644'; ctx.fillRect(0, GROUND + 3, W, H - GROUND - 3);
+    ctx.fillStyle = '#7f5539';
+    for (let x = 0; x < W; x += 6) ctx.fillRect(x + ((x * 7) % 4), GROUND + 7 + ((x * 3) % 10), 2, 1);
+  }
+
+  function render() {
+    ctx.save();
+    if (shake > 0) ctx.translate(Math.round((Math.random() - 0.5) * 4), Math.round((Math.random() - 0.5) * 4));
+
+    drawBackground();
+
+    if (state !== 'title') {
+      // 웅덩이
+      splats.forEach(s => {
+        ctx.globalAlpha = Math.min(1, s.t);
+        ctx.fillStyle = '#5c3a1e';
+        ctx.fillRect(Math.round(s.x - s.w / 2), GROUND - 1, s.w, 2);
+        ctx.fillStyle = '#8b5a2b';
+        ctx.fillRect(Math.round(s.x - s.w / 2 + 2), GROUND - 2, s.w - 4, 1);
+        ctx.globalAlpha = 1;
+      });
+
+      // 아이템
+      items.forEach(it => {
+        if (it.t < 2 && Math.floor(it.t * 8) % 2) return;
+        draw(it.type, it.x, it.y);
+      });
+
+      // 원숭이
+      monkeys.forEach(m => {
+        if (m.stun > 0) {
+          // 기절: 흔들림 + 머리 위 똥 + 빙글빙글 별
+          const wob = Math.round(Math.sin(m.anim * 20));
+          draw('monkeyDizzy', m.x + wob, m.y - 1, m.face < 0);
+          draw('poop', m.x + wob, m.y - 8);
+          for (let k = 0; k < 3; k++) {
+            const a = m.anim * 6 + k * Math.PI * 2 / 3;
+            ctx.fillStyle = '#ffd166';
+            ctx.fillRect(Math.round(m.x + Math.cos(a) * 8), Math.round(m.y - 10 + Math.sin(a) * 2), 1, 1);
+          }
+          return;
+        }
+        const bob = Math.floor(m.anim * 4) % 2;
+        draw(m.throwT > 0 ? 'monkeyThrow' : 'monkey', m.x, m.y - 1 - bob, m.face < 0);
+        // 꼬리
+        ctx.fillStyle = '#7a4a24';
+        ctx.fillRect(Math.round(m.x + 4 * -m.face), Math.round(m.y + 4), 1, 6);
+      });
+
+      // 조준 그림자 (떨어질 위치 표시)
+      poops.forEach(p => {
+        const t = solveLanding(p);
+        const lx = p.x + p.vx * t;
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        const w = p.big ? 8 : 5;
+        ctx.fillRect(Math.round(lx - w / 2), GROUND - 1, w, 1);
+      });
+
+      // 플레이어
+      if (!(invuln > 0 && Math.floor(invuln * 12) % 2)) {
+        const walk = Math.abs(hero.vx) > 10 ? Math.floor(time * 12) % 2 : 0;
+        draw(state === 'over' ? 'heroHit' : 'hero', hero.x, hero.y - walk, hero.face < 0);
+        if (glove > 0 && !(glove < 3 && Math.floor(glove * 8) % 2)) {
+          const hx = Math.round(hero.x + hero.face * 5), hy = Math.round(hero.y + 1 - walk);
+          ctx.fillStyle = '#1a1a1a'; ctx.fillRect(hx - 2, hy - 2, 4, 4);
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(hx - 1, hy - 1, 2, 2);
+          if (ammo > 0) draw('poop', hx, hy - 4);
+        }
+      }
+
+      // 플레이어가 던진 똥
+      shots.forEach(sh => draw('poop', sh.x, sh.y, Math.floor(sh.rot) % 2 === 0));
+
+      // 똥
+      poops.forEach(p => {
+        if (p.big) {
+          ctx.save();
+          ctx.translate(Math.round(p.x), Math.round(p.y));
+          ctx.scale(2, 2);
+          ctx.drawImage(bake('poop'), -3, -3);
+          ctx.restore();
+        } else {
+          draw('poop', p.x, p.y, Math.floor(p.rot) % 2 === 0);
+        }
+        // 냄새 파티클
+        if (Math.random() < 0.2) particles.push({ x: p.x + (Math.random() - 0.5) * 4, y: p.y - 4, vx: 0, vy: -20, t: 0.3, c: '#9acd32' });
+      });
+
+      // 파티클
+      particles.forEach(p => { ctx.fillStyle = p.c; ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1); });
+
+      // 팝업 텍스트
+      popups.forEach(p => text(p.str, Math.round(p.x), Math.round(p.y), p.color, 'center', p.big ? 2 : 1));
+
+      // HUD
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(0, H - 18, W, 18);
+      for (let i = 0; i < 3; i++) draw(i < lives ? 'heart' : 'heartEmpty', 8 + i * 9, H - 9);
+      if (glove > 0) {
+        // THROW 버튼 (터치용) + 남은 똥 + 장갑 시간
+        ctx.fillStyle = ammo > 0 ? '#52b788' : '#555';
+        ctx.fillRect(34, H - 16, 50, 14);
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(34, H - 3, 50, 1);
+        draw('glove', 41, H - 10);
+        text('x' + ammo, 47, H - 14, '#fff');
+        text('THROW', 58, H - 14, ammo > 0 ? '#fff' : '#999');
+        ctx.fillStyle = '#ffd166';
+        ctx.fillRect(47, H - 7, Math.ceil(36 * glove / GLOVE_TIME), 2);
+      }
+      text('SCORE ' + Math.floor(score), W - 4, H - 15, '#fff', 'right');
+      text('LV ' + level + '  BEST ' + Math.max(best, Math.floor(score)), W - 4, H - 8, '#ffd166', 'right');
+    }
+
+    // 화면 오버레이
+    if (state === 'title') {
+      draw('monkey', W / 2, 30);
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(10, 60, W - 20, 120);
+      text('MONKEY', W / 2, 70, '#ffd166', 'center', 3);
+      text('POOP DODGE', W / 2, 90, '#a8683a', 'center', 2);
+      draw('poop', W / 2 - 30, 112); draw('poop', W / 2, 108); draw('poop', W / 2 + 30, 112);
+      text('<- -> OR A/D TO MOVE', W / 2, 126, '#fff', 'center');
+      text('H OR ? : HOW TO PLAY', W / 2, 134, '#fff', 'center');
+      text('BANANA = +1 LIFE', W / 2, 142, '#ffd166', 'center');
+      text('GLOVE = THROW POOP BACK!', W / 2, 150, '#ffffff', 'center');
+      if (Math.floor(performance.now() / 500) % 2) text('PRESS SPACE / TAP', W / 2, 162, '#52b788', 'center');
+      if (best) text('BEST ' + best, W / 2, 171, '#fff', 'center');
+      draw('hero', W / 2, GROUND - 6);
+    } else if (state === 'pause') {
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(0, 0, W, H);
+      text('PAUSED', W / 2, H / 2 - 10, '#fff', 'center', 2);
+      text('TAP OR P TO RESUME', W / 2, H / 2 + 8, '#ffd166', 'center');
+    } else if (state === 'over') {
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(10, 70, W - 20, 96);
+      text('GAME OVER', W / 2, 80, '#e63946', 'center', 2);
+      text('SCORE ' + Math.floor(score), W / 2, 102, '#fff', 'center');
+      text('DODGED ' + dodged + '  HIT ' + monkeyHits + '  LV ' + level, W / 2, 112, '#fff', 'center');
+      text('BEST ' + best, W / 2, 122, '#ffd166', 'center');
+      if (Math.floor(score) >= best && score > 0) text('NEW RECORD!', W / 2, 134, '#52b788', 'center');
+      if (Math.floor(performance.now() / 500) % 2) text('SPACE / TAP TO RETRY', W / 2, 150, '#fff', 'center');
+    }
+    ctx.restore();
+  }
+
+  // 투사체가 바닥에 닿을 때까지의 시간
+  function solveLanding(p) {
+    const a = 0.5 * p.g, b = p.vy, c = p.y - (GROUND - 2);
+    const disc = b * b - 4 * a * c;
+    if (disc < 0) return 0;
+    return Math.max(0, (-b + Math.sqrt(disc)) / (2 * a));
+  }
+
+  // ---------- 메인 루프 ----------
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (state === 'play') update(dt);
+    else if (state === 'over') updateFx(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+  reset();
+  requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
