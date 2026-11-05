@@ -9,6 +9,11 @@ app = Flask(__name__)
 def home():
     return render_template('index.html')  # HTML 파일 연결
 
+# 다이너마이트 낚시 게임 (프로토타입)
+@app.route('/dynamite')
+def dynamite():
+    return render_template('dynamite.html')
+
 # 색상 조정 함수
 def apply_color_filter(image, filter_type):
     if filter_type == "grayscale":
