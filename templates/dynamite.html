@@ -69,7 +69,7 @@
     <div class="tip">
       🔥 도화선은 <b>깊게 → 중간 → 얕게 → 공중</b> 순서로 타 들어가고, 구간이 바뀔 때마다 <b>딸깍</b> 소리가 납니다.<br>
       🐟 진한 그림자는 얕은 곳, 흐린 그림자는 깊은 곳에 있습니다. 깊을수록 비싼 물고기가 있습니다.<br>
-      💥 너무 오래 들고 있으면 손에서 터집니다!<br>
+      💀 너무 오래 들고 있으면 <b>손에서 터져 그대로 게임 오버</b>입니다!<br>
       📅 하루에 다이너마이트 <b>6개</b>. 그날 <b>목표 점수</b>를 넘기면 다음 날로 넘어갑니다.<br>
       🎯 <b>한 방에 6마리 이상</b> 잡으면 다이너마이트를 돌려받습니다. 연속으로 잘 맞히면 점수 배율이 오릅니다.<br>
       📦 목표를 넘긴 점수 <b>100점마다</b> 다음 날 다이너마이트 +1.<br>
@@ -237,7 +237,7 @@ const SHADOW = '#05202a';
 let state = 'menu';
 let time = 0, score = 0, dyn = START_DYN, best = 0, bestDay = 0;
 let day = 1, dayScore = 0, target = 250, nextBonus = 0;
-let streak = 0, charmsLeft = 0;
+let streak = 0, charmsLeft = 0, lastEndBlast = false;
 
 // ===== 영구 성장: 동전 + 장비 =====
 const UPGRADES = [
@@ -275,7 +275,7 @@ function startDay() {
   bombs = []; combos = [];
   big = null; nextBig = bigDelay(14, 18); schoolSpawnT = 4;
   hold = null; shake = flash = ink = endT = 0;
-  player.stun = 0; player.throwAnim = 0;
+  player.stun = 0; player.throwAnim = 0; player.dead = false;
   // 날이 갈수록 물고기 떼가 늘고 깊은 물고기 비중이 커진다
   while (schools.length < maxSchools()) spawnSchool(pickKind(), false);
   for (const sc of schools) sc.mult = daySpeed(day);
@@ -511,12 +511,33 @@ function explode(x, y, depth) {
 
 function handBlast() {
   streak = 0;
-  const hx = player.x, hy = player.y - 6;
-  player.stun = 1.4;
-  shake = 7; flash = 0.8;
-  for (let i = 0; i < 26; i++) parts.push({ x: hx, y: hy, z: 6, vx: rand(-30, 30), vy: rand(-25, 15), vz: rand(10, 50), life: rand(0.5, 1.1), max: 1.1, type: i < 12 ? 'fire' : 'smoke' });
-  texts.push(mkText(hx, hy - 12, '앗 뜨거!!', '#ff7b54', 1.6, true));
-  sfx.boom(0); vibrate([120, 40, 120]);
+  const px = player.x, py = player.y;
+  player.dead = true; player.deathT = 0;
+  shake = 12; flash = 1;
+  // 주인공이 픽셀 조각으로 산산조각
+  const pieces = [
+    ['#e0b04a', 8, 2, -12], ['#e0b04a', 4, 2, -14],                  // 밀짚모자
+    ['#f1c27d', 3, 3, -10], ['#f1c27d', 3, 3, -8], ['#f1c27d', 2, 2, -4], // 머리, 팔
+    ['#d9483b', 3, 3, -4], ['#d9483b', 3, 3, -2], ['#d9483b', 2, 3, -5], ['#d9483b', 3, 2, 0],
+    ['#2f4a7a', 2, 3, 3], ['#2f4a7a', 2, 3, 3], ['#2f4a7a', 2, 2, 6], ['#2f4a7a', 2, 2, 6],
+  ];
+  for (const [col, w, h, oy] of pieces) for (let i = 0; i < 2; i++) {
+    const a = rand(0, TAU), sp = rand(25, 85);
+    parts.push({ x: px + rand(-3, 3), y: py + oy * 0.3, z: -oy + 8, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.6 - 15,
+      vz: rand(50, 130), life: rand(3.5, 5), max: 5, type: 'gib', col: i ? shade(col) : col, w: Math.max(1, w - i), h: Math.max(1, h - i), spin: rand(-12, 12), rot: 0 });
+  }
+  // 모자는 크게 하늘로
+  parts.push({ x: px, y: py, z: 16, vx: rand(-15, 15), vy: rand(-10, 5), vz: 170, life: 5, max: 5, type: 'gib', col: '#e0b04a', w: 7, h: 2, spin: 9, rot: 0 });
+  for (let i = 0; i < 40; i++) parts.push({ x: px, y: py - 4, z: 8, vx: rand(-55, 55), vy: rand(-45, 25), vz: rand(10, 80), life: rand(0.5, 1.3), max: 1.3, type: i < 22 ? 'fire' : 'smoke' });
+  for (let i = 0; i < 18; i++) parts.push({ x: px + rand(-6, 6), y: py - 6 + rand(-4, 4), z: 0, vx: rand(-6, 6), vy: rand(-10, -2), vz: 0, life: rand(1.5, 2.8), max: 2.8, type: 'smoke' });
+  texts.push(mkText(px, py - 22, '콰광!!!', '#ff5b3a', 2.2, true));
+  sfx.boom(0); tone(50, 1.4, 0.6, 'sine', 25);
+  vibrate([200, 60, 300]);
+  if (hiss) hiss.g.gain.setTargetAtTime(0, ac.currentTime, 0.03);
+}
+function shade(hex) { // 조각 하나는 살짝 어둡게
+  const n = parseInt(hex.slice(1), 16), f = 0.7;
+  return `rgb(${(n >> 16 & 255) * f | 0},${(n >> 8 & 255) * f | 0},${(n & 255) * f | 0})`;
 }
 
 // ===== 도화선 구간 =====
@@ -556,7 +577,7 @@ cvs.addEventListener('pointerdown', e => {
   e.preventDefault();
   if (state !== 'play') return;
   ensureAudio();
-  if (hold || player.stun > 0 || dyn <= 0) return;
+  if (hold || player.stun > 0 || player.dead || dyn <= 0) return;
   try { cvs.setPointerCapture(e.pointerId); } catch (err) {}
   const p = ptr(e);
   hold = { id: e.pointerId, sx: p.x, sy: p.y, cx: p.x, cy: p.y, fuse: FUSE };
@@ -685,7 +706,12 @@ function update(dt) {
 
   updateAmbient(dt);
 
-  // 종료 판정
+  // 종료 판정: 손에서 터지면 곧바로 게임 오버
+  if (player.dead) {
+    player.deathT += dt;
+    if (player.deathT > 2.4) endGame('blast');
+    return;
+  }
   const busy = hold || bombs.length || combos.length || fish.some(f => f.state === 'rise' || f.state === 'float') || (big && big.dead);
   if (dyn <= 0 && !busy) { endT += dt; if (endT > 1.3) { if (dayScore >= target) dayClear(); else endGame(); } } else endT = 0;
 }
@@ -767,6 +793,15 @@ function updateAmbient(dt) {
     else if (p.type === 'fire') { p.z += p.vz * dt; p.vx *= 0.92; p.vy *= 0.92; }
     else if (p.type === 'spark') { p.vz -= 90 * dt; p.z += p.vz * dt; p.vx *= 0.96; p.vy *= 0.96; if (p.z < -2) p.life = 0; }
     else if (p.type === 'wisp') { p.z += 10 * dt; p.vx *= 0.97; }
+    else if (p.type === 'gib') {
+      p.vz -= 260 * dt; p.z += p.vz * dt; p.rot += p.spin * dt;
+      if (p.z < 0) {
+        if (p.y < SHORE) { // 물에 빠짐
+          p.life = 0; ripples.push({ x: p.x, y: p.y, r: 0, max: 5, life: 0.7 });
+          for (let i = 0; i < 3; i++) parts.push({ x: p.x, y: p.y, z: 0, vx: rand(-8, 8), vy: rand(-5, 5), vz: rand(15, 30), life: 0.4, max: 0.4, type: 'drop' });
+        } else { p.z = 0; p.vz = Math.abs(p.vz) > 20 ? -p.vz * 0.35 : 0; p.vx *= 0.55; p.vy *= 0.55; p.spin *= 0.5; if (!p.vz) { p.vx *= 0.8; p.vy *= 0.8; } }
+      }
+    }
     else if (p.type === 'smoke') { p.z += 12 * dt; p.vx *= 0.95; p.vy *= 0.95; }
   }
   parts = parts.filter(p => p.life > 0);
@@ -919,6 +954,11 @@ function drawPier() {
 
 function drawPlayer() {
   const px = Math.round(player.x), py = Math.round(player.y);
+  if (player.dead) { // 그을린 자국만 남는다
+    b.fillStyle = 'rgba(20,10,5,0.75)'; b.beginPath(); b.ellipse(px, py + 6, 9, 3, 0, 0, TAU); b.fill();
+    b.fillStyle = 'rgba(40,20,10,0.5)'; b.beginPath(); b.ellipse(px + 3, py + 7, 13, 4, 0, 0, TAU); b.fill();
+    return;
+  }
   const burnt = player.stun > 0;
   const skin = burnt ? '#2b2b2b' : '#f1c27d', shirt = burnt ? '#222' : '#d9483b', pants = burnt ? '#1a1a1a' : '#2f4a7a';
   // 그림자
@@ -1025,6 +1065,11 @@ function drawParts() {
     else if (p.type === 'fire') { b.fillStyle = k > 0.5 ? '#ffe066' : '#ff7b2a'; b.fillRect(x, y, 2, 2); }
     else if (p.type === 'spark') { b.fillStyle = k > 0.65 ? '#fffbe0' : k > 0.35 ? '#ffd45a' : '#ff7a24'; b.fillRect(x, y, 1, 1); }
     else if (p.type === 'wisp') { b.fillStyle = `rgba(210,210,205,${k * 0.35})`; b.fillRect(x, y, 2, 1); }
+    else if (p.type === 'gib') {
+      if (p.z > 0) { b.fillStyle = 'rgba(0,0,0,0.25)'; b.fillRect(Math.round(p.x) - 1, Math.round(p.y), p.w, 1); }
+      b.save(); b.globalAlpha = Math.min(1, p.life / 0.5); b.translate(x, y); b.rotate(Math.round(p.rot / (Math.PI / 4)) * Math.PI / 4);
+      b.fillStyle = p.col; b.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); b.restore();
+    }
     else if (p.type === 'smoke') { b.fillStyle = `rgba(60,60,60,${k * 0.6})`; b.fillRect(x - 1, y - 1, 3, 3); }
   }
 }
@@ -1059,7 +1104,7 @@ function render() {
   drawSurfaceThings();
   drawBlasts();
   drawPier();
-  if (state === 'play' || state === 'end') drawPlayer();
+  if (state === 'play' || state === 'end' || state === 'clear') drawPlayer();
   drawAimGuide();
   drawBombs(false);
   drawParts();
@@ -1301,19 +1346,21 @@ function retryDay() {
   banner = { str: `🧿 부적의 힘! ${day}일차 다시 · 목표 ${target}점`, t: 2.8 };
   endOv.classList.add('hidden');
 }
-function endGame() {
+function endGame(reason) {
   state = 'end';
+  const blast = reason === 'blast';
   const earned = earnCoins();
   if (hiss) hiss.g.gain.setTargetAtTime(0, ac.currentTime, 0.03);
   const nb = score > best;
   if (nb) best = score;
   bestDay = Math.max(bestDay, day);
   try { localStorage.setItem('dynfish_best', String(best)); localStorage.setItem('dynfish_bestday', String(bestDay)); } catch (e) {}
-  document.getElementById('endTitle').textContent = `${day}일차에서 마감`;
+  document.getElementById('endTitle').textContent = blast ? '💥 손에서 터졌다!' : `${day}일차에서 마감`;
   document.getElementById('endScore').textContent = score;
   const k = stats.kinds;
   document.getElementById('endStats').innerHTML =
-    `<span style="color:#ff9a8a">오늘 목표 미달 (${dayScore} / ${target})</span><br>` +
+    (blast ? `<span style="color:#ff9a8a">${day}일차, 도화선을 너무 오래 쥐고 있었습니다</span><br>`
+           : `<span style="color:#ff9a8a">오늘 목표 미달 (${dayScore} / ${target})</span><br>`) +
     (nb ? '<div class="newbest">🏆 최고 기록 갱신!</div>' : `최고 기록 ${best} · 최고 ${bestDay}일차<br>`) +
     `잡은 물고기 <b>${stats.fish}</b>마리 (붕어 ${k.crucian} · 잉어 ${k.carp} · 메기 ${k.catfish})<br>` +
     `한 방 최다 <b>${stats.bestCombo}</b>마리` +
@@ -1321,7 +1368,8 @@ function endGame() {
     (stats.whaleHits ? `<br><span style="color:#ff8a8a">고래 오폭 ${stats.whaleHits}회</span>` : '') +
     `<br><span class="earn">🪙 +${earned} (보유 ${meta.coins}) · 가게에서 장비를 사면 다음 판이 길어집니다</span>`;
   const cb = document.getElementById('charmBtn');
-  cb.hidden = charmsLeft <= 0;
+  lastEndBlast = blast;
+  cb.hidden = charmsLeft <= 0 || blast; // 손에서 터진 건 부적으로도 못 살린다
   cb.textContent = `🧿 부적 사용: ${day}일차 다시 (${charmsLeft}개)`;
   endOv.classList.remove('hidden');
 }
@@ -1366,7 +1414,7 @@ document.querySelectorAll('[data-shop]').forEach(btn => btn.addEventListener('cl
 document.getElementById('shopClose').addEventListener('click', () => {
   shopOv.classList.add('hidden');
   if (shopBack) shopBack.classList.remove('hidden');
-  if (shopBack === endOv) { const cb = document.getElementById('charmBtn'); cb.hidden = charmsLeft <= 0; }
+  if (shopBack === endOv) { const cb = document.getElementById('charmBtn'); cb.hidden = charmsLeft <= 0 || lastEndBlast; }
 });
 renderShop();
 
