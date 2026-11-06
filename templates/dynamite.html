@@ -73,6 +73,10 @@
   .coin { display: inline-block; width: .85em; height: .85em; border-radius: 50%; vertical-align: -0.08em; margin-right: .22em;
     background: radial-gradient(circle at 35% 35%, #fff2b0 0 18%, #ffd44a 19% 60%, #d99a12 61%); box-shadow: 0 0 0 1px #7a5208; }
   .scorelbl { font-size: 13px; opacity: .75; margin-top: 2px; }
+  /* 보유 동전: 큼직하게 */
+  .coins .clbl { display: block; font-size: 13px; font-weight: 700; opacity: .8; margin-bottom: 2px; }
+  .coins .cbig { font-size: 34px; font-weight: 900; line-height: 1.1; font-variant-numeric: tabular-nums; letter-spacing: .5px; }
+  .coins .cbig .coin { width: .8em; height: .8em; margin-right: .18em; }
   .resetbox { margin-top: 18px; padding-top: 12px; border-top: 1px dashed #2f5a66; }
   .resetbox .ds { font-size: 12px; opacity: .75; margin-bottom: 8px; }
   button.reset { font-size: 13px; padding: 7px 10px; background: #3a1f24; color: #ffb3a8; box-shadow: 0 3px 0 #1d0f12; }
@@ -2150,9 +2154,10 @@ document.querySelectorAll('.panel').forEach(pn => {
 const shopOv = document.getElementById('shopOv');
 let shopBack = null;
 function renderShop() {
-  document.getElementById('shopCoins').innerHTML = `보유 동전 <span class="coin"></span>${meta.coins}`;
+  const coinHtml = `<span class="clbl">보유 동전</span><span class="cbig"><span class="coin"></span>${meta.coins.toLocaleString()}</span>`;
+  document.getElementById('shopCoins').innerHTML = coinHtml;
   updateAmmoBar(true);
-  document.getElementById('startCoins').innerHTML = `보유 동전 <span class="coin"></span>${meta.coins}`;
+  document.getElementById('startCoins').innerHTML = coinHtml;
   const list = document.getElementById('shopList');
   list.innerHTML = '';
   for (const u of UPGRADES) {
