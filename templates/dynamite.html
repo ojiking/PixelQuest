@@ -69,6 +69,10 @@
   .item .lv { color: #f2c14e; font-size: 12px; letter-spacing: 2px; }
   .item button { font-size: 13.5px; padding: 7px 10px; white-space: nowrap; }
   .earn { color: #ffd76a; }
+  .resetbox { margin-top: 18px; padding-top: 12px; border-top: 1px dashed #2f5a66; }
+  .resetbox .ds { font-size: 12px; opacity: .75; margin-bottom: 8px; }
+  button.reset { font-size: 13px; padding: 7px 10px; background: #3a1f24; color: #ffb3a8; box-shadow: 0 3px 0 #1d0f12; }
+  button.reset.armed { background: #c0392b; color: #fff; }
   /* 도감 */
   .dexgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
   .dcard { background: #0d2530; padding: 8px 8px 9px; text-align: center; min-width: 0; }
@@ -163,6 +167,14 @@
     <div class="coins" id="shopCoins"></div>
     <div id="shopList"></div>
     <button class="ghost" id="shopClose">닫기</button>
+    <div class="resetbox">
+      <div class="ds">초기화</div>
+      <div class="btns">
+        <button class="reset" id="resetGear">장비만 초기화</button>
+        <button class="reset" id="resetAll">처음부터 다시</button>
+      </div>
+      <div class="ds" id="resetMsg"></div>
+    </div>
   </div>
 </div>
 
@@ -2124,6 +2136,7 @@ const shopOv = document.getElementById('shopOv');
 let shopBack = null;
 function renderShop() {
   document.getElementById('shopCoins').textContent = `🪙 ${meta.coins}`;
+  updateAmmoBar(true);
   document.getElementById('startCoins').textContent = `🪙 ${meta.coins}`;
   const list = document.getElementById('shopList');
   list.innerHTML = '';
@@ -2231,6 +2244,35 @@ document.querySelectorAll('[data-shop]').forEach(btn => btn.addEventListener('cl
   shopBack.classList.add('hidden');
   renderShop(); shopOv.classList.remove('hidden');
 }));
+// ===== 진행 초기화 (두 번 눌러야 실행) =====
+function twoStep(id, label, confirmLabel, action) {
+  const bt = document.getElementById(id); let t = null;
+  bt.addEventListener('click', () => {
+    if (!bt.classList.contains('armed')) {
+      bt.classList.add('armed'); bt.textContent = confirmLabel;
+      t = setTimeout(() => { bt.classList.remove('armed'); bt.textContent = label; }, 3000);
+      return;
+    }
+    clearTimeout(t); bt.classList.remove('armed'); bt.textContent = label;
+    action();
+  });
+}
+twoStep('resetGear', '장비만 초기화', '정말? 한 번 더 누르면 실행', () => {
+  // 환불은 하지 않는다: 예전 싼 가격에 산 장비를 지금 가격으로 돌려받는 일을 막기 위해
+  for (const u of UPGRADES) meta.up[u.id] = 0;
+  saveMeta(); applyUpgrades();
+  document.getElementById('resetMsg').textContent = '장비를 모두 초기화했습니다. 동전, 도감, 특수탄은 그대로입니다.';
+  renderShop();
+});
+twoStep('resetAll', '처음부터 다시', '정말? 모든 기록이 지워집니다', () => {
+  meta = { coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0 }, dex: {}, nukes: 0, ammo: { remote: 2, cluster: 2, bait: 2 } };
+  saveMeta(); applyUpgrades();
+  best = 0; bestDay = 0;
+  try { localStorage.removeItem('dynfish_best'); localStorage.removeItem('dynfish_bestday'); } catch (e) {}
+  document.getElementById('resetMsg').textContent = '모든 기록을 지웠습니다. 처음 상태로 돌아갔습니다.';
+  renderShop();
+});
+
 document.getElementById('shopClose').addEventListener('click', () => {
   shopOv.classList.add('hidden');
   if (shopBack) shopBack.classList.remove('hidden');
