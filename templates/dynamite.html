@@ -84,6 +84,11 @@
   #nukeBtn.armed { background: #b8261a; color: #fff; border-color: #fff; animation: nukeblink .3s steps(2) infinite; }
   @keyframes nukeblink { 50% { filter: brightness(1.6); } }
   @media (prefers-reduced-motion: reduce) { #nukeBtn.armed { animation: none; } }
+  /* 특수 다이너마이트 선택 */
+  #ammoBar { position: fixed; left: max(8px, env(safe-area-inset-left, 0px)); bottom: 90px; z-index: 4; display: flex; gap: 5px; flex-wrap: nowrap; }
+  #ammoBar button { font-size: 13px; padding: 6px 7px; white-space: nowrap; background: #1d3e48; box-shadow: 0 3px 0 #0b1d26; border: 2px solid transparent; }
+  #ammoBar button.on { border-color: #ffd76a; background: #2f5a66; }
+  #ammoBar button:disabled { opacity: .35; }
 </style>
 </head>
 <body>
@@ -149,6 +154,7 @@
 </div>
 
 <button id="nukeBtn" hidden>☢ 핵폭탄</button>
+<div id="ammoBar" hidden></div>
 
 <div class="overlay hidden" id="shopOv">
   <div class="panel">
@@ -300,8 +306,18 @@ const UPGRADES = [
   { id: 'charm', name: '재기의 부적',       desc: '목표 미달 때 그날을 한 번 더 (판마다)', costs: [1500, 4000] },
 ];
 let meta = { coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0 }, dex: {}, nukes: 0 };
-try { const m = JSON.parse(localStorage.getItem('dynfish_meta') || 'null'); if (m && m.up) meta = { coins: m.coins | 0, up: Object.assign(meta.up, m.up), dex: m.dex || {}, nukes: m.nukes | 0 }; } catch (e) {}
+try { const m = JSON.parse(localStorage.getItem('dynfish_meta') || 'null'); if (m && m.up) meta = { coins: m.coins | 0, up: Object.assign(meta.up, m.up), dex: m.dex || {}, nukes: m.nukes | 0, ammo: m.ammo }; } catch (e) {}
 const NUKE_COST = 1500, NUKE_MAX = 2;
+
+// ===== 특수 다이너마이트 (던질 때 기본 다이너마이트 1개를 특수탄으로 바꿔 던진다) =====
+const AMMO = [
+  { id: 'remote',  icon: '📡', name: '원격 기폭', desc: '도화선 없음. 물에 빠진 뒤 화면을 탭하면 원하는 순간 폭발', pack: 3, cost: 300, col: '#3fae6a' },
+  { id: 'cluster', icon: '💥', name: '산탄',      desc: '물에 닿으면 세 갈래로 갈라져 넓게 폭발 (하나하나는 조금 작음)', pack: 3, cost: 350, col: '#ff8a2a' },
+  { id: 'bait',    icon: '🪱', name: '미끼 폭탄', desc: '가라앉는 동안 떡밥을 뿌려 근처 물고기 떼를 끌어모은 뒤 폭발', pack: 3, cost: 250, col: '#a07040' },
+];
+const AMMO_MAX = 9;
+if (!meta.ammo) { meta.ammo = { remote: 2, cluster: 2, bait: 2 }; } // 처음엔 맛보기로 2개씩
+let selAmmo = 'basic';
 
 // ===== 도감 =====
 const DEX = [
@@ -438,7 +454,31 @@ nukeBtn.addEventListener('click', e => {
   nuke = { t: 0, beep: 4 };
   banner = { str: '☢ 핵폭탄 투하!', t: 3 };
 });
+// ===== 특수탄 선택 바 =====
+const ammoBar = document.getElementById('ammoBar');
+let ammoSig = '';
+function updateAmmoBar(force) {
+  const total = AMMO.reduce((n, a) => n + (meta.ammo[a.id] || 0), 0);
+  const show = state === 'play' && !fatal && !player.dead && total > 0;
+  if (ammoBar.hidden === show) ammoBar.hidden = !show;
+  ammoBar.style.bottom = (26 * S + 12) + 'px';
+  const sig = selAmmo + AMMO.map(a => meta.ammo[a.id]).join(',');
+  if (!force && sig === ammoSig) return;
+  ammoSig = sig;
+  ammoBar.innerHTML = '';
+  const mk = (id, label, n) => {
+    const bt = document.createElement('button');
+    bt.textContent = label; bt.className = selAmmo === id ? 'on' : '';
+    if (id !== 'basic' && !n) bt.disabled = true;
+    bt.addEventListener('pointerdown', e => e.stopPropagation());
+    bt.addEventListener('click', e => { e.stopPropagation(); selAmmo = selAmmo === id ? 'basic' : id; updateAmmoBar(true); });
+    ammoBar.appendChild(bt);
+  };
+  mk('basic', '🧨 기본', 0);
+  for (const a of AMMO) mk(a.id, `${a.icon}×${meta.ammo[a.id] || 0}`, meta.ammo[a.id]);
+}
 function updateNukeButton(dt) {
+  updateAmmoBar(false);
   if (nukeArmT > 0) { nukeArmT -= dt; if (nukeArmT <= 0) nukeBtn.classList.remove('armed'); }
   const show = nukeAvailable();
   if (nukeBtn.hidden === show) nukeBtn.hidden = !show;
@@ -557,7 +597,7 @@ function eatSwimmer(B) {
 
 function swimmerHit(ex) {
   if (!swimmer || swimmer.dead || fatal) return;
-  const ed = Math.max(0, ex.depth), rr = ex.depth < 0 ? R * 0.7 : R;
+  const ed = Math.max(0, ex.depth), rr = (ex.depth < 0 ? R * 0.7 : R) * (ex.rs || 1);
   if (Math.hypot(ex.x - swimmer.x, ex.y - swimmer.y, ed * DZ) > rr + 4) return;
   murderSwimmer();
 }
@@ -749,7 +789,7 @@ function finishBig() {
 
 function bigHit(ex) {
   if (!big || big.dead) return;
-  const ed = Math.max(0, ex.depth), rr = ex.depth < 0 ? R * 0.7 : R;
+  const ed = Math.max(0, ex.depth), rr = (ex.depth < 0 ? R * 0.7 : R) * (ex.rs || 1);
   if (big.type === 'shark' || big.type === 'whale') {
     const [ax, ay, bx, by] = bigBody();
     const hd = Math.max(0, segDist(ex.x, ex.y, ax, ay, bx, by) - big.wid / 2);
@@ -794,10 +834,10 @@ function mkText(x, y, str, col = '#fff', size = 1, pop = false) { return { x, y,
 function addScore(n) { score = Math.max(0, score + n); dayScore += n; }
 
 // ===== 폭발 =====
-function explode(x, y, depth) {
-  const ex = { x, y, depth, kills: 0, pts: 0, t: 0, mult: streakMult(streak) };
+function explode(x, y, depth, rs = 1, quiet = false) {
+  const ex = { x, y, depth, kills: 0, pts: 0, t: 0, mult: streakMult(streak), rs, quiet };
   combos.push(ex);
-  const ed = Math.max(0, depth), rr = depth < 0 ? R * 0.7 : R;
+  const ed = Math.max(0, depth), rr = (depth < 0 ? R * 0.7 : R) * rs;
   for (const f of fish) {
     if (f.state !== 'swim') continue;
     const d = Math.hypot(f.x - x, f.y - y, (f.depth - ed) * DZ);
@@ -902,12 +942,18 @@ cvs.addEventListener('pointerdown', e => {
   e.preventDefault();
   if (state !== 'play') return;
   ensureAudio();
-  if (hold || player.stun > 0 || player.dead || fatal || (nuke && !nuke.done) || dyn <= 0) return;
+  if (hold || player.stun > 0 || player.dead || fatal || (nuke && !nuke.done)) return;
+  // 원격 기폭: 물속에 원격탄이 있으면 탭 = 폭발
+  const rb = bombs.find(b2 => b2.type === 'remote' && b2.state === 'water');
+  if (rb) { rb.fuse = 0; tone(1400, 0.06, 0.1, 'square'); tone(1800, 0.06, 0.1, 'square', null, 0.06); return; }
+  if (dyn <= 0) return;
   try { cvs.setPointerCapture(e.pointerId); } catch (err) {}
   const p = ptr(e);
-  hold = { id: e.pointerId, sx: p.x, sy: p.y, cx: p.x, cy: p.y, fuse: FUSE };
+  const type = selAmmo !== 'basic' && meta.ammo[selAmmo] > 0 ? selAmmo : 'basic';
+  hold = { id: e.pointerId, sx: p.x, sy: p.y, cx: p.x, cy: p.y, fuse: FUSE, type };
   dyn--;
-  sfx.light();
+  if (type !== 'basic') { meta.ammo[type]--; saveMeta(); }
+  if (type === 'remote') tone(900, 0.08, 0.06, 'square'); else sfx.light();
 });
 cvs.addEventListener('pointermove', e => {
   if (!hold || e.pointerId !== hold.id) return;
@@ -919,12 +965,15 @@ function release(e) {
   const a = aimInfo(h);
   if (a.len < 6) { // 거의 안 당겼으면 취소
     dyn++;
+    if (h.type !== 'basic') { meta.ammo[h.type]++; saveMeta(); }
     texts.push(mkText(player.x, player.y - 18, '불 끔', '#cfd8dc', 1));
     return;
   }
   bombs.push({ x: a.hx, y: a.hy, z: 0, sx: a.hx, sy: a.hy, tx: a.lx, ty: a.ly, t: 0, flight: a.flight,
-    arc: 14 + a.fd * 0.22, state: 'air', fuse: h.fuse, depth: 0, wt: 0, spin: 0 });
+    arc: 14 + a.fd * 0.22, state: 'air', fuse: h.type === 'remote' ? 99 : h.fuse, depth: 0, wt: 0, spin: 0, type: h.type, ang: a.ang });
   player.throwAnim = 0.3; player.lastAng = a.ang;
+  if (h.type !== 'basic') selAmmo = 'basic'; // 특수탄은 한 번 쓰면 기본으로 돌아간다
+  updateAmmoBar(true);
   sfx.throw();
 }
 cvs.addEventListener('pointerup', release);
@@ -939,7 +988,8 @@ function update(dt) {
   if (player.stun > 0) player.stun -= dt;
   if (player.throwAnim > 0) player.throwAnim -= dt;
 
-  if (hold) {
+  if (hold && hold.type === 'remote') { /* 원격탄은 도화선이 없다 */ }
+  else if (hold) {
     hold.fuse -= dt;
     if (hold.fuse <= 0) { hold = null; handBlast(); }
     else {
@@ -964,6 +1014,16 @@ function update(dt) {
       if (Math.random() < dt * 25) parts.push({ x: bm.x, y: bm.y, z: bm.z + 3, vx: rand(-2, 2), vy: 0, vz: 0, life: 0.6, max: 0.6, type: 'wisp' });
       if (u >= 1 && bm.fuse > 0) {
         bm.state = 'water'; bm.z = 0;
+        if (bm.type === 'cluster') { // 세 갈래로 갈라짐
+          bm.small = true;
+          for (const off of [-1, 1]) {
+            const pa = bm.ang + Math.PI / 2 * off;
+            const nx = clamp(bm.x + Math.cos(pa) * 20 + Math.cos(bm.ang) * 8, 4, VW - 4), ny = clamp(bm.y + Math.sin(pa) * 16 + Math.sin(bm.ang) * 6, 4, SHORE - 5);
+            bombs.push({ ...bm, x: nx, y: ny, sx: nx, sy: ny, tx: nx, ty: ny, child: true });
+            ripples.push({ x: nx, y: ny, r: 1, max: 10, life: 0.7 });
+          }
+          texts.push(mkText(bm.x, bm.y - 8, '💥 산탄!', '#ff8a2a', 1.1));
+        }
         ripples.push({ x: bm.x, y: bm.y, r: 1, max: 14, life: 0.9 }, { x: bm.x, y: bm.y, r: 1, max: 8, life: 0.6 });
         for (let i = 0; i < 10; i++) parts.push({ x: bm.x, y: bm.y, z: 0, vx: rand(-14, 14), vy: rand(-10, 10), vz: rand(20, 45), life: 0.6, max: 0.6, type: 'drop' });
         sfx.splash();
@@ -971,9 +1031,11 @@ function update(dt) {
     } else {
       bm.wt += dt;
       bm.depth = Math.min(1, bm.wt * SINK);
+      if (bm.type === 'remote' && bm.wt > 12) bm.fuse = 0; // 원격탄 자동 폭발
+      if (bm.type === 'bait' && Math.random() < dt * 14) parts.push({ x: bm.x + rand(-6, 6), y: bm.y + rand(-5, 5), z: 0, vx: rand(-4, 4), vy: rand(-4, 4), vz: 0, life: 0.8, max: 0.8, type: 'crumb' });
       if (Math.random() < dt * 8) parts.push({ x: bm.x + rand(-2, 2), y: bm.y + rand(-2, 2), z: 0, vx: 0, vy: 0, vz: 0, life: 0.5, max: 0.5, type: 'bubble' });
     }
-    if (bm.fuse <= 0) { bm.dead = true; explode(bm.x, bm.y, bm.state === 'air' ? -0.05 : bm.depth); }
+    if (bm.fuse <= 0) { bm.dead = true; explode(bm.x, bm.y, bm.state === 'air' ? -0.05 : bm.depth, bm.small ? 0.72 : 1, bm.child); }
   }
   bombs = bombs.filter(bm => !bm.dead);
 
@@ -981,7 +1043,7 @@ function update(dt) {
   if (hiss && !muted) {
     const anyAir = bombs.some(b2 => b2.state === 'air'), anyWater = bombs.some(b2 => b2.state === 'water');
     let g = 0, f = 3200;
-    if (hold) { const z = hold.zone ?? 3; g = z === 0 ? 0.1 : 0.07; f = 2600 + (1 - hold.fuse / FUSE) * 3500 + (z === 0 ? Math.sin(time * 40) * 900 : 0); }
+    if (hold && hold.type !== 'remote') { const z = hold.zone ?? 3; g = z === 0 ? 0.1 : 0.07; f = 2600 + (1 - hold.fuse / FUSE) * 3500 + (z === 0 ? Math.sin(time * 40) * 900 : 0); }
     else if (anyAir) { g = 0.04; f = 3000; if (Math.random() < dt * 6) noiseBurst(0.02, 6500, 0.06, 'highpass'); }
     else if (anyWater) { g = 0.02; f = 700; }
     hiss.g.gain.setTargetAtTime(g, ac.currentTime, 0.03);
@@ -1013,6 +1075,10 @@ function update(dt) {
       stats.bestCombo = Math.max(stats.bestCombo, c.kills);
       let msg = null, col = '#fff';
       if (c.nuke) { texts.push(mkText(VW / 2, SHORE * 0.3, `☢ 핵폭발! x${c.kills}`, '#e8ff6a', 2.4, true)); continue; }
+      if (c.quiet) { // 산탄 파편: 점수만, 연속 판정은 본탄이 한다
+        if (c.kills >= 4) texts.push(mkText(c.x, c.y - 14, `x${c.kills}`, '#ffc58f', 1.1));
+        continue;
+      }
       if (c.kills >= 15) { msg = `초대박!!! x${c.kills}`; col = '#ff5bd1'; }
       else if (c.kills >= 9) { msg = `대박!! x${c.kills}`; col = '#ffd23f'; }
       else if (c.kills >= 4) { msg = `좋아! x${c.kills}`; col = '#8fe3ff'; }
@@ -1058,6 +1124,14 @@ function updateSchools(dt) {
     s.fish = s.fish.filter(f => f.state === 'swim');
     if (!s.fish.length) { s.dead = true; continue; }
     s.scared = Math.max(0, s.scared - dt);
+    // 미끼 폭탄: 근처 떼가 떡밥 쪽으로 몰려들고 그 깊이로 내려간다
+    for (const bm of bombs) {
+      if (bm.type !== 'bait' || bm.state !== 'water' || s.transit) continue;
+      if (Math.hypot(bm.x - s.x, bm.y - s.y) < 110) {
+        s.wa = angLerp(s.wa, Math.atan2(bm.y - s.y, bm.x - s.x), dt * 4);
+        s.td = clamp(bm.depth, 0.05, 1); s.depth = lerp(s.depth, s.td, dt * 1.2); s.scared = 0;
+      }
+    }
     if (s.transit) { // 황다랑어: 곧게 고속 질주 후 화면 밖으로
       const sp = s.sp.speed * s.mult * (s.scared > 0 ? 1.4 : 1);
       s.vx = lerp(s.vx, Math.cos(s.wa) * sp, dt * 3); s.vy = lerp(s.vy, Math.sin(s.wa) * sp, dt * 3);
@@ -1368,9 +1442,14 @@ function drawBombs(under) {
     if (under && bm.state === 'water') {
       const al = 1 - bm.depth * 0.75, sc = 1 - bm.depth * 0.3;
       b.globalAlpha = al;
-      b.fillStyle = '#7a1f17'; b.fillRect(Math.round(bm.x - 1), Math.round(bm.y - 2 * sc), 3, Math.max(2, Math.round(4 * sc)));
-      const blink = (time * (4 + 16 / (bm.fuse + 0.3)) | 0) % 2;
-      if (blink) { b.fillStyle = 'rgba(255,170,60,0.6)'; b.beginPath(); b.arc(bm.x, bm.y - 2, 2.5 * sc, 0, TAU); b.fill(); }
+      b.fillStyle = bm.type === 'remote' ? '#1f5a36' : bm.type === 'bait' ? '#5a3a1c' : bm.type === 'cluster' ? '#8a3f10' : '#7a1f17';
+      b.fillRect(Math.round(bm.x - 1), Math.round(bm.y - 2 * sc), 3, Math.max(2, Math.round(4 * sc)));
+      if (bm.type === 'remote') { // 초록 LED: 탭하면 터진다
+        if ((time * 3 | 0) % 2) { b.fillStyle = 'rgba(90,255,140,0.75)'; b.beginPath(); b.arc(bm.x, bm.y - 2, 2.2 * sc, 0, TAU); b.fill(); }
+      } else {
+        const blink = (time * (4 + 16 / (bm.fuse + 0.3)) | 0) % 2;
+        if (blink) { b.fillStyle = 'rgba(255,170,60,0.6)'; b.beginPath(); b.arc(bm.x, bm.y - 2, 2.5 * sc, 0, TAU); b.fill(); }
+      }
       if (bm.fuse < 0.3) { // 폭발 직전 예고 섬광
         const k = 1 - bm.fuse / 0.3;
         b.fillStyle = `rgba(255,245,200,${0.25 + k * 0.5})`; b.beginPath(); b.arc(bm.x, bm.y, 3 + k * 10, 0, TAU); b.fill();
@@ -1379,8 +1458,10 @@ function drawBombs(under) {
     } else if (!under && bm.state === 'air') {
       b.fillStyle = 'rgba(0,0,0,0.25)'; b.fillRect(Math.round(bm.x - 2), Math.round(bm.y), 4, 1);
       b.save(); b.translate(Math.round(bm.x), Math.round(bm.y - bm.z)); b.rotate(bm.spin);
-      b.fillStyle = '#d0362a'; b.fillRect(-1, -3, 3, 6);
-      b.fillStyle = '#ffe066'; b.fillRect(0, -5, 1, 2);
+      b.fillStyle = { remote: '#2f9a58', cluster: '#ff8a2a', bait: '#a07040' }[bm.type] || '#d0362a';
+      b.fillRect(-1, -3, 3, 6);
+      if (bm.type === 'cluster') { b.fillRect(-3, -2, 2, 5); b.fillRect(2, -2, 2, 5); }
+      b.fillStyle = bm.type === 'remote' ? '#7dff9e' : '#ffe066'; b.fillRect(0, -5, 1, 2);
       b.restore();
     }
   }
@@ -1418,6 +1499,7 @@ function drawParts() {
     else if (p.type === 'fire') { b.fillStyle = k > 0.5 ? '#ffe066' : '#ff7b2a'; b.fillRect(x, y, 2, 2); }
     else if (p.type === 'spark') { b.fillStyle = k > 0.65 ? '#fffbe0' : k > 0.35 ? '#ffd45a' : '#ff7a24'; b.fillRect(x, y, 1, 1); }
     else if (p.type === 'wisp') { b.fillStyle = `rgba(210,210,205,${k * 0.35})`; b.fillRect(x, y, 2, 1); }
+    else if (p.type === 'crumb') { b.fillStyle = `rgba(200,160,90,${k * 0.8})`; b.fillRect(x, y, 1, 1); }
     else if (p.type === 'glint') { b.fillStyle = `rgba(255,225,90,${k})`; b.fillRect(x, y - 1, 1, 3); b.fillRect(x - 1, y, 3, 1); }
     else if (p.type === 'mush') {
       const r = 3 + (1 - k) * 9, hot = p.z < 30 && k > 0.6;
@@ -1650,8 +1732,16 @@ function drawHUD() {
   }
   if (dyn === 0 && !hold) txt('다이너마이트 소진', W - 14, 22, u * 1.1, '#f88', 'right');
 
-  if (hold) drawFuseStick(u); else if (fuseFx.sparks.length || fuseFx.smoke.length) drawFuseFx();
+  if (hold && hold.type === 'remote') {
+    txt('📡 원격 기폭탄 · 놓은 뒤 화면을 탭하면 폭발', W / 2, cvs.height * 0.16, u * 1.15, '#7dff9e', 'center');
+  } else if (hold) drawFuseStick(u); else if (fuseFx.sparks.length || fuseFx.smoke.length) drawFuseFx();
 
+  if (bombs.some(b2 => b2.type === 'remote' && b2.state === 'water') && !hold)
+    txt('📡 지금 탭하면 폭발!', W / 2, cvs.height * 0.16, u * 1.3, (time * 4 | 0) % 2 ? '#7dff9e' : '#c8ffd6', 'center');
+  if (hold && hold.type !== 'basic' && hold.type !== 'remote') {
+    const am = AMMO.find(x => x.id === hold.type);
+    txt(`${am.icon} ${am.name}`, W / 2, cvs.height * 0.16, u * 1.2, am.col, 'center');
+  }
   // 팝업 텍스트
   for (const t of texts) {
     const k = t.t / t.life;
@@ -1757,6 +1847,7 @@ const RULES = [
   ['⚡', '황다랑어', '가끔 <b>아주 빠른 그림자</b>가 호수를 가로지릅니다. 황다랑어 한 마리 <b>150점</b>. 지나갈 길목을 미리 노리세요.'],
   ['🛟', '튜브 탄 수영객', '<b>3일차부터</b> 가끔 튜브를 타고 떠다니는 사람이 나타납니다. 폭발에 휘말리면 <b>살인자</b>가 되어 그대로 게임 오버. 상어가 쫓아가면 잡아먹히니, 상어를 잡아 <b>구조</b>하면 +300.'],
   ['✨', '희귀종과 도감', '잉어 떼 속 <b>황금잉어</b>(500점), 바닥의 <b>철갑상어</b>(800점), 그리고 <b>호수의 주인</b>(3000점, 3발). 처음 잡으면 <b>도감</b>에 등록되고 동전 보너스!'],
+  ['🧨', '특수 다이너마이트', '왼쪽 아래에서 골라 던집니다. <b>📡 원격</b>: 물에 빠진 뒤 탭하면 폭발 · <b>💥 산탄</b>: 세 갈래로 갈라짐 · <b>🪱 미끼</b>: 떼를 끌어모은 뒤 폭발. 처음엔 2개씩 드려요.'],
   ['☢', '핵폭탄', '가게에서 사는 소모품. 오른쪽 아래 버튼을 <b>두 번</b> 누르면 3초 뒤 <b>호수 전체</b>가 터집니다. 수영객이 있으면 살인자, 고래가 있으면 감점.'],
   ['🪙', '동전과 가게', '점수만큼 <b>동전</b>이 쌓입니다. 가게 장비(가방 · 화약 · 긴 도화선 · 부적)는 게임이 끝나도 계속 남습니다.'],
 ];
@@ -1834,6 +1925,20 @@ function renderShop() {
       // 진행 중인 판에도 바로 적용 (부적은 다음 판부터)
       applyUpgrades();
       renderShop();
+    });
+    row.appendChild(bt); list.appendChild(row);
+  }
+  // 소모품: 특수 다이너마이트 (3개 묶음)
+  for (const am of AMMO) {
+    const have = meta.ammo[am.id] || 0;
+    const row = document.createElement('div'); row.className = 'item';
+    row.innerHTML = `<div class="info"><div class="nm">${am.icon} ${am.name} ×${am.pack}</div><div class="ds">${am.desc}</div><div class="lv">보유 ${have} / ${AMMO_MAX}</div></div>`;
+    const bt = document.createElement('button'); bt.id = 'buy-' + am.id;
+    if (have + am.pack > AMMO_MAX) { bt.textContent = '가득'; bt.disabled = true; }
+    else { bt.textContent = `🪙 ${am.cost}`; bt.disabled = meta.coins < am.cost; }
+    bt.addEventListener('click', () => {
+      if ((meta.ammo[am.id] || 0) + am.pack > AMMO_MAX || meta.coins < am.cost) return;
+      meta.coins -= am.cost; meta.ammo[am.id] = (meta.ammo[am.id] || 0) + am.pack; saveMeta(); ensureAudio(); sfx.bonus(); renderShop();
     });
     row.appendChild(bt); list.appendChild(row);
   }
@@ -1927,7 +2032,7 @@ requestAnimationFrame(frame);
 
 // 디버그/테스트용 훅
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; },
-  get fish() { return fish.length; }, spawnKind: k => spawnSchool(k, false), giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
+  get fish() { return fish.length; }, selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), spawnKind: k => spawnSchool(k, false), giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
 </script>
 </body>
