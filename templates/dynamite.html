@@ -69,6 +69,10 @@
   .item .lv { color: #f2c14e; font-size: 12px; letter-spacing: 2px; }
   .item button { font-size: 13.5px; padding: 7px 10px; white-space: nowrap; }
   .earn { color: #ffd76a; }
+  /* 동전 아이콘: 이모지 대신 직접 그린다 (일부 PC에서 동전 이모지가 네모로 깨짐) */
+  .coin { display: inline-block; width: .85em; height: .85em; border-radius: 50%; vertical-align: -0.08em; margin-right: .22em;
+    background: radial-gradient(circle at 35% 35%, #fff2b0 0 18%, #ffd44a 19% 60%, #d99a12 61%); box-shadow: 0 0 0 1px #7a5208; }
+  .scorelbl { font-size: 13px; opacity: .75; margin-top: 2px; }
   .resetbox { margin-top: 18px; padding-top: 12px; border-top: 1px dashed #2f5a66; }
   .resetbox .ds { font-size: 12px; opacity: .75; margin-bottom: 8px; }
   button.reset { font-size: 13px; padding: 7px 10px; background: #3a1f24; color: #ffb3a8; box-shadow: 0 3px 0 #1d0f12; }
@@ -108,7 +112,7 @@
       <li><b>놓으면</b> 던집니다. 늦게 놓을수록 얕은 곳에서 터집니다</li>
     </ol>
     <div class="coins" id="startCoins"></div>
-    <div class="btns"><button id="startBtn">시작</button><button class="ghost" data-shop>🪙 가게</button><button class="ghost" data-dex>📘 도감</button></div>
+    <div class="btns"><button id="startBtn">시작</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button></div>
     <button class="link" id="rulesBtn">📖 자세한 규칙 보기</button>
     <a class="home" href="/">← PixelQuest로 돌아가기</a>
   </div>
@@ -117,20 +121,22 @@
 <div class="overlay hidden" id="clearOv">
   <div class="panel">
     <h1 id="clearTitle">1일차 성공!</h1>
+    <div class="scorelbl">오늘 점수</div>
     <div class="bigscore" id="clearScore">0</div>
     <div class="stats" id="clearStats"></div>
-    <div class="btns"><button id="nextBtn">다음 날</button><button class="ghost" data-shop>🪙 가게</button><button class="ghost" data-dex>📘 도감</button></div>
+    <div class="btns"><button id="nextBtn">다음 날</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button></div>
   </div>
 </div>
 
 <div class="overlay hidden" id="endOv">
   <div class="panel">
     <h1 id="endTitle">오늘의 조과</h1>
+    <div class="scorelbl">총점</div>
     <div class="bigscore" id="endScore">0</div>
     <div class="stats" id="endStats"></div>
     <div class="btns">
       <button class="charm" id="charmBtn" hidden>🧿 부적 사용: 오늘 다시</button>
-      <button id="againBtn">다시 하기</button><button class="ghost" data-shop>🪙 가게</button><button class="ghost" data-dex>📘 도감</button>
+      <button id="againBtn">다시 하기</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button>
     </div>
     <a class="home" href="/">← PixelQuest로 돌아가기</a>
   </div>
@@ -328,7 +334,7 @@ const NUKE_COST = 1500, NUKE_MAX = 2;
 const AMMO = [
   { id: 'remote',  icon: '📡', name: '원격 기폭', desc: '도화선 없음. 물에 빠진 뒤 화면을 탭하면 원하는 순간 폭발', pack: 3, cost: 300, col: '#3fae6a' },
   { id: 'cluster', icon: '💥', name: '산탄',      desc: '물에 닿으면 세 갈래로 갈라져 넓게 폭발 (하나하나는 조금 작음)', pack: 3, cost: 350, col: '#ff8a2a' },
-  { id: 'bait',    icon: '🪱', name: '미끼 폭탄', desc: '가라앉는 동안 떡밥을 뿌려 근처 물고기 떼를 끌어모은 뒤 폭발', pack: 3, cost: 250, col: '#a07040' },
+  { id: 'bait',    icon: '🐛', name: '미끼 폭탄', desc: '가라앉는 동안 떡밥을 뿌려 근처 물고기 떼를 끌어모은 뒤 폭발', pack: 3, cost: 250, col: '#a07040' },
 ];
 const AMMO_MAX = 9;
 if (!meta.ammo) { meta.ammo = { remote: 2, cluster: 2, bait: 2 }; } // 처음엔 맛보기로 2개씩
@@ -355,7 +361,7 @@ function recordDex(id, x, y) {
   meta.dex[id] = (meta.dex[id] || 0) + 1;
   if (first) {
     meta.coins += d.bonus;
-    if (x !== undefined) texts.push(mkText(x, y - 20, `📘 도감 ${d.seen ? '목격' : '등록'}! ${d.name} +🪙${d.bonus}`, d.rare ? '#ffd23f' : '#9fe0ff', 1.25, true));
+    if (x !== undefined) texts.push(mkText(x, y - 20, `📘 도감 ${d.seen ? '목격' : '등록'}! ${d.name} 동전 +${d.bonus}`, d.rare ? '#ffd23f' : '#9fe0ff', 1.25, true));
     [784, 988, 1175].forEach((f, i) => tone(f, 0.1, 0.06, 'square', null, i * 0.07));
   }
   saveMeta();
@@ -548,7 +554,7 @@ function spawnSwimmer() {
   swimmer = { x: left ? -10 : VW + 10, y: rand(28, SHORE - 60), dir: left ? 1 : -1, sp: rand(6, 9), t: 0, kick: 0,
     vx: 0, vy: 0, panic: 0, screamCd: 0 };
   swimmer.vx = swimmer.dir * swimmer.sp;
-  banner = { str: '🛟 튜브 탄 수영객 등장! 절대 맞히지 마세요', t: 2.8 };
+  banner = { str: '🏊 튜브 탄 수영객 등장! 절대 맞히지 마세요', t: 2.8 };
   tone(880, 0.12, 0.06, 'sine', null); tone(1100, 0.16, 0.06, 'sine', null, 0.14);
 }
 function updateSwimmer(dt) {
@@ -2013,7 +2019,7 @@ function dayClear() {
   document.getElementById('clearStats').innerHTML =
     `목표 ${target}점 · <b>+${extra}</b> 초과<br>총점 ${score}` +
     (nextBonus ? `<br><span class="newbest">초과 점수 보너스! 내일 다이너마이트 +${nextBonus}</span>` : `<br><span style="opacity:.75">100점 더 넘겼으면 내일 다이너마이트 +1</span>`) +
-    `<br><span class="earn">🪙 +${earned} (보유 ${meta.coins})</span>` +
+    `<br><span class="earn"><span class="coin"></span>동전 +${earned} · 보유 ${meta.coins}</span>` +
     `<br><span style="opacity:.8">내일 목표: ${dayTarget(day + 1)}점</span>`;
   document.getElementById('nextBtn').textContent = `${day + 1}일차 시작`;
   clearOv.classList.remove('hidden');
@@ -2061,7 +2067,7 @@ function endGame(reason) {
     (stats.whaleHits ? `<br><span style="color:#ff8a8a">고래 오폭 ${stats.whaleHits}회</span>` : '') +
     (stats.rescues ? `<br><span style="color:#7fffb0">수영객 구조 ${stats.rescues}회</span>` : '') +
     (stats.swimmersLost ? `<br><span style="opacity:.75">상어에게 잃은 수영객 ${stats.swimmersLost}명</span>` : '') +
-    `<br><span class="earn">🪙 +${earned} (보유 ${meta.coins}) · 가게에서 장비를 사면 다음 판이 길어집니다</span>`;
+    `<br><span class="earn"><span class="coin"></span>동전 +${earned} · 보유 ${meta.coins}</span><br><span style="opacity:.75">가게에서 장비를 사면 다음 판이 길어집니다</span>`;
   const cb = document.getElementById('charmBtn');
   lastEndBlast = blast || murder;
   cb.hidden = charmsLeft <= 0 || lastEndBlast; // 손에서 터지거나 사람을 터뜨리면 부적으로도 못 살린다
@@ -2083,12 +2089,12 @@ const RULES = [
   ['📅', '하루와 목표', '하루에 다이너마이트 <b>6개</b>. 그날 <b>목표 점수</b>를 넘기면 다음 날로. 넘긴 점수 <b>100점마다</b> 내일 다이너마이트 +1.'],
   ['🎯', '실력 보상', '한 방에 <b>6마리 이상</b>이면 다이너마이트 환급(12마리 이상 2개). 단, <b>하루 최대 3개</b>까지(오른쪽 위 ●). 3마리 이상을 <b>연속</b>으로 잡으면 점수가 최대 2배.'],
   ['⚡', '황다랑어', '가끔 <b>아주 빠른 그림자</b>가 호수를 가로지릅니다. 황다랑어 한 마리 <b>150점</b>. 지나갈 길목을 미리 노리세요.'],
-  ['🛟', '튜브 탄 수영객', '<b>3일차부터</b> 가끔 튜브를 타고 떠다니는 사람이 나타납니다. 폭발에 휘말리면 <b>살인자</b>가 되어 그대로 게임 오버. 상어가 쫓아가면 잡아먹히니, 상어를 잡아 <b>구조</b>하면 +300.'],
+  ['🏊', '튜브 탄 수영객', '<b>3일차부터</b> 가끔 튜브를 타고 떠다니는 사람이 나타납니다. 폭발에 휘말리면 <b>살인자</b>가 되어 그대로 게임 오버. 상어가 쫓아가면 잡아먹히니, 상어를 잡아 <b>구조</b>하면 +300.'],
   ['✨', '희귀종과 도감', '잉어 떼 속 <b>황금잉어</b>(500점), 바닥의 <b>철갑상어</b>(800점), 그리고 <b>호수의 주인</b>(3000점, 3발). 처음 잡으면 <b>도감</b>에 등록되고 동전 보너스!'],
-  ['🧨', '특수 다이너마이트', '왼쪽 아래에서 골라 던집니다. <b>📡 원격</b>: 물에 빠진 뒤 탭하면 폭발 · <b>💥 산탄</b>: 세 갈래로 갈라짐 · <b>🪱 미끼</b>: 떼를 끌어모은 뒤 폭발. 처음엔 2개씩 드려요.'],
+  ['🧨', '특수 다이너마이트', '왼쪽 아래에서 골라 던집니다. <b>📡 원격</b>: 물에 빠진 뒤 탭하면 폭발 · <b>💥 산탄</b>: 세 갈래로 갈라짐 · <b>🐛 미끼</b>: 떼를 끌어모은 뒤 폭발. 처음엔 2개씩 드려요.'],
   ['👹', '보스: 대괴수 쿠르가', '<b>5일차마다</b> 심연에서 올라옵니다. 체력 10. 몸통 -1, <b>물 위로 든 머리</b>는 급소 -2. 머리를 들고 <b>물대포</b>를 준비할 때 머리를 맞히면 막을 수 있고, 맞으면 다이너마이트 1개를 잃습니다. 꼬리치기는 조준을 흔듭니다. 격파 +10000.'],
   ['☢', '핵폭탄', '가게에서 사는 소모품. 오른쪽 아래 버튼을 <b>두 번</b> 누르면 3초 뒤 <b>호수 전체</b>가 터집니다. 수영객이 있으면 살인자, 고래가 있으면 감점.'],
-  ['🪙', '동전과 가게', '하루가 끝날 때 <b>동전</b>을 받습니다. 점수가 높을수록 받지만, 많이 벌수록 조금씩 덜 늘어납니다. 가게 장비(가방 · 화약 · 긴 도화선 · 부적)는 게임이 끝나도 계속 남습니다.'],
+  ['💰', '동전과 가게', '하루가 끝날 때 <b>동전</b>을 받습니다. 점수가 높을수록 받지만, 많이 벌수록 조금씩 덜 늘어납니다. 가게 장비(가방 · 화약 · 긴 도화선 · 부적)는 게임이 끝나도 계속 남습니다.'],
 ];
 let rulePage = 0;
 const rulesOv = document.getElementById('rulesOv');
@@ -2144,9 +2150,9 @@ document.querySelectorAll('.panel').forEach(pn => {
 const shopOv = document.getElementById('shopOv');
 let shopBack = null;
 function renderShop() {
-  document.getElementById('shopCoins').textContent = `🪙 ${meta.coins}`;
+  document.getElementById('shopCoins').innerHTML = `보유 동전 <span class="coin"></span>${meta.coins}`;
   updateAmmoBar(true);
-  document.getElementById('startCoins').textContent = `🪙 ${meta.coins}`;
+  document.getElementById('startCoins').innerHTML = `보유 동전 <span class="coin"></span>${meta.coins}`;
   const list = document.getElementById('shopList');
   list.innerHTML = '';
   for (const u of UPGRADES) {
@@ -2157,7 +2163,7 @@ function renderShop() {
     const bt = document.createElement('button');
     bt.id = 'buy-' + u.id;
     if (lv >= max) { bt.textContent = '최대'; bt.disabled = true; }
-    else { bt.textContent = `🪙 ${cost}`; bt.disabled = meta.coins < cost; }
+    else { bt.innerHTML = `<span class="coin"></span>${cost}`; bt.disabled = meta.coins < cost; }
     bt.addEventListener('click', () => {
       if (meta.up[u.id] >= max || meta.coins < cost) return;
       meta.coins -= cost; meta.up[u.id]++; saveMeta();
@@ -2175,7 +2181,7 @@ function renderShop() {
     row.innerHTML = `<div class="info"><div class="nm">${am.icon} ${am.name} ×${am.pack}</div><div class="ds">${am.desc}</div><div class="lv">보유 ${have} / ${AMMO_MAX}</div></div>`;
     const bt = document.createElement('button'); bt.id = 'buy-' + am.id;
     if (have + am.pack > AMMO_MAX) { bt.textContent = '가득'; bt.disabled = true; }
-    else { bt.textContent = `🪙 ${am.cost}`; bt.disabled = meta.coins < am.cost; }
+    else { bt.innerHTML = `<span class="coin"></span>${am.cost}`; bt.disabled = meta.coins < am.cost; }
     bt.addEventListener('click', () => {
       if ((meta.ammo[am.id] || 0) + am.pack > AMMO_MAX || meta.coins < am.cost) return;
       meta.coins -= am.cost; meta.ammo[am.id] = (meta.ammo[am.id] || 0) + am.pack; saveMeta(); ensureAudio(); sfx.bonus(); renderShop();
@@ -2188,7 +2194,7 @@ function renderShop() {
     `<div class="lv">보유 ${meta.nukes} / ${NUKE_MAX}</div></div>`;
   const bt = document.createElement('button'); bt.id = 'buy-nuke';
   if (meta.nukes >= NUKE_MAX) { bt.textContent = '가득'; bt.disabled = true; }
-  else { bt.textContent = `🪙 ${NUKE_COST}`; bt.disabled = meta.coins < NUKE_COST; }
+  else { bt.innerHTML = `<span class="coin"></span>${NUKE_COST}`; bt.disabled = meta.coins < NUKE_COST; }
   bt.addEventListener('click', () => {
     if (meta.nukes >= NUKE_MAX || meta.coins < NUKE_COST) return;
     meta.coins -= NUKE_COST; meta.nukes++; saveMeta(); ensureAudio(); sfx.bonus(); renderShop();
