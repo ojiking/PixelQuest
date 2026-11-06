@@ -307,6 +307,8 @@ let state = 'menu';
 let time = 0, score = 0, dyn = START_DYN, best = 0, bestDay = 0;
 let day = 1, dayScore = 0, target = 250, nextBonus = 0;
 let streak = 0, charmsLeft = 0, lastEndBlast = false;
+const REFUND_CAP = 3;   // 하루에 돌려받을 수 있는 다이너마이트 최대 개수
+let refundsToday = 0;
 let tunaT = 15, swimT = 25, swimmer = null, fatal = null, emptyTube = null;
 let rareT = 25, nuke = null, radiation = 0, nukeFlash = 0;
 let bossDay = false, bossSpawned = false;   // 5일차마다 보스의 날  // 희귀종 타이머, 핵폭탄 진행, 방사능 잔광  // 황다랑어 떼, 튜브 탄 수영객, 즉사 사유
@@ -381,7 +383,7 @@ function newGame() {
 
 function startDay() {
   dyn = dailyDyn() + nextBonus; nextBonus = 0;
-  dayScore = 0; target = dayTarget(day);
+  dayScore = 0; target = dayTarget(day); refundsToday = 0;
   bombs = []; combos = [];
   big = null; nextBig = bigDelay(14, 18); schoolSpawnT = 4;
   hold = null; shake = flash = ink = endT = 0;
@@ -1302,10 +1304,13 @@ function update(dt) {
       else if (c.kills === 0 && c.depth >= 0) { msg = '꽝…'; col = '#9aa'; }
       if (msg) texts.push(mkText(c.x, c.y - 14, msg, col, c.kills >= 9 ? 1.8 : 1.3, c.kills >= 4));
       // 실력 보상: 한 방에 많이 잡으면 다이너마이트 환급
-      const refund = (c.kills >= 12 ? 2 : c.kills >= 6 ? 1 : 0) + (c.bigKill ? 2 : 0);
-      if (refund) {
-        dyn += refund; sfx.bonus();
-        texts.push(mkText(c.x, c.y + 4, `+${refund} 다이너마이트!`, '#ff9f43', 1.3, true));
+      const earned = (c.kills >= 12 ? 2 : c.kills >= 6 ? 1 : 0) + (c.bigKill ? 2 : 0);
+      const refund = Math.min(earned, REFUND_CAP - refundsToday); // 하루 상한
+      if (refund > 0) {
+        dyn += refund; refundsToday += refund; sfx.bonus();
+        texts.push(mkText(c.x, c.y + 4, `+${refund} 다이너마이트!` + (refundsToday >= REFUND_CAP ? ' (오늘 환급 끝)' : ''), '#ff9f43', 1.3, true));
+      } else if (earned > 0) {
+        texts.push(mkText(c.x, c.y + 4, '오늘 환급 한도 도달', '#9aa', 1.0));
       }
       // 연속 명중: 3마리 이상이면 이어지고, 아니면 끊긴다
       if (c.kills >= 3) {
@@ -1950,6 +1955,10 @@ function drawHUD() {
     ctx.fillStyle = '#d0362a'; ctx.fillRect(x, y, u * 0.9, u * 2.2);
     ctx.fillStyle = '#f4ead2'; ctx.fillRect(x, y + u * 0.8, u * 0.9, u * 0.4);
   }
+  if (state === 'play') { // 오늘 남은 환급
+    const left = REFUND_CAP - refundsToday;
+    txt(`환급 ${'●'.repeat(left)}${'○'.repeat(REFUND_CAP - left)}`, W - 14, 18 + u * 3.2, u * 1.0, left ? '#ffb347' : '#8a9aa0', 'right');
+  }
   if (big && big.type === 'kaiju' && !big.dead && big.phase !== 'leave') {
     const bw = Math.min(W * 0.62, 340), bx = (W - bw) / 2, by = 58 + u * 1.2, bh = Math.max(9, u * 1.0);
     txt('👹 심연의 대괴수 쿠르가', W / 2, by - u * 1.0, u * 1.25, '#ff8a7a', 'center');
@@ -2072,7 +2081,7 @@ const RULES = [
   ['💀', '손에서 터지면 끝', '도화선을 끝까지 쥐고 있으면 <b>손에서 터져 그대로 게임 오버</b>. 부적으로도 못 살립니다.'],
   ['🦈', '거대한 그림자', '<b>상어</b> 2발 = +500 · <b>대왕오징어</b> 촉수 3발 = +1000. <b>고래</b>는 보호종이라 맞히면 -300. 물을 뿜으면 고래입니다.'],
   ['📅', '하루와 목표', '하루에 다이너마이트 <b>6개</b>. 그날 <b>목표 점수</b>를 넘기면 다음 날로. 넘긴 점수 <b>100점마다</b> 내일 다이너마이트 +1.'],
-  ['🎯', '실력 보상', '한 방에 <b>6마리 이상</b>이면 다이너마이트 환급(12마리 이상 2개). 3마리 이상을 <b>연속</b>으로 잡으면 점수가 최대 2배.'],
+  ['🎯', '실력 보상', '한 방에 <b>6마리 이상</b>이면 다이너마이트 환급(12마리 이상 2개). 단, <b>하루 최대 3개</b>까지(오른쪽 위 ●). 3마리 이상을 <b>연속</b>으로 잡으면 점수가 최대 2배.'],
   ['⚡', '황다랑어', '가끔 <b>아주 빠른 그림자</b>가 호수를 가로지릅니다. 황다랑어 한 마리 <b>150점</b>. 지나갈 길목을 미리 노리세요.'],
   ['🛟', '튜브 탄 수영객', '<b>3일차부터</b> 가끔 튜브를 타고 떠다니는 사람이 나타납니다. 폭발에 휘말리면 <b>살인자</b>가 되어 그대로 게임 오버. 상어가 쫓아가면 잡아먹히니, 상어를 잡아 <b>구조</b>하면 +300.'],
   ['✨', '희귀종과 도감', '잉어 떼 속 <b>황금잉어</b>(500점), 바닥의 <b>철갑상어</b>(800점), 그리고 <b>호수의 주인</b>(3000점, 3발). 처음 잡으면 <b>도감</b>에 등록되고 동전 보너스!'],
