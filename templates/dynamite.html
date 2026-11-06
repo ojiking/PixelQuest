@@ -296,7 +296,8 @@ let time = 0, score = 0, dyn = START_DYN, best = 0, bestDay = 0;
 let day = 1, dayScore = 0, target = 250, nextBonus = 0;
 let streak = 0, charmsLeft = 0, lastEndBlast = false;
 let tunaT = 15, swimT = 25, swimmer = null, fatal = null, emptyTube = null;
-let rareT = 25, nuke = null, radiation = 0, nukeFlash = 0;  // 희귀종 타이머, 핵폭탄 진행, 방사능 잔광  // 황다랑어 떼, 튜브 탄 수영객, 즉사 사유
+let rareT = 25, nuke = null, radiation = 0, nukeFlash = 0;
+let bossDay = false, bossSpawned = false;   // 5일차마다 보스의 날  // 희귀종 타이머, 핵폭탄 진행, 방사능 잔광  // 황다랑어 떼, 튜브 탄 수영객, 즉사 사유
 
 // ===== 영구 성장: 동전 + 장비 =====
 const UPGRADES = [
@@ -330,6 +331,7 @@ const DEX = [
   { id: 'lord',     name: '호수의 주인', col: '#6b5236', hint: '4일차부터 아주 드물게. 세 번은 맞혀야 한다', bonus: 500, rare: true },
   { id: 'shark',    name: '상어',        col: '#7b8c96', hint: '두 발을 맞혀야 잡힌다', bonus: 80 },
   { id: 'squid',    name: '대왕오징어',  col: '#c86a8a', hint: '물빛이 검어질 때. 촉수 세 발', bonus: 120 },
+  { id: 'kaiju',    name: '대괴수 쿠르가', col: '#35574a', hint: '5일차마다 심연에서 올라오는 보스. 머리를 노려라', bonus: 1000, rare: true },
   { id: 'whale',    name: '고래',        col: '#3e5f78', hint: '보호종. 목격하면 기록된다', bonus: 50, seen: true },
 ];
 const DEX_BY = Object.fromEntries(DEX.map(d => [d.id, d]));
@@ -378,6 +380,8 @@ function startDay() {
   banner = { str: `${day}일차 · 목표 ${target}점`, t: 2.8 };
   tunaT = rand(10, 18); swimT = firstSwimDelay(); swimmer = null; fatal = null; emptyTube = null;
   rareT = rand(18, 30); nuke = null; radiation = 0; nukeFlash = 0;
+  bossDay = day % 5 === 0; bossSpawned = false;
+  if (bossDay) { nextBig = 12; banner = { str: `👹 ${day}일차 · 보스의 날! 목표 ${target}점`, t: 3.6 }; }
   if (day === SWIM_DAY) banner = { str: `${day}일차 · 목표 ${target}점 · 오늘부터 수영객이 나옵니다`, t: 3.4 };
 }
 const maxSchools = () => 6 + Math.min(3, day - 1);
@@ -504,6 +508,7 @@ function nukeBlast() {
   for (const f of fish) if (f.state === 'swim') { f.hp = 1; f.state = 'rise'; f.ex = ex; ex.kills++; ex.pts += f.sp.pts; }
   if (big && !big.dead) {
     if (big.type === 'whale') { big.dive = 6; stats.whaleHits++; addScore(-300); texts.push(mkText(big.x, big.y, '고래는 보호종! -300', '#ff5b5b', 2.2, true)); }
+    else if (big.type === 'kaiju') { kaijuDamage(5, ex, '☢ 핵 직격! -5'); }
     else { big.dead = true; ex.bigKill = true; ex.kills += big.type === 'shark' ? 3 : 5; }
   }
   // 연출: 하얀 섬광, 충격파, 버섯구름, 호수 전체 물기둥
@@ -548,9 +553,9 @@ function updateSwimmer(dt) {
   if (w.dead) return;
   // 상어를 보면 죽어라 도망친다
   w.screamCd -= dt;
-  const shark = big && big.type === 'shark' && !big.dead ? big : null;
+  const shark = big && (big.type === 'shark' || big.type === 'kaiju') && !big.dead ? big : null;
   const sd = shark ? Math.hypot(shark.x - w.x, shark.y - w.y) : Infinity;
-  if (sd < 75) {
+  if (sd < (shark && shark.type === 'kaiju' ? 110 : 75)) {
     if (w.panic <= 0 && w.screamCd <= 0) {
       texts.push(mkText(w.x, w.y - 14, '꺄아악!!', '#ff7ab0', 1.5, true));
       [1500, 1900, 1600, 2000].forEach((f, i) => tone(f, 0.12, 0.05, 'sine', f * 1.2, i * 0.1));
@@ -654,8 +659,203 @@ function drawSwimmer() {
   if ((w.t * 2 | 0) % 5 === 0) { b.fillStyle = '#fff'; b.fillRect(x + w.dir * 1, y - 5, 1, 1); }
 }
 
+// ===== 보스: 심연의 대괴수 쿠르가 =====
+function spawnKaiju() {
+  bossSpawned = true;
+  big = { type: 'kaiju', x: VW / 2, y: SHORE * 0.4, ang: rand(0, TAU), depth: 1.25, hp: 10, maxHp: 10, t: 0, life: 75,
+    phase: 'rise', pt: 2.4, len: Math.min(78, VW * 0.5), wid: 24, wave: 0, headUp: 0, flash: 0, hitCd: 0,
+    tx: VW / 2, ty: SHORE * 0.45, tailUp: 0, beam: 0, dead: false };
+  ink = 0.7; shake = 10;
+  banner = { str: '👹 심연의 대괴수 쿠르가 출현!', t: 3.4 };
+  tone(38, 3, 0.6, 'sawtooth', 24); tone(55, 2.5, 0.4, 'sine', 30); noiseBurst(2.5, 300, 0.5);
+  vibrate([200, 100, 200, 100, 400]);
+}
+const kHead = B => ({ x: B.x + Math.cos(B.ang) * B.len * 0.5, y: B.y + Math.sin(B.ang) * B.len * 0.5, depth: lerp(B.depth, 0, B.headUp) });
+const kTail = B => ({ x: B.x - Math.cos(B.ang + Math.sin(B.t * 1.3) * 0.25) * B.len * 0.85, y: B.y - Math.sin(B.ang + Math.sin(B.t * 1.3) * 0.25) * B.len * 0.85 });
+function updateKaiju(dt) {
+  const B = big;
+  B.flash = Math.max(0, B.flash - dt); B.hitCd = Math.max(0, B.hitCd - dt); B.wave = Math.max(0, B.wave - dt * 0.6);
+  if (B.dead) { // 배를 드러내고 떠오른다
+    B.headUp = Math.max(0, B.headUp - dt); B.depth -= dt * 0.4;
+    if (B.depth <= 0) { B.depth = 0; B.ft = (B.ft || 0) + dt; if (B.ft > 2.2) finishBig(); }
+    return;
+  }
+  if (B.phase !== 'leave' && B.t > B.life) { B.phase = 'leave'; B.headUp = 0; banner = { str: '쿠르가가 심연으로 돌아갔다…', t: 2.6 }; }
+  B.pt -= dt;
+  const toward = (x, y, sp, turn) => { B.ang = angLerp(B.ang, Math.atan2(y - B.y, x - B.x), dt * turn); B.x += Math.cos(B.ang) * sp * dt; B.y += Math.sin(B.ang) * sp * dt; };
+  switch (B.phase) {
+    case 'rise':
+      B.depth = lerp(B.depth, 0.55, dt * 1.2);
+      if (B.pt <= 0) { B.phase = 'roam'; B.pt = rand(3.5, 5.5); }
+      break;
+    case 'roam':
+      B.depth = lerp(B.depth, 0.55 + Math.sin(B.t * 0.6) * 0.05, dt);
+      if (Math.hypot(B.tx - B.x, B.ty - B.y) < 10) { B.tx = rand(VW * 0.25, VW * 0.75); B.ty = rand(SHORE * 0.2, SHORE * 0.6); }
+      toward(B.tx, B.ty, 10, 0.8);
+      if (B.pt <= 0) {
+        if (Math.random() < 0.5) { B.phase = 'tail'; B.pt = 1.4; }
+        else { B.phase = 'aim'; B.pt = 1.0; }
+      }
+      break;
+    case 'tail': { // 꼬리를 쳐들었다가 내려친다
+      B.tailUp = Math.min(1, B.tailUp + dt * 1.5);
+      if (B.pt <= 0) {
+        const t = kTail(B);
+        shake = Math.max(shake, 12); B.wave = 3;
+        for (let i = 0; i < 50; i++) { const a = rand(0, TAU), sp = rand(15, 60); parts.push({ x: t.x, y: t.y, z: 0, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.6, vz: rand(50, 130), life: rand(0.8, 1.4), max: 1.4, type: 'drop' }); }
+        for (let i = 0; i < 4; i++) ripples.push({ x: t.x, y: t.y, r: i * 5, max: 60 + i * 20, life: 1.6 });
+        for (const s2 of schools) if (Math.hypot(s2.x - t.x, s2.y - t.y) < 90) { s2.scared = 4; s2.wa = Math.atan2(s2.y - t.y, s2.x - t.x); }
+        texts.push(mkText(t.x, t.y - 10, '쾅!! 조준이 흔들린다', '#9fe9ff', 1.3, true));
+        noiseBurst(1.2, 800, 0.7); tone(48, 0.8, 0.5, 'sine', 30); vibrate([150]);
+        B.tailUp = 0; B.phase = 'roam'; B.pt = rand(4, 6);
+      }
+      break;
+    }
+    case 'aim': // 머리를 들고 부두를 노려본다
+      B.ang = angLerp(B.ang, Math.atan2(player.y - B.y, player.x - B.x), dt * 3);
+      B.headUp = Math.min(1, B.headUp + dt * 1.4);
+      if (B.pt <= 0) { B.phase = 'charge'; B.pt = 2.2; texts.push(mkText(kHead(B).x, kHead(B).y - 14, '⚠ 물대포 준비! 머리를 맞혀 막아라', '#ff8a7a', 1.3, true)); }
+      break;
+    case 'charge':
+      B.ang = angLerp(B.ang, Math.atan2(player.y - B.y, player.x - B.x), dt * 2);
+      if (Math.random() < dt * 30) { const h = kHead(B), a = rand(0, TAU); parts.push({ x: h.x + Math.cos(a) * 14, y: h.y + Math.sin(a) * 9, z: 2, vx: -Math.cos(a) * 30, vy: -Math.sin(a) * 18, vz: 0, life: 0.4, max: 0.4, type: 'drop' }); }
+      if (Math.random() < dt * 6) tone(300 + (2.2 - B.pt) * 300, 0.1, 0.05, 'sine');
+      if (B.pt <= 0) { B.phase = 'fire'; B.pt = 0.7; B.beam = 0.7; kaijuFire(); }
+      break;
+    case 'fire':
+      B.beam = B.pt;
+      if (B.pt <= 0) { B.phase = 'sink'; B.pt = 1.2; B.beam = 0; }
+      break;
+    case 'stagger': // 급소를 맞아 비틀거림
+      B.headUp = Math.max(0, B.headUp - dt * 1.2);
+      if (B.pt <= 0) { B.phase = 'roam'; B.pt = rand(4, 6); }
+      break;
+    case 'sink':
+      B.headUp = Math.max(0, B.headUp - dt);
+      if (B.pt <= 0) { B.phase = 'roam'; B.pt = rand(4, 6); }
+      break;
+    case 'leave':
+      B.headUp = Math.max(0, B.headUp - dt); B.depth += dt * 0.3;
+      if (B.depth > 1.4) { big = null; nextBig = bigDelay(18, 26); }
+      break;
+  }
+  if (big) { B.x = clamp(B.x, VW * 0.15, VW * 0.85); B.y = clamp(B.y, SHORE * 0.15, SHORE * 0.7); }
+}
+function kaijuFire() { // 부두를 향한 물대포
+  const h = kHead(big);
+  shake = Math.max(shake, 14); flash = Math.max(flash, 0.4);
+  noiseBurst(0.9, 2400, 0.8, 'bandpass'); tone(90, 0.7, 0.4, 'sawtooth', 50);
+  for (let i = 0; i < 40; i++) { const u = Math.random(); parts.push({ x: lerp(h.x, player.x, u) + rand(-4, 4), y: lerp(h.y, player.y - 6, u) + rand(-3, 3), z: 4, vx: rand(-20, 20), vy: rand(-15, 15), vz: rand(20, 70), life: rand(0.5, 1), max: 1, type: 'drop' }); }
+  if (player.dead || fatal) return;
+  if (hold) { hold = null; } // 손에 든 다이너마이트를 놓친다
+  if (dyn > 0) dyn--;
+  player.stun = 1.6; player.wet = 1.6;
+  texts.push(mkText(player.x, player.y - 20, '물대포에 맞았다! -1 다이너마이트', '#9fe9ff', 1.3, true));
+  vibrate([250]);
+}
+function kaijuDamage(dmg, ex, label) {
+  const B = big;
+  B.hp -= dmg; B.flash = 0.35; B.hitCd = 0.12;
+  const h = kHead(B);
+  texts.push(mkText(h.x, h.y - 8, label, '#ffd23f', 1.5, true));
+  tone(160, 0.25, 0.3, 'sawtooth', 70);
+  if (B.hp <= 0) {
+    B.hp = 0; B.dead = true; B.phase = 'dead'; B.beam = 0;
+    if (ex) { ex.bigKill = true; ex.kills += 10; }
+    shake = Math.max(shake, 16);
+    texts.push(mkText(B.x, B.y - 14, '쿠르가 격파!!!', '#ff5b3a', 2.4, true));
+    noiseBurst(2.5, 400, 0.7); tone(30, 2.5, 0.6, 'sawtooth', 20);
+  }
+}
+function kaijuHit(ex) {
+  const B = big;
+  if (B.hitCd > 0 || B.phase === 'leave') return;
+  const ed = Math.max(0, ex.depth), rr = (ex.depth < 0 ? R * 0.7 : R) * (ex.rs || 1);
+  const h = kHead(B);
+  if (B.headUp > 0.5 && Math.hypot(ex.x - h.x, ex.y - h.y, (h.depth - ed) * DZ) < rr + 8) { // 머리 = 급소
+    const interrupt = B.phase === 'aim' || B.phase === 'charge';
+    kaijuDamage(2, ex, interrupt ? '급소 명중! 공격 저지! -2' : '급소 명중! -2');
+    if (!B.dead && interrupt) { B.phase = 'stagger'; B.pt = 1.6; }
+    return;
+  }
+  const t = kTail(B);
+  const hd = Math.max(0, segDist(ex.x, ex.y, t.x, t.y, h.x, h.y) - B.wid / 2);
+  if (Math.hypot(hd, (B.depth - ed) * DZ) < rr) kaijuDamage(1, ex, '-1');
+}
+function kaijuPath(L, B, sc) { // 위에서 본 괴수 몸 (그림자/아이콘 공용)
+  const len = B.len * sc, wid = B.wid * sc, sw = Math.sin(B.t * 1.3) * 0.25;
+  L.save(); L.translate(B.x, B.y); L.rotate(B.ang);
+  L.beginPath(); L.ellipse(len * 0.05, 0, len * 0.3, wid / 2, 0, 0, TAU); L.fill();                 // 몸통
+  L.beginPath(); L.ellipse(len * 0.42, 0, len * 0.13, wid * 0.28, 0, 0, TAU); L.fill();             // 머리
+  L.beginPath(); L.moveTo(-len * 0.2, -wid * 0.3);                                                  // 꼬리
+  L.quadraticCurveTo(-len * 0.55, Math.sin(sw) * len * 0.3, -len * 0.88, Math.sin(sw) * len * 0.45);
+  L.quadraticCurveTo(-len * 0.55, Math.sin(sw) * len * 0.3 + wid * 0.08, -len * 0.2, wid * 0.3); L.fill();
+  for (const [px, py] of [[0.2, 1], [0.2, -1], [-0.12, 1], [-0.12, -1]]) {                         // 다리
+    L.beginPath(); L.ellipse(len * px, py * wid * 0.55, len * 0.07, wid * 0.16, py * 0.6, 0, TAU); L.fill();
+  }
+  L.restore();
+}
+function drawKaijuShadow() {
+  const B = big;
+  if (B.dead && B.depth <= 0) return;
+  const L = B.depth > 0.45 ? dctx : sctx;
+  L.globalAlpha = clamp(0.75 - B.depth * 0.4, 0.15, 0.75) * (B.phase === 'leave' ? clamp(1.4 - B.depth, 0, 1) : 1);
+  L.fillStyle = B.flash > 0 ? '#5a1010' : SHADOW;
+  kaijuPath(L, B, 1 - Math.min(1, B.depth) * 0.2);
+}
+function drawKaijuSurface() {
+  const B = big;
+  if (B.dead && B.depth <= 0) { // 쓰러진 괴수
+    b.globalAlpha = 0.95; b.fillStyle = '#8f9a8c'; kaijuPath(b, B, 1); b.globalAlpha = 1;
+    return;
+  }
+  if (B.phase === 'leave' || B.depth > 0.75) return;
+  // 등가시: 물 위로 비죽 솟은 가시 줄
+  const ca = Math.cos(B.ang), sa = Math.sin(B.ang);
+  for (let i = -3; i <= 3; i++) {
+    const px = B.x + ca * i * B.len * 0.07, py = B.y + sa * i * B.len * 0.07, hgt = 5 - Math.abs(i) * 0.9;
+    b.fillStyle = B.flash > 0 ? '#ff6a5a' : '#2e4a3c';
+    b.beginPath(); b.moveTo(px - 2, py); b.lineTo(px, py - hgt); b.lineTo(px + 2, py); b.fill();
+    b.fillStyle = 'rgba(230,250,255,0.55)'; b.fillRect(Math.round(px - 3), Math.round(py), 6, 1);
+  }
+  // 꼬리 쳐들기 예고
+  if (B.tailUp > 0) {
+    const t = kTail(B);
+    b.strokeStyle = '#2e4a3c'; b.lineWidth = 4; b.lineCap = 'round';
+    b.beginPath(); b.moveTo(t.x, t.y); b.quadraticCurveTo(t.x + 6, t.y - 14 * B.tailUp, t.x - 2, t.y - 24 * B.tailUp); b.stroke();
+    b.fillStyle = 'rgba(230,250,255,0.6)'; b.beginPath(); b.ellipse(t.x, t.y, 7, 3, 0, 0, TAU); b.fill();
+  }
+  // 머리를 들어올림
+  if (B.headUp > 0.05) {
+    const h = kHead(B), u = B.headUp, hy = h.y - 10 * u;
+    b.fillStyle = 'rgba(230,250,255,0.6)'; b.beginPath(); b.ellipse(h.x, h.y, 11 * u + 3, 5 * u + 2, 0, 0, TAU); b.fill();
+    b.save(); b.translate(h.x, hy); b.rotate(B.ang);
+    b.fillStyle = B.flash > 0 ? '#c84a3a' : '#35574a';
+    b.beginPath(); b.ellipse(0, 0, 11 * u, 7 * u, 0, 0, TAU); b.fill();                      // 머리
+    b.beginPath(); b.ellipse(8 * u, 0, 6 * u, 4 * u, 0, 0, TAU); b.fill();                   // 주둥이
+    b.fillStyle = '#4a7262'; b.fillRect(-6 * u, -6 * u, 3, 2); b.fillRect(-6 * u, 4 * u, 3, 2); // 뿔
+    const glow = B.phase === 'charge' ? 0.6 + (2.2 - B.pt) / 2.2 * 0.4 : 0.7;
+    b.fillStyle = `rgba(127,240,255,${glow})`;
+    b.fillRect(Math.round(2 * u), Math.round(-4 * u), 2, 2); b.fillRect(Math.round(2 * u), Math.round(3 * u), 2, 2); // 눈
+    if (B.phase === 'charge' || B.phase === 'fire') {
+      b.fillStyle = '#f4f4ea'; for (let i = 0; i < 3; i++) b.fillRect(Math.round(10 * u + i * 2), -2, 1, 1), b.fillRect(Math.round(10 * u + i * 2), 1, 1, 1);
+      const k = B.phase === 'charge' ? (2.2 - B.pt) / 2.2 : 1;
+      b.fillStyle = `rgba(160,235,255,${0.3 + k * 0.5})`; b.beginPath(); b.arc(14 * u, 0, 2 + k * 4, 0, TAU); b.fill();
+    }
+    b.restore();
+    if (B.phase === 'fire' && B.beam > 0) { // 물대포 줄기
+      const k = B.beam / 0.7, sx = h.x + Math.cos(B.ang) * 14, sy = hy + Math.sin(B.ang) * 14;
+      b.strokeStyle = `rgba(200,245,255,${0.8 * k})`; b.lineWidth = 7; b.lineCap = 'round';
+      b.beginPath(); b.moveTo(sx, sy); b.lineTo(player.x, player.y - 6); b.stroke();
+      b.strokeStyle = `rgba(255,255,255,${k})`; b.lineWidth = 3;
+      b.beginPath(); b.moveTo(sx, sy); b.lineTo(player.x, player.y - 6); b.stroke();
+    }
+  }
+}
+
 // ===== 대형 생물 =====
 function spawnBig() {
+  if ((bossDay && !bossSpawned) || (day >= 6 && Math.random() < 0.08)) { spawnKaiju(); return; }
   const r = Math.random();
   const type = r < 0.42 ? 'shark' : r < 0.78 ? 'whale' : 'squid';
   const left = Math.random() < 0.5;
@@ -690,6 +890,7 @@ function updateBig(dt) {
     return;
   }
   big.t += dt;
+  if (big.type === 'kaiju') { updateKaiju(dt); return; }
   if (big.type === 'shark') {
     const B = big;
     if (B.dead) { B.depth -= dt * 0.6; if (B.depth <= 0) { B.depth = 0; B.ft = (B.ft || 0) + dt; if (B.ft > 1.4) finishBig(); } return; }
@@ -777,11 +978,12 @@ function tentTip(t) {
   return { x: big.x + Math.cos(a) * L, y: big.y + Math.sin(a) * L * 0.8, depth: lerp(big.depth, 0.04, t.rise), a };
 }
 function finishBig() {
-  const pts = big.type === 'shark' ? 500 : 1000;
+  const pts = big.type === 'kaiju' ? 10000 : big.type === 'shark' ? 500 : 1000;
   recordDex(big.type, big.x, big.y);
   addScore(pts);
   sfx.bonus();
-  stats.catches.push(big.type === 'shark' ? '상어' : '대왕오징어');
+  stats.catches.push(big.type === 'kaiju' ? '👹 대괴수 쿠르가' : big.type === 'shark' ? '상어' : '대왕오징어');
+  if (big.type === 'kaiju') { dyn += 3; texts.push(mkText(big.x, big.y + 10, '+3 다이너마이트!', '#ff9f43', 1.4, true)); banner = { str: '🏆 대괴수 쿠르가 격파!', t: 3 }; }
   texts.push(mkText(big.x, big.y - 8, '+' + pts, '#ffe066', 1.8, true));
   for (let i = 0; i < 4; i++) ripples.push({ x: big.x, y: big.y, r: i * 4, max: 30 + i * 6, life: 1.2 });
   big = null; nextBig = bigDelay(18, 26);
@@ -789,6 +991,7 @@ function finishBig() {
 
 function bigHit(ex) {
   if (!big || big.dead) return;
+  if (big.type === 'kaiju') { kaijuHit(ex); return; }
   const ed = Math.max(0, ex.depth), rr = (ex.depth < 0 ? R * 0.7 : R) * (ex.rs || 1);
   if (big.type === 'shark' || big.type === 'whale') {
     const [ax, ay, bx, by] = bigBody();
@@ -926,6 +1129,7 @@ function aimInfo(h) {
   const hx = player.x, hy = player.y - 6;
   let lx = hx + Math.cos(ang) * dist, ly = hy + Math.sin(ang) * dist;
   if (big && big.type === 'squid' && !big.dead) { lx += Math.sin(time * 2.7) * 7; ly += Math.cos(time * 2.1) * 4; }
+  if (big && big.type === 'kaiju' && big.wave > 0) { lx += Math.sin(time * 5.3) * 12 * Math.min(1, big.wave); ly += Math.cos(time * 4.1) * 7 * Math.min(1, big.wave); }
   lx = clamp(lx, 4, VW - 4); ly = clamp(ly, 4, SHORE - 5);
   const fd = Math.hypot(lx - hx, ly - hy);
   const flight = 0.35 + fd / 230;
@@ -986,6 +1190,7 @@ function update(dt) {
   if (state !== 'play') { updateAmbient(dt); return; }
 
   if (player.stun > 0) player.stun -= dt;
+  if (player.wet > 0) player.wet -= dt;
   if (player.throwAnim > 0) player.throwAnim -= dt;
 
   if (hold && hold.type === 'remote') { /* 원격탄은 도화선이 없다 */ }
@@ -1149,7 +1354,7 @@ function updateSchools(dt) {
       if (big.type === 'whale' && d < 160 && big.dive <= 0) { // 고래 곁으로 몰려듦
         const tx = big.x - big.dir * 10, ty = big.y + (s.y < big.y ? -20 : 20);
         s.wa = angLerp(s.wa, Math.atan2(ty - s.y, tx - s.x), dt * 1.4);
-      } else if ((big.type === 'shark' && d < 60) || (big.type === 'squid' && d < 45)) {
+      } else if ((big.type === 'shark' && d < 60) || (big.type === 'squid' && d < 45) || (big.type === 'kaiju' && d < 75)) {
         s.wa = angLerp(s.wa, Math.atan2(s.y - big.y, s.x - big.x), dt * 4); s.scared = Math.max(s.scared, 1.2);
       }
     }
@@ -1270,6 +1475,7 @@ function drawShadows() {
 
 function drawBigShadow() {
   const B = big;
+  if (B.type === 'kaiju') { drawKaijuShadow(); return; }
   if ((B.type === 'shark' && B.dead && B.depth <= 0) || (B.type === 'squid' && B.dead && B.depth <= 0)) return;
   const L = B.depth > 0.45 ? dctx : sctx;
   L.globalAlpha = clamp(0.6 - B.depth * 0.4, 0.12, 0.65) * (B.type === 'squid' && B.t > B.life ? clamp(1.3 - B.depth, 0, 1) : 1);
@@ -1333,6 +1539,7 @@ function drawSurfaceThings() {
     b.restore();
   }
   if (!big) return;
+  if (big.type === 'kaiju') { drawKaijuSurface(); return; }
   if (big.type === 'shark' && !big.dead && big.depth < 0.16) {
     // 등지느러미
     const fx = big.x + Math.cos(big.ang) * 1, fy = big.y + Math.sin(big.ang) * 1;
@@ -1386,7 +1593,8 @@ function drawPlayer() {
     b.fillStyle = 'rgba(40,20,10,0.5)'; b.beginPath(); b.ellipse(px + 3, py + 7, 13, 4, 0, 0, TAU); b.fill();
     return;
   }
-  const burnt = player.stun > 0;
+  const burnt = player.stun > 0 && !(player.wet > 0);
+  if (player.wet > 0 && Math.random() < 0.4) parts.push({ x: px + rand(-4, 4), y: py - rand(0, 12), z: 0, vx: 0, vy: 0, vz: -10, life: 0.4, max: 0.4, type: 'bubble' });
   const skin = burnt ? '#2b2b2b' : '#f1c27d', shirt = burnt ? '#222' : '#d9483b', pants = burnt ? '#1a1a1a' : '#2f4a7a';
   // 그림자
   b.fillStyle = 'rgba(0,0,0,0.3)'; b.fillRect(px - 4, py + 7, 9, 2);
@@ -1730,6 +1938,14 @@ function drawHUD() {
     ctx.fillStyle = '#d0362a'; ctx.fillRect(x, y, u * 0.9, u * 2.2);
     ctx.fillStyle = '#f4ead2'; ctx.fillRect(x, y + u * 0.8, u * 0.9, u * 0.4);
   }
+  if (big && big.type === 'kaiju' && !big.dead && big.phase !== 'leave') {
+    const bw = Math.min(W * 0.62, 340), bx = (W - bw) / 2, by = 58 + u * 1.2, bh = Math.max(9, u * 1.0);
+    txt('👹 심연의 대괴수 쿠르가', W / 2, by - u * 1.0, u * 1.25, '#ff8a7a', 'center');
+    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(bx - 3, by - 3, bw + 6, bh + 6);
+    ctx.fillStyle = '#3a0d0d'; ctx.fillRect(bx, by, bw, bh);
+    ctx.fillStyle = big.flash > 0 ? '#fff' : '#e8473a'; ctx.fillRect(bx, by, bw * big.hp / big.maxHp, bh);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; for (let i = 1; i < big.maxHp; i++) ctx.fillRect(bx + bw * i / big.maxHp - 1, by, 2, bh);
+  }
   if (dyn === 0 && !hold) txt('다이너마이트 소진', W - 14, 22, u * 1.1, '#f88', 'right');
 
   if (hold && hold.type === 'remote') {
@@ -1848,6 +2064,7 @@ const RULES = [
   ['🛟', '튜브 탄 수영객', '<b>3일차부터</b> 가끔 튜브를 타고 떠다니는 사람이 나타납니다. 폭발에 휘말리면 <b>살인자</b>가 되어 그대로 게임 오버. 상어가 쫓아가면 잡아먹히니, 상어를 잡아 <b>구조</b>하면 +300.'],
   ['✨', '희귀종과 도감', '잉어 떼 속 <b>황금잉어</b>(500점), 바닥의 <b>철갑상어</b>(800점), 그리고 <b>호수의 주인</b>(3000점, 3발). 처음 잡으면 <b>도감</b>에 등록되고 동전 보너스!'],
   ['🧨', '특수 다이너마이트', '왼쪽 아래에서 골라 던집니다. <b>📡 원격</b>: 물에 빠진 뒤 탭하면 폭발 · <b>💥 산탄</b>: 세 갈래로 갈라짐 · <b>🪱 미끼</b>: 떼를 끌어모은 뒤 폭발. 처음엔 2개씩 드려요.'],
+  ['👹', '보스: 대괴수 쿠르가', '<b>5일차마다</b> 심연에서 올라옵니다. 체력 10. 몸통 -1, <b>물 위로 든 머리</b>는 급소 -2. 머리를 들고 <b>물대포</b>를 준비할 때 머리를 맞히면 막을 수 있고, 맞으면 다이너마이트 1개를 잃습니다. 꼬리치기는 조준을 흔듭니다. 격파 +10000.'],
   ['☢', '핵폭탄', '가게에서 사는 소모품. 오른쪽 아래 버튼을 <b>두 번</b> 누르면 3초 뒤 <b>호수 전체</b>가 터집니다. 수영객이 있으면 살인자, 고래가 있으면 감점.'],
   ['🪙', '동전과 가게', '점수만큼 <b>동전</b>이 쌓입니다. 가게 장비(가방 · 화약 · 긴 도화선 · 부적)는 게임이 끝나도 계속 남습니다.'],
 ];
@@ -1964,7 +2181,11 @@ function drawDexIcon(c, d, known) {
   const col = known ? d.col : '#05161c';
   g.fillStyle = col; g.strokeStyle = col;
   const cx = c.width / 2, cy = c.height / 2;
-  if (d.id === 'whale') {
+  if (d.id === 'kaiju') {
+    kaijuPath(g, { x: cx + 4, y: cy, ang: 0, len: 60, wid: 18, t: 0 }, 1);
+    for (let i = -3; i <= 3; i++) { g.beginPath(); g.moveTo(cx + 4 + i * 4 - 2, cy); g.lineTo(cx + 4 + i * 4, cy - 6 + Math.abs(i)); g.lineTo(cx + 4 + i * 4 + 2, cy); g.fill(); }
+    if (known) { g.fillStyle = '#7ff0ff'; g.fillRect(cx + 30, cy - 3, 2, 2); g.fillRect(cx + 30, cy + 1, 2, 2); }
+  } else if (d.id === 'whale') {
     g.beginPath(); g.ellipse(cx + 2, cy, 24, 8, 0, 0, TAU); g.fill();
     g.beginPath(); g.moveTo(cx - 20, cy); g.lineTo(cx - 32, cy - 7); g.lineTo(cx - 28, cy); g.lineTo(cx - 32, cy + 7); g.fill();
   } else if (d.id === 'squid') {
@@ -2032,7 +2253,7 @@ requestAnimationFrame(frame);
 
 // 디버그/테스트용 훅
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; },
-  get fish() { return fish.length; }, selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), spawnKind: k => spawnSchool(k, false), giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
+  get fish() { return fish.length; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), spawnKind: k => spawnSchool(k, false), giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
 </script>
 </body>
