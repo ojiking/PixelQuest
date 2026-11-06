@@ -351,7 +351,9 @@ const SWIM_DAY = 3;   // 이 날부터 등장
 const firstSwimDelay = () => day < SWIM_DAY ? Infinity : rand(28, 42) * Math.max(0.6, 1 - (day - SWIM_DAY) * 0.1);
 function spawnSwimmer() {
   const left = Math.random() < 0.5;
-  swimmer = { x: left ? -10 : VW + 10, y: rand(28, SHORE - 60), dir: left ? 1 : -1, sp: rand(6, 9), t: 0, kick: 0 };
+  swimmer = { x: left ? -10 : VW + 10, y: rand(28, SHORE - 60), dir: left ? 1 : -1, sp: rand(6, 9), t: 0, kick: 0,
+    vx: 0, vy: 0, panic: 0, screamCd: 0 };
+  swimmer.vx = swimmer.dir * swimmer.sp;
   banner = { str: '🛟 튜브 탄 수영객 등장! 절대 맞히지 마세요', t: 2.8 };
   tone(880, 0.12, 0.06, 'sine', null); tone(1100, 0.16, 0.06, 'sine', null, 0.14);
 }
@@ -364,14 +366,40 @@ function updateSwimmer(dt) {
   const w = swimmer;
   w.t += dt;
   if (w.dead) return;
-  w.x += w.dir * w.sp * dt; w.y += Math.sin(w.t * 0.5) * 2 * dt;
-  w.kick -= dt;
-  if (w.kick <= 0) { // 발장구
-    w.kick = rand(0.4, 0.9);
-    for (let i = 0; i < 3; i++) parts.push({ x: w.x - w.dir * 7, y: w.y + 1, z: 0, vx: -w.dir * rand(4, 12), vy: rand(-4, 4), vz: rand(12, 25), life: 0.4, max: 0.4, type: 'drop' });
-    ripples.push({ x: w.x, y: w.y, r: 6, max: 11, life: 0.8 });
+  // 상어를 보면 죽어라 도망친다
+  w.screamCd -= dt;
+  const shark = big && big.type === 'shark' && !big.dead ? big : null;
+  const sd = shark ? Math.hypot(shark.x - w.x, shark.y - w.y) : Infinity;
+  if (sd < 75) {
+    if (w.panic <= 0 && w.screamCd <= 0) {
+      texts.push(mkText(w.x, w.y - 14, '꺄아악!!', '#ff7ab0', 1.5, true));
+      [1500, 1900, 1600, 2000].forEach((f, i) => tone(f, 0.12, 0.05, 'sine', f * 1.2, i * 0.1));
+      w.screamCd = 4;
+    }
+    w.panic = 1.5;
   }
-  if (w.x < -30 || w.x > VW + 30) { swimmer = null; swimT = rand(30, 50) * Math.max(0.6, 1 - (day - SWIM_DAY) * 0.1); }
+  if (w.panic > 0) {
+    w.panic -= dt;
+    // 상어 반대쪽으로 전력 질주 (부두 쪽으로는 못 감)
+    let ax = w.x - (shark ? shark.x : w.x - w.dir), ay = w.y - (shark ? shark.y : w.y);
+    if (w.y > SHORE - 40 && ay > 0) ay = -Math.abs(ay) * 0.3;
+    const al = Math.hypot(ax, ay) || 1, SPD = 46;
+    w.vx = lerp(w.vx, ax / al * SPD, dt * 4); w.vy = lerp(w.vy, ay / al * SPD, dt * 4);
+    if (Math.abs(w.vx) > 3) w.dir = Math.sign(w.vx);
+  } else {
+    w.vx = lerp(w.vx, w.dir * w.sp, dt * 1.2); w.vy = lerp(w.vy, Math.sin(w.t * 0.5) * 2, dt * 1.2);
+  }
+  w.x += w.vx * dt; w.y += w.vy * dt;
+  if (w.y > SHORE - 18) { w.y = SHORE - 18; w.vy = Math.min(0, w.vy); }
+  w.kick -= dt;
+  if (w.kick <= 0) { // 발장구 (도망칠 땐 미친 듯이)
+    const pn = w.panic > 0;
+    w.kick = pn ? rand(0.05, 0.12) : rand(0.4, 0.9);
+    const bx = w.x - Math.sign(w.vx || w.dir) * 7, by = w.y - Math.sign(w.vy) * (pn ? 3 : 0) + 1;
+    for (let i = 0; i < (pn ? 5 : 3); i++) parts.push({ x: bx + rand(-2, 2), y: by, z: 0, vx: -w.vx * rand(0.2, 0.5) + rand(-6, 6), vy: -w.vy * 0.3 + rand(-4, 4), vz: rand(12, pn ? 45 : 25), life: 0.45, max: 0.45, type: 'drop' });
+    ripples.push({ x: w.x, y: w.y, r: 6, max: pn ? 14 : 11, life: 0.8 });
+  }
+  if (w.x < -30 || w.x > VW + 30 || w.y < -24) { swimmer = null; swimT = rand(30, 50) * Math.max(0.6, 1 - (day - SWIM_DAY) * 0.1); }
 }
 function swimmerHit(ex) {
   if (!swimmer || swimmer.dead || fatal) return;
@@ -406,7 +434,10 @@ function drawSwimmer() {
   // 사람: 수영복, 팔, 얼굴, 긴 머리
   b.fillStyle = '#e23d5c'; b.fillRect(x - 2, y - 2, 4, 3);
   b.fillStyle = '#f1c27d';
-  b.fillRect(x - 5, y - 2, 3, 1); b.fillRect(x + 2, y - 2, 3, 1);   // 튜브에 걸친 팔
+  if (w.panic > 0) { // 허우적대는 팔
+    const f = (w.t * 14 | 0) % 2;
+    b.fillRect(x - 4, y - 4 - f * 2, 1, 3); b.fillRect(x + 3, y - 6 + f * 2, 1, 3);
+  } else { b.fillRect(x - 5, y - 2, 3, 1); b.fillRect(x + 2, y - 2, 3, 1); } // 튜브에 걸친 팔
   b.fillRect(x - 2, y - 6, 4, 4);                                   // 얼굴
   b.fillStyle = '#4a2c18';
   b.fillRect(x - 3, y - 7, 6, 2); b.fillRect(x - 3, y - 5, 1, 4); b.fillRect(x + 2, y - 5, 1, 4); // 머리카락
@@ -1623,7 +1654,7 @@ requestAnimationFrame(frame);
 
 // 디버그/테스트용 훅
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; },
-  get fish() { return fish.length; }, spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
+  get fish() { return fish.length; }, spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
 </script>
 </body>
