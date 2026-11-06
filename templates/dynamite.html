@@ -12,6 +12,7 @@
   .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
     background: rgba(5, 15, 20, .74); color: #f4ead2; z-index: 5; }
   .overlay.hidden { display: none; }
+  [hidden] { display: none !important; }
   .panel { max-width: 420px; margin: 16px; padding: 22px 22px 18px; background: #13303b;
     border: 3px solid #f2c14e; box-shadow: 0 0 0 3px #0b1d26, 6px 6px 0 3px #000; text-align: center; }
   h1 { margin: 0 0 4px; font-size: 26px; color: #f2c14e; letter-spacing: 1px; }
@@ -77,6 +78,20 @@
   .coins .clbl { display: block; font-size: 13px; font-weight: 700; opacity: .8; margin-bottom: 2px; }
   .coins .cbig { font-size: 34px; font-weight: 900; line-height: 1.1; font-variant-numeric: tabular-nums; letter-spacing: .5px; }
   .coins .cbig .coin { width: .8em; height: .8em; margin-right: .18em; }
+  /* 결과 화면의 동전 상자 */
+  .coinbox { margin: 4px auto 14px; padding: 10px 12px 11px; background: #2a2410; border: 2px solid #ffd44a; box-shadow: 0 0 18px rgba(255,212,74,.25); }
+  .coinbox .clbl { display: block; font-size: 13px; font-weight: 700; color: #ffe9a8; }
+  .coinbox .earned { font-size: 38px; font-weight: 900; color: #ffd44a; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .coinbox .earned .coin { width: .75em; height: .75em; }
+  .coinbox .total { font-size: 15px; font-weight: 700; color: #fff2c4; }
+  .goal { margin-top: 6px; font-size: 13px; color: #ffe9a8; line-height: 1.5; }
+  .goal .bar { height: 7px; background: #3a3114; margin-top: 4px; }
+  .goal .bar i { display: block; height: 100%; background: linear-gradient(90deg, #d99a12, #ffd44a); }
+  .goal.ready { color: #8ff0ad; font-weight: 800; }
+  /* 살 수 있는 장비가 있으면 가게 버튼이 반짝인다 */
+  button[data-shop].canbuy { box-shadow: 0 4px 0 #0e2a33, 0 0 0 2px #ffd44a, 0 0 14px rgba(255,212,74,.7); animation: shopglow 1.2s ease-in-out infinite; }
+  @keyframes shopglow { 50% { box-shadow: 0 4px 0 #0e2a33, 0 0 0 2px #fff2b0, 0 0 22px rgba(255,212,74,.95); } }
+  @media (prefers-reduced-motion: reduce) { button[data-shop].canbuy { animation: none; } }
   .resetbox { margin-top: 18px; padding-top: 12px; border-top: 1px dashed #2f5a66; }
   .resetbox .ds { font-size: 12px; opacity: .75; margin-bottom: 8px; }
   button.reset { font-size: 13px; padding: 7px 10px; background: #3a1f24; color: #ffb3a8; box-shadow: 0 3px 0 #1d0f12; }
@@ -128,6 +143,7 @@
     <div class="scorelbl">오늘 점수</div>
     <div class="bigscore" id="clearScore">0</div>
     <div class="stats" id="clearStats"></div>
+    <div class="coinbox" id="clearCoins"></div>
     <div class="btns"><button id="nextBtn">다음 날</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button></div>
   </div>
 </div>
@@ -138,6 +154,7 @@
     <div class="scorelbl">총점</div>
     <div class="bigscore" id="endScore">0</div>
     <div class="stats" id="endStats"></div>
+    <div class="coinbox" id="endCoins"></div>
     <div class="btns">
       <button class="charm" id="charmBtn" hidden>🧿 부적 사용: 오늘 다시</button>
       <button id="againBtn">다시 하기</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button>
@@ -1947,7 +1964,8 @@ function drawFuseStick(u) {
 }
 
 function drawHUD() {
-  const u = S * 3.2, W = cvs.width;
+  // 글자 단위: 폰처럼 좁은 화면에서도 읽히도록 화면 크기 기준 하한을 둔다
+  const u = Math.max(S * 3.2, Math.min(cvs.width, cvs.height) / 38), W = cvs.width;
   txt(`${day}일차`, 12, 18, u * 1.2, '#ffcf5b');
   txt(`총점 ${score}`, 12, 18 + u * 1.9, u * 1.9, '#fff');
   // 오늘 목표 진행 막대
@@ -1957,6 +1975,24 @@ function drawHUD() {
   ctx.fillStyle = ok ? '#5fe08a' : '#f2c14e'; ctx.fillRect(bx, by, bw * pr, bh);
   txt(ok ? `목표 달성! ${dayScore} / ${target}` : `오늘 ${dayScore} / ${target}`, bx, by + bh + u * 0.9, u * 1.05, ok ? '#8ff0ad' : '#dde');
   if (ok && dayScore - target >= 100) txt(`내일 보너스 +${Math.min(3, Math.floor((dayScore - target) / 100))}`, bx, by + bh + u * 2.1, u * 1.0, '#ffb347');
+  // 동전: 보유 + 오늘 벌 동전(예상) + 다음 장비까지
+  {
+    const cy = by + bh + u * 3.7, cr = u * 0.75, cx = bx + cr;
+    const g = ctx.createRadialGradient(cx - cr * 0.3, cy - cr * 0.3, 0, cx, cy, cr);
+    g.addColorStop(0, '#fff2b0'); g.addColorStop(0.55, '#ffd44a'); g.addColorStop(1, '#c98a0e');
+    ctx.fillStyle = '#5a3a00'; ctx.beginPath(); ctx.arc(cx, cy, cr + 1.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, cr, 0, TAU); ctx.fill();
+    const tc = todayCoins();
+    txt(`${meta.coins.toLocaleString()}`, cx + cr + 6, cy, u * 1.55, '#ffd44a');
+    ctx.font = `800 ${u * 1.55}px system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+    const w1 = ctx.measureText(`${meta.coins.toLocaleString()}`).width;
+    txt(`+${tc} 예정`, cx + cr + 12 + w1, cy, u * 1.05, '#ffe9a8');
+    const ng = nextGoal();
+    if (ng) {
+      const need = ng.cost - meta.coins - tc;
+      txt(need <= 0 ? `오늘 끝나면 ${ng.name} 구매 가능!` : `${ng.name}까지 ${need}`, bx, cy + u * 1.5, u * 0.95, need <= 0 ? '#8ff0ad' : 'rgba(255,233,168,0.8)');
+    }
+  }
   if (streak >= 1) txt(`🔥 연속 ${streak} · 점수 x${streakMult(streak)}`, W / 2, 20, u * 1.2, '#ffb3e6', 'center');
   // 다이너마이트 개수
   for (let i = 0; i < dyn; i++) {
@@ -2023,8 +2059,8 @@ function dayClear() {
   document.getElementById('clearStats').innerHTML =
     `목표 ${target}점 · <b>+${extra}</b> 초과<br>총점 ${score}` +
     (nextBonus ? `<br><span class="newbest">초과 점수 보너스! 내일 다이너마이트 +${nextBonus}</span>` : `<br><span style="opacity:.75">100점 더 넘겼으면 내일 다이너마이트 +1</span>`) +
-    `<br><span class="earn"><span class="coin"></span>동전 +${earned} · 보유 ${meta.coins}</span>` +
     `<br><span style="opacity:.8">내일 목표: ${dayTarget(day + 1)}점</span>`;
+  showCoinBox('clearCoins', earned);
   document.getElementById('nextBtn').textContent = `${day + 1}일차 시작`;
   clearOv.classList.remove('hidden');
 }
@@ -2032,6 +2068,43 @@ function nextDay() {
   ensureAudio();
   day++; startDay(); state = 'play';
   clearOv.classList.add('hidden');
+}
+const COIN = '<span class="coin"></span>';
+// 다음에 노릴 장비: 아직 다 안 산 장비 중 가장 싼 다음 단계
+function nextGoal() {
+  let g = null;
+  for (const u of UPGRADES) {
+    const lv = meta.up[u.id];
+    if (lv < u.costs.length && (!g || u.costs[lv] < g.cost)) g = { name: u.name, cost: u.costs[lv], lv: lv + 1 };
+  }
+  return g;
+}
+const todayCoins = () => Math.floor(Math.sqrt(Math.max(0, dayScore)) * 1.5);
+function goalHtml() {
+  const g = nextGoal();
+  if (!g) return '<div class="goal ready">모든 장비를 다 모았습니다!</div>';
+  if (meta.coins >= g.cost) return `<div class="goal ready">✔ 지금 <b>${g.name}</b>을(를) 살 수 있어요! 가게로 가 보세요</div>`;
+  const pct = Math.round(meta.coins / g.cost * 100);
+  return `<div class="goal">다음 목표: <b>${g.name}</b> ${COIN}${g.cost} · <b>${g.cost - meta.coins}</b>개 남음<div class="bar"><i style="width:${pct}%"></i></div></div>`;
+}
+function showCoinBox(id, earned) {
+  const el = document.getElementById(id);
+  el.innerHTML = `<span class="clbl">받은 동전</span><div class="earned">${COIN}+<span class="num">0</span></div>` +
+    `<div class="total">보유 동전 ${COIN}${meta.coins.toLocaleString()}</div>` + goalHtml();
+  const num = el.querySelector('.num'), t0 = performance.now(), dur = Math.min(1400, 400 + earned * 6);
+  let ticks = 0;
+  const step = now => { // 숫자가 차르르 올라간다
+    const k = Math.min(1, (now - t0) / dur), v = Math.round(earned * (1 - Math.pow(1 - k, 3)));
+    num.textContent = v;
+    if (Math.floor(k * 12) > ticks) { ticks++; tone(1200 + ticks * 40, 0.04, 0.04, 'square'); }
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+  updateShopGlow();
+}
+function updateShopGlow() {
+  const g = nextGoal(), can = !!(g && meta.coins >= g.cost);
+  document.querySelectorAll('[data-shop]').forEach(b2 => b2.classList.toggle('canbuy', can));
 }
 function earnCoins() {
   // 점수가 높을수록 덜 늘어난다 (제곱근): 500점 → 33, 5000점 → 106, 20000점 → 212
@@ -2071,7 +2144,8 @@ function endGame(reason) {
     (stats.whaleHits ? `<br><span style="color:#ff8a8a">고래 오폭 ${stats.whaleHits}회</span>` : '') +
     (stats.rescues ? `<br><span style="color:#7fffb0">수영객 구조 ${stats.rescues}회</span>` : '') +
     (stats.swimmersLost ? `<br><span style="opacity:.75">상어에게 잃은 수영객 ${stats.swimmersLost}명</span>` : '') +
-    `<br><span class="earn"><span class="coin"></span>동전 +${earned} · 보유 ${meta.coins}</span><br><span style="opacity:.75">가게에서 장비를 사면 다음 판이 길어집니다</span>`;
+    '';
+  showCoinBox('endCoins', earned);
   const cb = document.getElementById('charmBtn');
   lastEndBlast = blast || murder;
   cb.hidden = charmsLeft <= 0 || lastEndBlast; // 손에서 터지거나 사람을 터뜨리면 부적으로도 못 살린다
@@ -2154,10 +2228,11 @@ document.querySelectorAll('.panel').forEach(pn => {
 const shopOv = document.getElementById('shopOv');
 let shopBack = null;
 function renderShop() {
+  updateShopGlow();
   const coinHtml = `<span class="clbl">보유 동전</span><span class="cbig"><span class="coin"></span>${meta.coins.toLocaleString()}</span>`;
   document.getElementById('shopCoins').innerHTML = coinHtml;
   updateAmmoBar(true);
-  document.getElementById('startCoins').innerHTML = coinHtml;
+  document.getElementById('startCoins').innerHTML = coinHtml + goalHtml();
   const list = document.getElementById('shopList');
   list.innerHTML = '';
   for (const u of UPGRADES) {
