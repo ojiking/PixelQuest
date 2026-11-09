@@ -88,6 +88,17 @@
   .goal .bar { height: 7px; background: #3a3114; margin-top: 4px; }
   .goal .bar i { display: block; height: 100%; background: linear-gradient(90deg, #d99a12, #ffd44a); }
   .goal.ready { color: #8ff0ad; font-weight: 800; }
+  /* 🌙 저녁 */
+  .evening { background: radial-gradient(circle at 50% 0, #2b2a52, #141a33 75%); border-color: #9fb4ff; }
+  .evening h1 { color: #ffe39a; }
+  .basket { display: flex; flex-wrap: wrap; gap: 4px 10px; justify-content: center; font-size: 13.5px; margin: 4px 0 6px; color: #dfe8ff; }
+  .chipsnow { font-size: 34px; font-weight: 900; color: #8fd6ff; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .evechoice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 2px 0 12px; }
+  .evechoice button { font-size: 15px; padding: 10px 6px; line-height: 1.35; min-width: 0; }
+  .evechoice small { display: block; font-size: 11.5px; font-weight: 600; opacity: .85; }
+  button.sell { background: #5c6a73; box-shadow: 0 4px 0 #2b3236; }
+  button.sell:active { box-shadow: 0 1px 0 #2b3236; }
+  #nextBtn.armed { background: #8a3a2a; }
   /* 🎰 생선 슬롯 */
   button.slotbtn { background: linear-gradient(180deg, #ffcf3a, #e89a12); color: #3a1c00; box-shadow: 0 4px 0 #8a5200; }
   button.slotbtn:active { box-shadow: 0 1px 0 #8a5200; }
@@ -169,21 +180,23 @@
     </ol>
     <div class="coins" id="startCoins"></div>
     <div class="btns"><button id="startBtn">시작</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button></div>
-    <div class="btns" style="margin-top:10px"><button class="slotbtn" data-slot>🎰 생선 슬롯</button></div>
     <button class="link" id="rulesBtn">📖 자세한 규칙 보기</button>
     <a class="home" href="/">← PixelQuest로 돌아가기</a>
   </div>
 </div>
 
 <div class="overlay hidden" id="clearOv">
-  <div class="panel">
-    <h1 id="clearTitle">1일차 성공!</h1>
+  <div class="panel evening">
+    <h1 id="clearTitle">🌙 1일차 저녁</h1>
     <div class="scorelbl">오늘 점수</div>
     <div class="bigscore" id="clearScore">0</div>
     <div class="stats" id="clearStats"></div>
     <div class="coinbox" id="clearCoins"></div>
-    <div class="btns" style="margin-bottom:10px"><button class="slotbtn" data-slot>🎰 잡은 생선으로 슬롯 돌리기</button></div>
-    <div class="btns"><button id="nextBtn">다음 날</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button></div>
+    <div class="evechoice">
+      <button class="sell" id="sellBtn">🐟 헐값에 팔기<small id="sellInfo"></small></button>
+      <button class="slotbtn" data-slot>🎰 슬롯으로 도박<small id="slotInfo"></small></button>
+    </div>
+    <div class="btns"><button id="nextBtn">🛏 잠자리에 들기</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button></div>
   </div>
 </div>
 
@@ -196,7 +209,6 @@
     <div class="coinbox" id="endCoins"></div>
     <div class="btns">
       <button class="charm" id="charmBtn" hidden>🧿 부적 사용: 오늘 다시</button>
-      <button class="slotbtn" data-slot>🎰 생선 슬롯</button>
       <button id="againBtn">다시 하기</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button>
     </div>
     <a class="home" href="/">← PixelQuest로 돌아가기</a>
@@ -415,10 +427,12 @@ const AMMO = [
 ];
 const AMMO_MAX = 9;
 if (!meta.ammo) { meta.ammo = { remote: 2, cluster: 2, bait: 2 }; } // 처음엔 맛보기로 2개씩
-if (typeof meta.chips !== 'number') meta.chips = 40;                    // 생선칩: 처음엔 맛보기 40
 // 물고기 → 생선칩 환산
 const CHIP = { crucian: 1, carp: 3, catfish: 8, tuna: 15, goldcarp: 50, sturgeon: 80, lord: 300, shark: 50, squid: 100, kaiju: 1000 };
-let todayChips = 0;
+let todayChips = 0, todayKinds = {};
+let eveChips = 0, eveFail = false;   // 저녁에 처분할 생선칩, 목표 미달로 맞은 저녁인지
+const SELL_RATE = 0.1;
+const sellValue = c => c > 0 ? Math.max(1, Math.floor(c * SELL_RATE)) : 0;               // 헐값: 칩 1개 = 동전 0.1 (슬롯 평균의 절반 이하)
 let selAmmo = 'basic';
 
 // ===== 도감 =====
@@ -470,7 +484,7 @@ function newGame() {
 
 function startDay() {
   dyn = dailyDyn() + nextBonus; nextBonus = 0;
-  dayScore = 0; target = dayTarget(day); refundsToday = 0; todayChips = 0;
+  dayScore = 0; target = dayTarget(day); refundsToday = 0; todayChips = 0; todayKinds = {};
   bombs = []; combos = [];
   big = null; nextBig = bigDelay(14, 18); schoolSpawnT = 4;
   hold = null; shake = flash = ink = endT = 0;
@@ -1081,7 +1095,7 @@ function tentTip(t) {
 function finishBig() {
   const pts = big.type === 'kaiju' ? 10000 : big.type === 'shark' ? 500 : 1000;
   recordDex(big.type, big.x, big.y);
-  todayChips += CHIP[big.type] || 0;
+  todayChips += CHIP[big.type] || 0; todayKinds[big.type] = (todayKinds[big.type] || 0) + 1;
   addScore(pts);
   sfx.bonus();
   stats.catches.push(big.type === 'kaiju' ? '👹 대괴수 쿠르가' : big.type === 'shark' ? '상어' : '대왕오징어');
@@ -1426,7 +1440,7 @@ function update(dt) {
     return;
   }
   const busy = (nuke && !nuke.done) || hold || bombs.length || combos.length || fish.some(f => f.state === 'rise' || f.state === 'float') || (big && big.dead);
-  if (dyn <= 0 && !busy) { endT += dt; if (endT > 1.3) { if (dayScore >= target) dayClear(); else endGame(); } } else endT = 0;
+  if (dyn <= 0 && !busy) { endT += dt; if (endT > 1.3) { startEvening(dayScore >= target); } } else endT = 0;
 }
 
 function updateSchools(dt) {
@@ -1508,7 +1522,7 @@ function updateFish(dt) {
         f.state = 'got';
         const pts = Math.round(f.sp.pts * (f.ex ? f.ex.mult : 1));
         addScore(pts); stats.fish++; stats.kinds[f.kind]++;
-        todayChips += CHIP[f.kind] || 1;
+        todayChips += CHIP[f.kind] || 1; todayKinds[f.kind] = (todayKinds[f.kind] || 0) + 1;
         recordDex(f.kind, f.x, f.y);
         if (f.sp.rare) { texts.push(mkText(f.x, f.y - 10, `✨ ${f.sp.name}!`, '#ffd23f', 1.6, true)); sfx.bonus(); }
         texts.push(mkText(f.x, f.y - 3, '+' + pts, f.sp.pts >= 80 ? '#ffe066' : f.sp.pts >= 30 ? '#ffc58f' : '#e8f4f8', f.sp.pts >= 80 ? 1.1 : 0.85));
@@ -2108,27 +2122,72 @@ function startGame() {
   newGame(); state = 'play';
   startOv.classList.add('hidden'); endOv.classList.add('hidden'); clearOv.classList.add('hidden');
 }
-function dayClear() {
+// ===== 🌙 저녁: 잡은 생선을 헐값에 팔거나 슬롯에 건다. 잠자리에 들면 남은 생선은 상한다 =====
+function startEvening(success) {
   state = 'clear';
   if (hiss) hiss.g.gain.setTargetAtTime(0, ac.currentTime, 0.03);
-  sfx.bonus();
+  eveFail = !success;
+  eveChips = todayChips; todayChips = 0;
   const extra = dayScore - target;
-  nextBonus = Math.min(3, Math.floor(extra / 100));
-  const earned = earnCoins();
-  document.getElementById('clearTitle').textContent = `${day}일차 성공!`;
+  nextBonus = success ? Math.min(3, Math.floor(extra / 100)) : 0;
+  if (success) sfx.bonus(); else tone(330, 0.5, 0.08, 'triangle', 220);
+  document.getElementById('clearTitle').textContent = success ? `🌙 ${day}일차 저녁` : `🌙 ${day}일차 저녁 · 마지막 밤`;
   document.getElementById('clearScore').textContent = dayScore;
-  document.getElementById('clearStats').innerHTML =
-    `목표 ${target}점 · <b>+${extra}</b> 초과<br>총점 ${score}` +
-    (nextBonus ? `<br><span class="newbest">초과 점수 보너스! 내일 다이너마이트 +${nextBonus}</span>` : `<br><span style="opacity:.75">100점 더 넘겼으면 내일 다이너마이트 +1</span>`) +
-    `<br><span style="opacity:.8">내일 목표: ${dayTarget(day + 1)}점</span>`;
-  showCoinBox('clearCoins', earned);
-  document.getElementById('nextBtn').textContent = `${day + 1}일차 시작`;
+  document.getElementById('clearStats').innerHTML = success
+    ? `목표 ${target}점 달성 · <b>+${extra}</b> 초과 · 총점 ${score}` +
+      (nextBonus ? `<br><span class="newbest">내일 다이너마이트 +${nextBonus}</span>` : '') +
+      `<br><span style="opacity:.8">내일 목표 ${dayTarget(day + 1)}점</span>`
+    : `<span style="color:#ff9a8a">목표 미달 (${dayScore} / ${target}). 오늘이 마지막 밤입니다</span>`;
+  renderEvening(true);
+  document.getElementById('nextBtn').textContent = success ? `🛏 잠자리에 들기 → ${day + 1}일차` : '🛏 잠자리에 들기 (여기서 끝)';
   clearOv.classList.remove('hidden');
 }
+function renderEvening(countUp) {
+  const parts2 = Object.entries(todayKinds).filter(x => x[1] > 0)
+    .map(([k, n]) => `<span>${(SPECIES[k] && SPECIES[k].name) || (DEX_BY[k] && DEX_BY[k].name) || k} ${n}</span>`).join('');
+  const el = document.getElementById('clearCoins');
+  el.innerHTML = `<span class="clbl">오늘 잡은 생선 (오늘 저녁에만 쓸 수 있어요)</span>` +
+    `<div class="basket">${parts2 || '<span>빈 바구니…</span>'}</div>` +
+    `<div class="chipsnow">🐟 <span class="num">${countUp ? 0 : eveChips}</span> 칩</div>` +
+    `<div class="total">보유 동전 ${COIN}${meta.coins.toLocaleString()}</div>` + goalHtml();
+  if (countUp && eveChips > 0) {
+    const num = el.querySelector('.num'), t0 = performance.now(), dur = Math.min(1400, 400 + eveChips * 4), target2 = eveChips;
+    let ticks = 0;
+    const step = now => { const k = Math.min(1, (now - t0) / dur); num.textContent = Math.round(target2 * (1 - Math.pow(1 - k, 3)));
+      if (Math.floor(k * 12) > ticks) { ticks++; tone(900 + ticks * 40, 0.04, 0.04, 'square'); } if (k < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  }
+  const sellN = sellValue(eveChips);
+  document.getElementById('sellInfo').textContent = eveChips ? `확실하게 동전 +${sellN}` : '팔 생선이 없어요';
+  document.getElementById('sellBtn').disabled = eveChips <= 0;
+  document.getElementById('slotInfo').textContent = eveChips >= SPIN_COST ? `${Math.floor(eveChips / SPIN_COST)}판 · 대박 아니면 쪽박` : '칩이 모자라요';
+  slotWallet(); updateShopGlow();
+}
+document.getElementById('sellBtn').addEventListener('click', () => {
+  if (eveChips <= 0) return;
+  ensureAudio();
+  const n = sellValue(eveChips);
+  meta.coins += n; eveChips = 0; saveMeta();
+  [523, 494, 440].forEach((f, i) => tone(f, 0.12, 0.06, 'triangle', null, i * 0.09)); // 헐값의 쓸쓸한 소리
+  renderEvening(false);
+  const el = document.getElementById('clearCoins');
+  el.insertAdjacentHTML('afterbegin', `<div class="goal">🐟 생선을 헐값에 넘겼습니다… ${COIN}+${n}</div>`);
+});
+let bedArm = null;
 function nextDay() {
   ensureAudio();
-  day++; startDay(); state = 'play';
+  const bt = document.getElementById('nextBtn');
+  if (eveChips > 0 && !bt.classList.contains('armed')) { // 남은 생선은 상해서 버려진다
+    bt.classList.add('armed'); const prev = bt.textContent;
+    bt.textContent = `남은 생선 ${eveChips}칩은 상해서 버려져요. 한 번 더 누르면 잠자리로`;
+    bedArm = setTimeout(() => { bt.classList.remove('armed'); bt.textContent = prev; }, 3500);
+    return;
+  }
+  clearTimeout(bedArm); bt.classList.remove('armed');
+  eveChips = 0;
   clearOv.classList.add('hidden');
+  if (eveFail) { endGame('fail'); return; }
+  day++; startDay(); state = 'play';
 }
 const COIN = '<span class="coin"></span>';
 // 다음에 노릴 장비: 아직 다 안 산 장비 중 가장 싼 다음 단계
@@ -2148,31 +2207,15 @@ function goalHtml() {
   const pct = Math.round(meta.coins / g.cost * 100);
   return `<div class="goal">다음 목표: <b>${g.name}</b> ${COIN}${g.cost} · <b>${g.cost - meta.coins}</b>개 남음<div class="bar"><i style="width:${pct}%"></i></div></div>`;
 }
-function showCoinBox(id, earned) {
-  const el = document.getElementById(id);
-  el.innerHTML = `<span class="clbl">오늘 잡은 생선 → 생선칩</span><div class="earned" style="color:#8fd6ff">🐟+<span class="num">0</span></div>` +
-    `<div class="total">보유 생선칩 🐟${meta.chips.toLocaleString()} · 동전 ${COIN}${meta.coins.toLocaleString()}</div>` +
-    `<div class="goal">🎰 슬롯 한 판 = 생선칩 ${SPIN_COST} · 지금 <b>${Math.floor(meta.chips / SPIN_COST)}판</b> 돌릴 수 있어요</div>` + goalHtml();
-  const num = el.querySelector('.num'), t0 = performance.now(), dur = Math.min(1400, 400 + earned * 6);
-  let ticks = 0;
-  const step = now => { // 숫자가 차르르 올라간다
-    const k = Math.min(1, (now - t0) / dur), v = Math.round(earned * (1 - Math.pow(1 - k, 3)));
-    num.textContent = v;
-    if (Math.floor(k * 12) > ticks) { ticks++; tone(1200 + ticks * 40, 0.04, 0.04, 'square'); }
-    if (k < 1) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
+function showCoinBox(id) {
+  document.getElementById(id).innerHTML = `<span class="clbl">보유 동전</span><div class="earned">${COIN}${meta.coins.toLocaleString()}</div>` + goalHtml();
   updateShopGlow();
 }
 function updateShopGlow() {
   const g = nextGoal(), can = !!(g && meta.coins >= g.cost);
   document.querySelectorAll('[data-shop]').forEach(b2 => b2.classList.toggle('canbuy', can));
 }
-function earnCoins() { // 동전은 이제 슬롯에서만. 하루가 끝나면 잡은 생선을 생선칩으로 적립
-  const c = todayChips; todayChips = 0;
-  meta.chips += c; saveMeta();
-  return c;
-}
+
 function retryDay() {
   if (charmsLeft <= 0) return;
   charmsLeft--;
@@ -2184,7 +2227,7 @@ function retryDay() {
 function endGame(reason) {
   state = 'end';
   const blast = reason === 'blast', murder = reason === 'murder';
-  const earned = earnCoins();
+  todayChips = 0; eveChips = 0; // 즉사하면 그날 잡은 생선도 끝
   if (hiss) hiss.g.gain.setTargetAtTime(0, ac.currentTime, 0.03);
   const nb = score > best;
   if (nb) best = score;
@@ -2206,7 +2249,7 @@ function endGame(reason) {
     (stats.rescues ? `<br><span style="color:#7fffb0">수영객 구조 ${stats.rescues}회</span>` : '') +
     (stats.swimmersLost ? `<br><span style="opacity:.75">상어에게 잃은 수영객 ${stats.swimmersLost}명</span>` : '') +
     '';
-  showCoinBox('endCoins', earned);
+  showCoinBox('endCoins');
   const cb = document.getElementById('charmBtn');
   lastEndBlast = blast || murder;
   cb.hidden = charmsLeft <= 0 || lastEndBlast; // 손에서 터지거나 사람을 터뜨리면 부적으로도 못 살린다
@@ -2233,8 +2276,8 @@ const RULES = [
   ['🧨', '특수 다이너마이트', '왼쪽 아래에서 골라 던집니다. <b>📡 원격</b>: 물에 빠진 뒤 탭하면 폭발 · <b>💥 산탄</b>: 세 갈래로 갈라짐 · <b>🐛 미끼</b>: 떼를 끌어모은 뒤 폭발. 처음엔 2개씩 드려요.'],
   ['👹', '보스: 대괴수 쿠르가', '<b>5일차마다</b> 심연에서 올라옵니다. 체력 10. 몸통 -1, <b>물 위로 든 머리</b>는 급소 -2. 머리를 들고 <b>물대포</b>를 준비할 때 머리를 맞히면 막을 수 있고, 맞으면 다이너마이트 1개를 잃습니다. 꼬리치기는 조준을 흔듭니다. 격파 +10000.'],
   ['☢', '핵폭탄', '가게에서 사는 소모품. 오른쪽 아래 버튼을 <b>두 번</b> 누르면 3초 뒤 <b>호수 전체</b>가 터집니다. 수영객이 있으면 살인자, 고래가 있으면 감점.'],
-  ['🎰', '생선 슬롯', '잡은 물고기는 <b>생선칩</b>이 됩니다(붕어 1 · 잉어 3 · 메기 8 · 황다랑어 15 · 희귀종은 훨씬 많이). 칩을 걸고 <b>슬롯</b>을 돌려 동전, 특수탄, 핵폭탄을 따세요. <b>👹 세 개면 잭팟!</b>'],
-  ['💰', '동전과 가게', '<b>동전</b>은 슬롯에서 땁니다(도감 첫 등록 보너스도 있어요). 가게 장비(가방 · 화약 · 긴 도화선 · 부적)는 게임이 끝나도 계속 남습니다.'],
+  ['🌙', '저녁: 팔까, 걸까', '낚시가 끝나면 <b>저녁</b>입니다. 잡은 생선(칩: 붕어 1 · 잉어 3 · 메기 8 · 황다랑어 15 · 희귀종은 훨씬 많이)을 <b>헐값에 팔거나</b>(칩 1개 = 동전 0.1) <b>🎰 슬롯</b>에 거세요. <b>잠자리에 들면 남은 생선은 상합니다.</b> 👹 세 개면 잭팟!'],
+  ['💰', '동전과 가게', '<b>동전</b>은 저녁에 생선을 팔거나 슬롯에서 땁니다(도감 첫 등록 보너스도 있어요). 가게 장비(가방 · 화약 · 긴 도화선 · 부적)는 게임이 끝나도 계속 남습니다.'],
 ];
 let rulePage = 0;
 const rulesOv = document.getElementById('rulesOv');
@@ -2374,10 +2417,10 @@ function slotPay(r, b) {
 const slotOv = document.getElementById('slotOv');
 let slotBack = null, slotBusy = false, slotBet = 1;
 function slotWallet() {
-  document.getElementById('slotChips').textContent = meta.chips.toLocaleString();
+  document.getElementById('slotChips').textContent = eveChips.toLocaleString();
   document.getElementById('slotCoins').textContent = meta.coins.toLocaleString();
   document.getElementById('spinBtn').textContent = `SPIN! (🐟${SPIN_COST * slotBet})`;
-  document.querySelectorAll('[data-slot]').forEach(b2 => b2.classList.toggle('ready', meta.chips >= SPIN_COST));
+  document.querySelectorAll('[data-slot]').forEach(b2 => { b2.classList.toggle('ready', eveChips >= SPIN_COST); b2.disabled = eveChips < SPIN_COST; });
 }
 function renderBets() {
   const box = document.getElementById('betBtns'); box.innerHTML = '';
@@ -2403,8 +2446,8 @@ function spin() {
   if (slotBusy) return;
   ensureAudio();
   const cost = SPIN_COST * slotBet, msg = document.getElementById('slotMsg');
-  if (meta.chips < cost) { msg.className = 'slotmsg'; msg.textContent = meta.chips >= SPIN_COST ? '칩이 모자라요. 배수를 낮춰 보세요' : '생선칩이 없어요. 물고기를 더 잡아 오세요!'; sfx.bad(); return; }
-  meta.chips -= cost; saveMeta(); slotWallet();
+  if (eveChips < cost) { msg.className = 'slotmsg'; msg.textContent = eveChips >= SPIN_COST ? '칩이 모자라요. 배수를 낮춰 보세요' : '생선칩이 없어요. 물고기를 더 잡아 오세요!'; sfx.bad(); return; }
+  eveChips -= cost; slotWallet();
   slotBusy = true; document.getElementById('spinBtn').disabled = true;
   const res = [slotPick(), slotPick(), slotPick()];
   const tease = res[0] === res[1] && HIGH.has(res[0]);     // 두 개 맞으면 마지막 릴을 질질 끈다
@@ -2465,7 +2508,7 @@ document.querySelectorAll('[data-slot]').forEach(btn => btn.addEventListener('cl
 document.getElementById('slotClose').addEventListener('click', () => {
   if (slotBusy) return;
   slotOv.classList.add('hidden');
-  if (slotBack) { slotBack.classList.remove('hidden'); renderShop(); }
+  if (slotBack) { slotBack.classList.remove('hidden'); renderShop(); if (slotBack === clearOv) renderEvening(false); }
   if (slotBack === endOv) { const cb = document.getElementById('charmBtn'); cb.hidden = charmsLeft <= 0 || lastEndBlast; }
 });
 
@@ -2558,6 +2601,7 @@ twoStep('resetAll', '처음부터 다시', '정말? 모든 기록이 지워집�
 document.getElementById('shopClose').addEventListener('click', () => {
   shopOv.classList.add('hidden');
   if (shopBack) shopBack.classList.remove('hidden');
+  if (shopBack === clearOv) renderEvening(false);
   if (shopBack === endOv) { const cb = document.getElementById('charmBtn'); cb.hidden = charmsLeft <= 0 || lastEndBlast; }
 });
 renderShop();
@@ -2579,7 +2623,7 @@ requestAnimationFrame(frame);
 
 // 디버그/테스트용 훅
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; },
-  get fish() { return fish.length; }, get chips() { return meta.chips; }, get todayChips() { return todayChips; }, setChips: n => { meta.chips = n; saveMeta(); slotWallet(); }, slotPay: (r, b) => slotPay(r, b), spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), spawnKind: k => spawnSchool(k, false), giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
+  get fish() { return fish.length; }, get chips() { return eveChips; }, get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotPay: (r, b) => slotPay(r, b), spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), spawnKind: k => spawnSchool(k, false), giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
 </script>
 </body>
