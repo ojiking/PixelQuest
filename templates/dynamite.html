@@ -119,6 +119,10 @@
   .reel.win { background: #fff1a8; animation: reelwin .35s ease-in-out 4; }
   @keyframes reelstop { 0% { transform: translateY(-10px); } 60% { transform: translateY(4px); } 100% { transform: none; } }
   @keyframes reelwin { 50% { transform: scale(1.12); background: #ffe14a; } }
+  .tally { margin: 0 0 8px; padding: 7px 10px; background: rgba(0,0,0,.4); border: 1px solid rgba(255,212,74,.4); font-size: 13.5px; line-height: 1.5; color: #f5e9ff; }
+  .tally b { font-variant-numeric: tabular-nums; }
+  .tally .net { display: block; font-size: 17px; font-weight: 900; }
+  .tally .up { color: #7fffb0; } .tally .down { color: #ff8a8a; } .tally .even { color: #e0e0e0; }
   .slotmsg { min-height: 50px; font-weight: 900; font-size: 18px; color: #ffe9f6; display: flex; align-items: center; justify-content: center; line-height: 1.3; }
   .slotmsg.win { font-size: 24px; color: #ffd44a; animation: msgpop .5s ease-out; }
   .slotmsg.tease { color: #ff8ad8; animation: msgpop .3s ease-out infinite alternate; }
@@ -236,6 +240,7 @@
     </div>
     <div class="reels"><div class="reel" id="reel0">🐟</div><div class="reel" id="reel1">🦈</div><div class="reel" id="reel2">👹</div></div>
     <div class="slotmsg" id="slotMsg">잡은 생선으로 한 판!</div>
+    <div class="tally" id="slotTally"></div>
     <div class="bets" id="betBtns"></div>
     <button id="spinBtn">SPIN!</button>
     <details class="paytable"><summary>배당표 (건 판 수 × 배당 = 동전)</summary><table id="payTable"></table></details>
@@ -431,6 +436,7 @@ if (!meta.ammo) { meta.ammo = { remote: 2, cluster: 2, bait: 2 }; } // 처음엔
 const CHIP = { crucian: 1, carp: 3, catfish: 8, tuna: 15, goldcarp: 50, sturgeon: 80, lord: 300, shark: 50, squid: 100, kaiju: 1000 };
 let todayChips = 0, todayKinds = {};
 let eveChips = 0, eveFail = false;   // 저녁에 처분할 생선칩, 목표 미달로 맞은 저녁인지
+let eveBet = 0, eveWon = 0, eveSpins = 0;  // 이번 저녁 슬롯 결산: 건 칩, 딴 동전, 판 수
 const SELL_RATE = 0.1;
 const sellValue = c => c > 0 ? Math.max(1, Math.floor(c * SELL_RATE)) : 0;               // 헐값: 칩 1개 = 동전 0.1 (슬롯 평균의 절반 이하)
 let selAmmo = 'basic';
@@ -2127,7 +2133,7 @@ function startEvening(success) {
   state = 'clear';
   if (hiss) hiss.g.gain.setTargetAtTime(0, ac.currentTime, 0.03);
   eveFail = !success;
-  eveChips = todayChips; todayChips = 0;
+  eveChips = todayChips; todayChips = 0; eveBet = 0; eveWon = 0; eveSpins = 0;
   const extra = dayScore - target;
   nextBonus = success ? Math.min(3, Math.floor(extra / 100)) : 0;
   if (success) sfx.bonus(); else tone(330, 0.5, 0.08, 'triangle', 220);
@@ -2149,7 +2155,8 @@ function renderEvening(countUp) {
   el.innerHTML = `<span class="clbl">오늘 잡은 생선 (오늘 저녁에만 쓸 수 있어요)</span>` +
     `<div class="basket">${parts2 || '<span>빈 바구니…</span>'}</div>` +
     `<div class="chipsnow">🐟 <span class="num">${countUp ? 0 : eveChips}</span> 칩</div>` +
-    `<div class="total">보유 동전 ${COIN}${meta.coins.toLocaleString()}</div>` + goalHtml();
+    `<div class="total">보유 동전 ${COIN}${meta.coins.toLocaleString()}</div>` +
+    (eveSpins ? `<div class="tally" style="margin-top:6px">${tallyHtml()}</div>` : '') + goalHtml();
   if (countUp && eveChips > 0) {
     const num = el.querySelector('.num'), t0 = performance.now(), dur = Math.min(1400, 400 + eveChips * 4), target2 = eveChips;
     let ticks = 0;
@@ -2416,7 +2423,17 @@ function slotPay(r, b) {
 }
 const slotOv = document.getElementById('slotOv');
 let slotBack = null, slotBusy = false, slotBet = 1;
+// 이번 저녁 결산: 건 칩과 딴 동전, 같은 칩을 팔았을 때와 비교한 이득/손해
+function tallyHtml() {
+  if (!eveSpins) return '아직 안 돌렸어요. 칩을 팔면 10개당 동전 1개입니다';
+  const sold = Math.floor(eveBet * SELL_RATE), net = eveWon - sold;
+  const cls = net > 0 ? 'up' : net < 0 ? 'down' : 'even';
+  const verdict = net > 0 ? `팔았을 때보다 동전 +${net} 이득!` : net < 0 ? `팔았을 때보다 동전 ${net} 손해` : '팔았을 때와 똑같아요';
+  return `이번 저녁 <b>${eveSpins}</b>판 · 칩 <b>${eveBet}</b>개 걸어서 ${COIN}<b>+${eveWon}</b> 땀` +
+    `<span class="net ${cls}">${verdict}</span><span style="opacity:.7;font-size:12px">(같은 칩을 팔았다면 동전 +${sold})</span>`;
+}
 function slotWallet() {
+  const tl = document.getElementById('slotTally'); if (tl) tl.innerHTML = tallyHtml();
   document.getElementById('slotChips').textContent = eveChips.toLocaleString();
   document.getElementById('slotCoins').textContent = meta.coins.toLocaleString();
   document.getElementById('spinBtn').textContent = `SPIN! (🐟${SPIN_COST * slotBet})`;
@@ -2447,7 +2464,7 @@ function spin() {
   ensureAudio();
   const cost = SPIN_COST * slotBet, msg = document.getElementById('slotMsg');
   if (eveChips < cost) { msg.className = 'slotmsg'; msg.textContent = eveChips >= SPIN_COST ? '칩이 모자라요. 배수를 낮춰 보세요' : '생선칩이 없어요. 물고기를 더 잡아 오세요!'; sfx.bad(); return; }
-  eveChips -= cost; slotWallet();
+  eveChips -= cost; eveBet += cost; eveSpins++; slotWallet();
   slotBusy = true; document.getElementById('spinBtn').disabled = true;
   const res = [slotPick(), slotPick(), slotPick()];
   const tease = res[0] === res[1] && HIGH.has(res[0]);     // 두 개 맞으면 마지막 릴을 질질 끈다
@@ -2474,7 +2491,7 @@ function spin() {
 }
 function finishSpin(res, reels) {
   const pay = slotPay(res, slotBet), msg = document.getElementById('slotMsg');
-  meta.coins += pay.coins;
+  meta.coins += pay.coins; eveWon += pay.coins;
   let extra = '';
   if (pay.ammo) { for (const a of AMMO) meta.ammo[a.id] = Math.min(AMMO_MAX, (meta.ammo[a.id] || 0) + pay.ammo); }
   if (pay.nuke) { if (meta.nukes < NUKE_MAX) meta.nukes++; else { meta.coins += 300; extra = ' (핵폭탄이 가득 차서 동전 +300)'; } }
