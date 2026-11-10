@@ -127,6 +127,35 @@
   .slotmsg.win { font-size: 24px; color: #ffd44a; animation: msgpop .5s ease-out; }
   .slotmsg.tease { color: #ff8ad8; animation: msgpop .3s ease-out infinite alternate; }
   @keyframes msgpop { 0% { transform: scale(.6); } 70% { transform: scale(1.15); } 100% { transform: scale(1); } }
+  .machine { position: relative; padding: 6px; background: linear-gradient(180deg, #3a1236, #20091f); border: 3px solid #ffd44a;
+    box-shadow: 0 0 22px rgba(255,212,74,.35), inset 0 0 18px rgba(0,0,0,.6); margin: 4px 0 8px; }
+  .grid5 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .col { display: grid; grid-template-rows: repeat(3, 1fr); gap: 4px; }
+  .col.antic { box-shadow: 0 0 0 2px #ff5bd1, 0 0 16px #ff5bd1; animation: antic .25s ease-in-out infinite alternate; }
+  @keyframes antic { to { box-shadow: 0 0 0 2px #ffd44a, 0 0 22px #ffd44a; } }
+  .cell { aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; font-size: clamp(22px, 7.2vw, 34px); line-height: 1;
+    background: linear-gradient(180deg, #d8cfb8, #fffaf0 30%, #fffaf0 70%, #d8cfb8); box-shadow: inset 0 3px 6px rgba(0,0,0,.3); }
+  .cell.spin { filter: blur(1.4px); transform: translateY(2px); }
+  .cell.stop { animation: reelstop .22s ease-out; }
+  .cell.dim { opacity: .35; }
+  .cell.hit { background: #fff1a8; animation: reelwin .35s ease-in-out 3; }
+  .cell.wild { background: radial-gradient(#ffe2a8, #ff9a3a); }
+  .cell.scat { background: radial-gradient(#eaffa8, #7fd13a); }
+  svg.lines { position: absolute; inset: 6px; width: calc(100% - 12px); height: calc(100% - 12px); pointer-events: none; }
+  svg.lines polyline { fill: none; stroke-width: .07; stroke-linejoin: round; stroke-linecap: round; opacity: .9; filter: drop-shadow(0 0 .05px #000); }
+  .splash { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none;
+    background: rgba(20,0,30,.55); font-weight: 900; text-align: center; animation: splash .45s ease-out; }
+  .splash .t { font-size: 34px; letter-spacing: 2px; color: #ffd44a; text-shadow: 0 0 12px #ff5bd1, 0 3px 0 #7a2a00; }
+  .splash .n { font-size: 28px; color: #fff; }
+  .splash.mega .t { color: #ff8ad8; } .splash.jack .t { color: #fff36a; font-size: 38px; } .splash.fs .t { color: #b8ff6a; }
+  @keyframes splash { 0% { transform: scale(.4); opacity: 0; } 70% { transform: scale(1.1); opacity: 1; } 100% { transform: none; } }
+  .fsbar { background: linear-gradient(90deg, #2f6a12, #7fd13a, #2f6a12); color: #102a00; font-weight: 900; padding: 6px; margin-bottom: 6px; font-size: 14px; }
+  .slotpanel.fsmode { border-color: #b8ff6a; box-shadow: 0 0 0 3px #0b1d26, 0 0 30px rgba(184,255,106,.5); }
+  #autoBtn { font-size: 15px; padding: 10px 14px; }
+  #autoBtn.on { background: #b8261a; }
+  .paytable table { width: 100%; border-collapse: collapse; }
+  .paytable td { padding: 2px 4px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .paytable .rule { margin: 6px 0 2px; line-height: 1.5; }
   .bets { display: flex; gap: 6px; justify-content: center; margin-bottom: 10px; }
   .bets button { font-size: 14px; padding: 7px 10px; background: #3a2350; box-shadow: 0 3px 0 #150a20; border: 2px solid transparent; }
   .bets button.on { border-color: #ffd44a; background: #5a2f7a; }
@@ -242,12 +271,17 @@
       <div class="chips"><span class="clbl">생선칩 🐟</span><b id="slotChips">0</b></div>
       <div class="cn"><span class="clbl">동전</span><b id="slotCoins">0</b></div>
     </div>
-    <div class="reels"><div class="reel" id="reel0">🐟</div><div class="reel" id="reel1">🦈</div><div class="reel" id="reel2">👹</div></div>
-    <div class="slotmsg" id="slotMsg">잡은 생선으로 한 판!</div>
+    <div class="fsbar" id="fsBar" hidden>☢️ FREE SPINS <b id="fsLeft">0</b>회 남음 · 당첨 ×2 · 누적 <b id="fsWin">0</b></div>
+    <div class="machine" id="machine">
+      <div class="grid5" id="slotGrid"></div>
+      <svg class="lines" id="lineSvg" viewBox="0 0 5 3" preserveAspectRatio="none"></svg>
+      <div class="splash" id="slotSplash" hidden></div>
+    </div>
+    <div class="slotmsg" id="slotMsg">20라인 · 🧨 와일드 · ☢️ 3개면 프리스핀!</div>
     <div class="tally" id="slotTally"></div>
     <div class="bets" id="betBtns"></div>
-    <button id="spinBtn">SPIN!</button>
-    <details class="paytable"><summary>배당표 (건 판 수 × 배당 = 동전)</summary><table id="payTable"></table></details>
+    <div class="btns"><button id="spinBtn">SPIN!</button><button class="ghost" id="autoBtn">자동 10</button></div>
+    <details class="paytable"><summary>배당표 · 규칙</summary><div id="payTable"></div></details>
     <button class="ghost" id="slotClose">닫기</button>
   </div>
 </div>
@@ -470,17 +504,17 @@ const STAR_TH = {
 const stars = id => (STAR_TH[id] || []).filter(t => (meta.dex[id] || 0) >= t).length;
 const dexComplete = () => DEX.every(d => (meta.dex[d.id] || 0) > 0);
 // 세 개 맞추기 배당: 기본 + 별당 증가분
-const TRIPLE_DEX = { '🐟': ['crucian', 1], '🐠': ['carp', 2], '🐡': ['catfish', 4], '🦑': ['squid', 8], '🦈': ['shark', 12] };
+// 도감 ★ → 슬롯 효과 (5릴 비디오 슬롯 기준)
+const PAY_DEX = { '🐟': 'crucian', '🐠': 'carp', '🐡': 'catfish', '🦑': 'squid', '🦈': 'shark', '👹': 'kaiju' };
 function perkText(id, st) {
-  const sym = Object.keys(TRIPLE_DEX).find(k => TRIPLE_DEX[k][0] === id);
-  if (sym) { const base = { '🐟': 5, '🐠': 10, '🐡': 20, '🦑': 40, '🦈': 60 }[sym]; return `${sym}${sym}${sym} 배당 ×${base + TRIPLE_DEX[sym][1] * st}`; }
+  const sym = Object.keys(PAY_DEX).find(k => PAY_DEX[k] === id);
+  if (sym) return `${sym} 라인 배당 +${st * 15}%`;
   switch (id) {
-    case 'kaiju': return `👹 잭팟 ×${500 + 100 * st}`;
-    case 'lord': return `👹 확률 +${st * 25}%`;
+    case 'lord': return `👹 등장 확률 +${st * 25}%`;
     case 'tuna': return `저녁 무료 판 ${st}회`;
-    case 'goldcarp': return `꽝일 때 ${st * 8}% 확률로 마지막 릴 다시`;
+    case 'goldcarp': return `꽝이면 ${st * 8}% 확률로 5번째 릴 다시`;
     case 'sturgeon': return `저녁 생선칩 +${st * 10}%`;
-    case 'whale': return st ? `👢👢👢 위로금 ×${st * 3}` : '👢👢👢 위로금';
+    case 'whale': return `프리스핀 +${st * 2}회`;
   }
   return '';
 }
@@ -2320,12 +2354,12 @@ const RULES = [
   ['🎯', '실력 보상', '한 방에 <b>6마리 이상</b>이면 다이너마이트 환급(12마리 이상 2개). 단, <b>하루 최대 3개</b>까지(오른쪽 위 ●). 3마리 이상을 <b>연속</b>으로 잡으면 점수가 최대 2배.'],
   ['⚡', '황다랑어', '가끔 <b>아주 빠른 그림자</b>가 호수를 가로지릅니다. 황다랑어 한 마리 <b>150점</b>. 지나갈 길목을 미리 노리세요.'],
   ['🏊', '튜브 탄 수영객', '<b>3일차부터</b> 가끔 튜브를 타고 떠다니는 사람이 나타납니다. 폭발에 휘말리면 <b>살인자</b>가 되어 그대로 게임 오버. 상어가 쫓아가면 잡아먹히니, 상어를 잡아 <b>구조</b>하면 +300.'],
-  ['⭐', '도감 = 도박 부적', '같은 종을 많이 잡을수록 도감 <b>★</b>이 오르고 <b>슬롯이 유리</b>해집니다: 물고기 그림 배당 증가, 👹 확률·잭팟 증가, 무료 판, 마지막 릴 다시, 저녁 칩 보너스… <b>도감을 완성</b>하면 두 개 맞추기 배당이 ×2!'],
+  ['⭐', '도감 = 도박 부적', '같은 종을 많이 잡을수록 도감 <b>★</b>이 오르고 <b>슬롯이 유리</b>해집니다: 물고기 그림 배당 증가, 👹 확률 증가, 무료 판, 프리스핀 추가, 릴 다시 돌리기, 저녁 칩 보너스… <b>도감을 완성</b>하면 와일드 낀 당첨이 ×2!'],
   ['✨', '희귀종과 도감', '잉어 떼 속 <b>황금잉어</b>(500점), 바닥의 <b>철갑상어</b>(800점), 그리고 <b>호수의 주인</b>(3000점, 3발). 처음 잡으면 <b>도감</b>에 등록되고 동전 보너스!'],
   ['🧨', '특수 다이너마이트', '왼쪽 아래에서 골라 던집니다. <b>📡 원격</b>: 물에 빠진 뒤 탭하면 폭발 · <b>💥 산탄</b>: 세 갈래로 갈라짐 · <b>🐛 미끼</b>: 떼를 끌어모은 뒤 폭발. 처음엔 2개씩 드려요.'],
   ['👹', '보스: 대괴수 쿠르가', '<b>5일차마다</b> 심연에서 올라옵니다. 체력 10. 몸통 -1, <b>물 위로 든 머리</b>는 급소 -2. 머리를 들고 <b>물대포</b>를 준비할 때 머리를 맞히면 막을 수 있고, 맞으면 다이너마이트 1개를 잃습니다. 꼬리치기는 조준을 흔듭니다. 격파 +10000.'],
   ['☢', '핵폭탄', '가게에서 사는 소모품. 오른쪽 아래 버튼을 <b>두 번</b> 누르면 3초 뒤 <b>호수 전체</b>가 터집니다. 수영객이 있으면 살인자, 고래가 있으면 감점.'],
-  ['🌙', '저녁: 팔까, 걸까', '낚시가 끝나면 <b>저녁</b>입니다. 잡은 생선(칩: 붕어 1 · 잉어 3 · 메기 8 · 황다랑어 15 · 희귀종은 훨씬 많이)을 <b>헐값에 팔거나</b>(칩 1개 = 동전 0.1) <b>🎰 슬롯</b>에 거세요. <b>잠자리에 들면 남은 생선은 상합니다.</b> 👹 세 개면 잭팟!'],
+  ['🌙', '저녁: 팔까, 걸까', '낚시가 끝나면 <b>저녁</b>입니다. 잡은 생선(칩: 붕어 1 · 잉어 3 · 메기 8 · 황다랑어 15 · 희귀종은 훨씬 많이)을 <b>헐값에 팔거나</b>(칩 1개 = 동전 0.1) <b>🎰 슬롯</b>에 거세요. 슬롯은 <b>5릴 20라인</b>: 🧨 와일드가 아무 그림이나 대신하고, ☢️ 3개면 <b>프리스핀(당첨 ×2)</b>. <b>잠자리에 들면 남은 생선은 상합니다.</b>'],
   ['💰', '동전과 가게', '<b>동전</b>은 저녁에 생선을 팔거나 슬롯에서 땁니다(도감 첫 등록 보너스도 있어요). 가게 장비(가방 · 화약 · 긴 도화선 · 부적)는 게임이 끝나도 계속 남습니다.'],
 ];
 let rulePage = 0;
@@ -2436,43 +2470,70 @@ function renderShop() {
   row.appendChild(bt); list.appendChild(row);
 }
 
-// ===== 🎰 생선 슬롯 =====
-const SPIN_COST = 4;                       // 한 판에 거는 생선칩 (×배수)
-const SLOT_SYMS = [
-  { s: '🐟', w: 28 }, { s: '🐠', w: 22 }, { s: '🐡', w: 14 }, { s: '🦑', w: 8 }, { s: '🦈', w: 7 },
-  { s: '💣', w: 6 }, { s: '☢️', w: 3 }, { s: '👹', w: 4 }, { s: '👢', w: 8 },
-];
-const SLOT_W = SLOT_SYMS.reduce((n, x) => n + x.w, 0);
-const TRIPLE = { '🐟': 5, '🐠': 10, '🐡': 20, '🦑': 40, '🦈': 60, '💣': 20, '☢️': 50 };
-const HIGH = new Set(['🦑', '🦈', '💣', '☢️', '👹']);
-function slotPick() {
-  const kw = 4 * (1 + 0.25 * stars('lord'));                 // 호수의 주인 ★: 👹 확률 증가
-  const W = SLOT_W - 4 + kw; let r = Math.random() * W;
-  for (const x of SLOT_SYMS) { if ((r -= (x.s === '👹' ? kw : x.w)) < 0) return x.s; }
+// ===== 🎰 생선 슬롯: 5릴 × 3줄, 20라인 비디오 슬롯 =====
+const SPIN_COST = 4;                         // ×1 한 판에 거는 생선칩
+const REELS = 5, ROWS = 3, WILD = '🧨', SCAT = '☢️';
+const BASE_W = { '🐟': 30, '🐠': 26, '🐡': 20, '🦑': 12, '🦈': 10, '🐋': 7, '👹': 4, '🧨': 5, '☢️': 4.5 };
+// 라인 배당(단위): [_, _, _, 3개, 4개, 5개]
+const PAY = { '🐟': [0,0,0,2,5,15], '🐠': [0,0,0,3,8,25], '🐡': [0,0,0,5,15,40], '🦑': [0,0,0,8,25,80],
+  '🦈': [0,0,0,12,40,150], '🐋': [0,0,0,20,80,300], '👹': [0,0,0,40,200,1000] };
+const SCAT_PAY = { 3: [8, 2], 4: [12, 10], 5: [20, 50] };   // 스캐터 개수 → [프리스핀, 배당]
+const LINES = [[1,1,1,1,1],[0,0,0,0,0],[2,2,2,2,2],[0,1,2,1,0],[2,1,0,1,2],[0,0,1,2,2],[2,2,1,0,0],[1,0,0,0,1],[1,2,2,2,1],[1,0,1,2,1],
+  [1,2,1,0,1],[0,1,0,1,0],[2,1,2,1,2],[0,1,1,1,0],[2,1,1,1,2],[1,1,0,1,1],[1,1,2,1,1],[0,0,1,0,0],[2,2,1,2,2],[0,2,0,2,0]];
+const LINE_COL = ['#ffd44a','#ff5bd1','#5bd8ff','#7fff6a','#ff8a3a','#c08aff','#ff4a4a','#4affd2','#ffe08a','#8ab4ff'];
+const SLOT_K = 0.102;                         // 배당 단위 → 동전 환산 (시뮬레이션으로 맞춤)
+const ALL_SYMS = Object.keys(BASE_W);
+const BIG_U = 60, MEGA_U = 200;            // BIG / MEGA WIN 기준 (배당 단위, ×1 기준)
+function cellPick(c) {
+  const w = { ...BASE_W };
+  w['👹'] = 4 * (1 + 0.25 * stars('lord'));    // 호수의 주인 ★: 👹 확률 증가
+  if (c === 0 || c === 4) w[WILD] = 0;         // 와일드는 2~4번째 릴에만
+  let tot = 0; for (const k in w) tot += w[k];
+  let r = Math.random() * tot;
+  for (const k in w) { if ((r -= w[k]) < 0) return k; }
   return '🐟';
 }
-const tripleMult = s0 => (TRIPLE[s0] || 0) + (TRIPLE_DEX[s0] ? TRIPLE_DEX[s0][1] * stars(TRIPLE_DEX[s0][0]) : 0);
-function slotPay(r, b) {
-  const k = r.filter(x => x === '👹').length;
-  if (k === 3) { const jm = 500 + 100 * stars('kaiju'); return { coins: jm * b, label: `👹👹👹 대괴수 잭팟!!! ×${jm}`, jackpot: true }; }
-  if (r[0] === r[1] && r[1] === r[2]) {
-    const s0 = r[0];
-    if (s0 === '👢') { const w = 3 * stars('whale'); return w ? { coins: w * b, label: `👢👢👢 고래의 위로금 ×${w}` } : { coins: 0, label: '장화 세 짝… 완전 꽝' }; }
-    const m = tripleMult(s0);
-    const out = { coins: m * b, label: `${s0} 세 개! ×${m}`, big: m >= 20 };
-    if (s0 === '💣') { out.ammo = b; out.label = `💣 세 개! 특수탄 각 ${b}개 + ×20`; }
-    if (s0 === '☢️') { out.nuke = true; out.label = '☢️ 세 개! 핵폭탄 획득 + ×50'; }
-    return out;
-  }
-  if (k === 2) return { coins: 15 * b, label: '👹 두 마리! ×15', big: true };
-  const pair = (r[0] === r[1] && r[0]) || (r[1] === r[2] && r[1]) || (r[0] === r[2] && r[0]);
-  const pm = dexComplete() ? 2 : 1;                           // 도감 완성: 두 개 배당 ×2
-  if (k === 1) return { coins: pm * b, label: `👹 하나 · ×${pm}` };
-  if (pair && pair !== '👢') return { coins: pm * b, label: `${pair} 두 개 · ×${pm}` };
-  return { coins: 0, label: ['꽝…', '아깝다!', '다시 한 번?', '물고기가 운다…'][Math.random() * 4 | 0] };
+let forcedGrid = null;                       // 테스트용: 다음 판 결과 고정
+const spinGrid = () => { if (forcedGrid) { const g = forcedGrid; forcedGrid = null; return g.map(c => c.slice()); }
+  return Array.from({ length: REELS }, (_, c) => Array.from({ length: ROWS }, () => cellPick(c))); };
+const symMult = sy => PAY_DEX[sy] ? 1 + 0.15 * stars(PAY_DEX[sy]) : 1;
+function evalGrid(g, fsMult) {
+  const wins = []; let units = 0;
+  LINES.forEach((ln, li) => {
+    const first = g[0][ln[0]];
+    if (first === SCAT || first === WILD) return;
+    let n = 1, wild = false;
+    for (let c = 1; c < REELS; c++) { const sy = g[c][ln[c]]; if (sy === first) n++; else if (sy === WILD) { n++; wild = true; } else break; }
+    if (n >= 3) {
+      let v = PAY[first][n] * symMult(first);
+      if (wild && dexComplete()) v *= 2;          // 도감 완성: 와일드 낀 당첨 ×2
+      wins.push({ li, n, sym: first, v }); units += v;
+    }
+  });
+  const scPos = []; g.forEach((col, c) => col.forEach((sy, r) => { if (sy === SCAT) scPos.push([c, r]); }));
+  const sc = Math.min(5, scPos.length);
+  let fs = 0, nuke = false;
+  if (sc >= 3) { fs = SCAT_PAY[sc][0] + 2 * stars('whale'); units += SCAT_PAY[sc][1]; nuke = sc >= 5; }
+  const jackpot = wins.some(w => w.sym === '👹' && w.n === 5);
+  return { wins, units: units * fsMult, sc, scPos, fs, nuke, jackpot };
 }
+const toCoins = x => { const f = Math.floor(x); return f + (Math.random() < x - f ? 1 : 0); }; // 소수점은 확률로 반올림
+// 배당 검증용 시뮬레이션: 칩 1개당 평균 동전
+function slotSim(n) {
+  let coins = 0, fsTrig = 0, big = 0, mega = 0, jack = 0;
+  for (let i = 0; i < n; i++) {
+    let r = evalGrid(spinGrid(), 1), spinUnits = r.units, q = r.fs;
+    if (q) fsTrig++;
+    while (q > 0) { q--; const r2 = evalGrid(spinGrid(), 2); spinUnits += r2.units; q += r2.fs; if (r2.jackpot) jack++; }
+    if (r.jackpot) jack++;
+    if (spinUnits >= BIG_U) big++; if (spinUnits >= MEGA_U) mega++;
+    coins += spinUnits * SLOT_K;
+  }
+  return { coinsPerChip: +(coins / n / SPIN_COST).toFixed(3), fsEvery: Math.round(n / Math.max(1, fsTrig)), bigEvery: Math.round(n / Math.max(1, big)), megaEvery: Math.round(n / Math.max(1, mega)), jackEvery: Math.round(n / Math.max(1, jack)) };
+}
+
 const slotOv = document.getElementById('slotOv');
-let slotBack = null, slotBusy = false, slotBet = 1;
+let slotBack = null, slotBusy = false, slotBet = 1, fsLeft = 0, fsWin = 0, autoLeft = 0, curGrid = null;
 // 이번 저녁 결산: 건 칩과 딴 동전, 같은 칩을 팔았을 때와 비교한 이득/손해
 function tallyHtml() {
   if (!eveSpins) return '아직 안 돌렸어요. 칩을 팔면 10개당 동전 1개입니다';
@@ -2486,27 +2547,60 @@ function slotWallet() {
   const tl = document.getElementById('slotTally'); if (tl) tl.innerHTML = tallyHtml();
   document.getElementById('slotChips').textContent = eveChips.toLocaleString();
   document.getElementById('slotCoins').textContent = meta.coins.toLocaleString();
-  document.getElementById('spinBtn').textContent = eveFree > 0 && slotBet === 1 ? `무료 SPIN! (${eveFree}회 남음)` : `SPIN! (🐟${SPIN_COST * slotBet})`;
-  const canSpin = eveChips >= SPIN_COST || eveFree > 0;
+  const sb = document.getElementById('spinBtn');
+  sb.textContent = fsLeft > 0 ? `FREE SPIN! (${fsLeft})` : eveFree > 0 && slotBet === 1 ? `무료 SPIN! (${eveFree}회)` : `SPIN! (🐟${SPIN_COST * slotBet})`;
+  const canSpin = eveChips >= SPIN_COST || eveFree > 0 || fsLeft > 0;
   document.querySelectorAll('[data-slot]').forEach(b2 => { b2.classList.toggle('ready', canSpin); b2.disabled = !canSpin; });
+  const fb = document.getElementById('fsBar');
+  fb.hidden = fsLeft <= 0 && !document.getElementById('slotPanel').classList.contains('fsmode');
+  document.getElementById('fsLeft').textContent = fsLeft;
+  document.getElementById('fsWin').textContent = fsWin;
+  const ab = document.getElementById('autoBtn');
+  ab.textContent = autoLeft > 0 ? `멈춤 (${autoLeft})` : '자동 10'; ab.classList.toggle('on', autoLeft > 0);
+}
+// 릴 그리기
+function buildGrid() {
+  const gEl = document.getElementById('slotGrid');
+  if (gEl.children.length) return;
+  for (let c = 0; c < REELS; c++) {
+    const col = document.createElement('div'); col.className = 'col'; col.id = 'col' + c;
+    for (let r = 0; r < ROWS; r++) { const cell = document.createElement('div'); cell.className = 'cell'; cell.id = `cell${c}${r}`; col.appendChild(cell); }
+    gEl.appendChild(col);
+  }
+  setGrid(curGrid || spinGrid());
+}
+function setCell(c, r, sy) {
+  const el = document.getElementById(`cell${c}${r}`);
+  el.textContent = sy; el.classList.toggle('wild', sy === WILD); el.classList.toggle('scat', sy === SCAT);
+}
+function setGrid(g) { curGrid = g; for (let c = 0; c < REELS; c++) for (let r = 0; r < ROWS; r++) setCell(c, r, g[c][r]); }
+function clearWinFx() {
+  document.getElementById('lineSvg').innerHTML = '';
+  document.querySelectorAll('#slotGrid .cell').forEach(el => el.classList.remove('hit', 'dim', 'stop'));
+  document.querySelectorAll('#slotGrid .col').forEach(el => el.classList.remove('antic'));
 }
 function renderBets() {
   const box = document.getElementById('betBtns'); box.innerHTML = '';
   for (const b of [1, 3, 10]) {
     const bt = document.createElement('button'); bt.textContent = `×${b} (🐟${SPIN_COST * b})`;
     bt.className = slotBet === b ? 'on' : '';
-    bt.addEventListener('click', () => { if (slotBusy) return; slotBet = b; renderBets(); slotWallet(); });
+    bt.addEventListener('click', () => { if (slotBusy || fsLeft > 0) return; slotBet = b; renderBets(); slotWallet(); renderPay(); });
     box.appendChild(bt);
   }
-  const up = (s0) => { const st = TRIPLE_DEX[s0] ? stars(TRIPLE_DEX[s0][0]) : 0; return st ? ` <span style="color:#ffd44a">(도감 ★${st})</span>` : ''; };
-  const wb = 3 * stars('whale'), pm = dexComplete() ? 2 : 1;
+  renderPay();
+}
+function renderPay() {
+  const c = u => { const v = u * SLOT_K * slotBet; return v >= 10 ? Math.round(v) : v.toFixed(1); };
+  const rows = Object.keys(PAY).slice().reverse().map(sy => {
+    const m = symMult(sy), st = PAY_DEX[sy] ? stars(PAY_DEX[sy]) : 0;
+    return `<tr><td>${sy}</td><td>3개 ${c(PAY[sy][3] * m)}</td><td>4개 ${c(PAY[sy][4] * m)}</td><td>5개 <b>${c(PAY[sy][5] * m)}</b>${st ? ` <span style="color:#ffd44a">★${st}</span>` : ''}</td></tr>`;
+  }).join('');
   document.getElementById('payTable').innerHTML =
-    `<tr><td>👹👹👹</td><td><b>잭팟 ×${500 + 100 * stars('kaiju')}</b>${stars('kaiju') ? ' <span style="color:#ffd44a">(도감)</span>' : ''}</td></tr><tr><td>☢️☢️☢️</td><td>×50 + 핵폭탄</td></tr>` +
-    `<tr><td>🦈🦈🦈</td><td>×${tripleMult('🦈')}${up('🦈')}</td></tr><tr><td>🦑🦑🦑</td><td>×${tripleMult('🦑')}${up('🦑')}</td></tr>` +
-    `<tr><td>💣💣💣</td><td>×20 + 특수탄 각 (건 판 수)개</td></tr><tr><td>🐡🐡🐡</td><td>×${tripleMult('🐡')}${up('🐡')}</td></tr>` +
-    `<tr><td>🐠🐠🐠</td><td>×${tripleMult('🐠')}${up('🐠')}</td></tr><tr><td>🐟🐟🐟</td><td>×${tripleMult('🐟')}${up('🐟')}</td></tr>` +
-    `<tr><td>👹👹</td><td>×15</td></tr><tr><td>아무 두 개 · 👹 하나</td><td>×${pm}${pm > 1 ? ' <span style="color:#ffd44a">(도감 완성)</span>' : ''}</td></tr>` +
-    `<tr><td>👢👢👢</td><td>${wb ? `위로금 ×${wb} <span style="color:#ffd44a">(고래)</span>` : '꽝'}</td></tr>`;
+    `<div class="rule">동전 배당 (지금 배수 ×${slotBet} 기준, 한 라인당). <b>20라인</b> 모두 계산해서 더합니다. 왼쪽 첫 릴부터 같은 그림이 3개 이상 이어져야 당첨.</div>` +
+    `<table>${rows}</table>` +
+    `<div class="rule">🧨 <b>와일드</b>: 2~4번째 릴에만 나오고 어떤 그림이든 대신합니다${dexComplete() ? ' · <b style="color:#ffd44a">도감 완성: 와일드 낀 당첨 ×2</b>' : ''}.</div>` +
+    `<div class="rule">☢️ <b>스캐터</b>: 어디든 3개 = 프리스핀 8회(+${c(2)}) · 4개 = 12회(+${c(10)}) · 5개 = 20회(+${c(50)}) + <b>핵폭탄</b>${stars('whale') ? ` · 고래 ★${stars('whale')}: +${2 * stars('whale')}회` : ''}. 프리스핀 당첨은 <b>×2</b>, 프리스핀 중에도 다시 터질 수 있어요.</div>` +
+    `<div class="rule">👹 다섯 개가 한 라인에 = <b>JACKPOT</b></div>`;
 }
 function coinRain(n) {
   for (let i = 0; i < n; i++) {
@@ -2515,85 +2609,161 @@ function coinRain(n) {
     document.body.appendChild(sp); setTimeout(() => sp.remove(), 3500);
   }
 }
+function splash(cls, title, amount, ms) {
+  const el = document.getElementById('slotSplash');
+  el.className = 'splash ' + cls; el.hidden = false;
+  el.innerHTML = `<div class="t">${title}</div>` + (amount !== null ? `<div class="n">${COIN}<span class="amt">0</span></div>` : '');
+  if (amount !== null) {
+    const num = el.querySelector('.n .amt'), t0 = performance.now(), dur = Math.min(ms - 300, 600 + amount * 8);
+    const step = now => { const k = Math.min(1, (now - t0) / dur); num.textContent = Math.round(amount * (1 - Math.pow(1 - k, 3))).toLocaleString();
+      if (k < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  }
+  clearTimeout(splash.t); splash.t = setTimeout(() => { el.hidden = true; }, ms);
+}
 function spin() {
   if (slotBusy) return;
   ensureAudio();
-  const cost = SPIN_COST * slotBet, msg = document.getElementById('slotMsg');
-  const free = eveFree > 0 && slotBet === 1;   // 무료 판은 ×1에서만
-  if (!free && eveChips < cost) { msg.className = 'slotmsg'; msg.textContent = eveChips >= SPIN_COST ? '칩이 모자라요. 배수를 낮춰 보세요' : '생선칩이 없어요. 물고기를 더 잡아 오세요!'; sfx.bad(); return; }
-  if (free) eveFree--; else { eveChips -= cost; eveBet += cost; }
-  eveSpins++; slotWallet();
-  slotBusy = true; document.getElementById('spinBtn').disabled = true;
-  const res = [slotPick(), slotPick(), slotPick()];
-  const tease = res[0] === res[1] && HIGH.has(res[0]);     // 두 개 맞으면 마지막 릴을 질질 끈다
-  const stops = [650, 1050, tease ? 2700 : 1450];
-  const reels = [0, 1, 2].map(i => document.getElementById('reel' + i));
-  reels.forEach(r => r.classList.remove('win', 'stop'));
-  msg.className = 'slotmsg'; msg.textContent = '두구두구…';
-  const t0 = performance.now(); const done = [false, false, false];
-  const iv = setInterval(() => {
-    const t = performance.now() - t0;
-    reels.forEach((r, i) => {
-      if (done[i]) return;
-      if (t >= stops[i]) {
-        done[i] = true; r.textContent = res[i]; r.classList.remove('spin'); r.classList.add('stop');
-        tone(180 - i * 20, 0.08, 0.2, 'square');
-        if (i === 1 && tease) { msg.className = 'slotmsg tease'; msg.textContent = `${res[0]}${res[0]} … 두근두근!!`; }
-        return;
-      }
-      r.classList.add('spin'); r.textContent = SLOT_SYMS[Math.random() * SLOT_SYMS.length | 0].s;
-    });
-    if (!done[2]) tone(tease && done[1] ? 900 + Math.random() * 300 : 600 + Math.random() * 200, 0.02, 0.03, 'square');
-    if (done.every(Boolean)) { clearInterval(iv); finishSpin(res, reels); }
-  }, 60);
-}
-function finishSpin(res, reels, rerolled) {
-  let pay = slotPay(res, slotBet);
   const msg = document.getElementById('slotMsg');
-  const lose = pay.coins === 0 && !pay.ammo && !pay.nuke;
-  if (lose && !rerolled && Math.random() < 0.08 * stars('goldcarp')) { // 황금잉어 ★: 꽝이면 마지막 릴 한 번 더
-    msg.className = 'slotmsg tease'; msg.textContent = '✨ 황금잉어의 가호! 마지막 릴 다시!';
+  const inFS = fsLeft > 0, tunaFree = !inFS && eveFree > 0 && slotBet === 1;
+  const cost = SPIN_COST * slotBet;
+  if (!inFS && !tunaFree && eveChips < cost) {
+    autoLeft = 0;
+    msg.className = 'slotmsg'; msg.textContent = eveChips >= SPIN_COST ? '칩이 모자라요. 배수를 낮춰 보세요' : '생선칩이 없어요. 물고기를 더 잡아 오세요!';
+    sfx.bad(); slotWallet(); return;
+  }
+  if (inFS) fsLeft--; else if (tunaFree) eveFree--; else { eveChips -= cost; eveBet += cost; }
+  if (!inFS && autoLeft > 0) autoLeft--;
+  if (!inFS) eveSpins++;
+  slotBusy = true; document.getElementById('spinBtn').disabled = true;
+  slotWallet(); clearWinFx();
+  const g = spinGrid();
+  // 기대감: 앞 릴까지 스캐터가 2개 이상이면 남은 릴을 느리게 + 반짝
+  const stops = []; let t = 420, sc = 0;
+  for (let c = 0; c < REELS; c++) {
+    t += 190;
+    if (sc >= 2 && c >= 2) t += 750;
+    stops.push(t);
+    sc += g[c].filter(x => x === SCAT).length;
+  }
+  msg.className = 'slotmsg'; msg.textContent = inFS ? `FREE SPIN! (남은 ${fsLeft}회)` : '두구두구…';
+  const t0 = performance.now(), done = Array(REELS).fill(false);
+  let scSoFar = 0;
+  const iv = setInterval(() => {
+    const now = performance.now() - t0;
+    for (let c = 0; c < REELS; c++) {
+      if (done[c]) continue;
+      if (now >= stops[c]) {
+        done[c] = true;
+        for (let r = 0; r < ROWS; r++) { setCell(c, r, g[c][r]); const el = document.getElementById(`cell${c}${r}`); el.classList.remove('spin'); el.classList.add('stop'); }
+        document.getElementById('col' + c).classList.remove('antic');
+        const nsc = g[c].filter(x => x === SCAT).length; scSoFar += nsc;
+        tone(nsc ? 1200 : 170 - c * 10, nsc ? 0.12 : 0.07, nsc ? 0.12 : 0.18, nsc ? 'triangle' : 'square');
+        if (scSoFar >= 2 && c < REELS - 1) { // 남은 릴에 기대감 표시
+          for (let k = c + 1; k < REELS; k++) if (!done[k]) document.getElementById('col' + k).classList.add('antic');
+          msg.className = 'slotmsg tease'; msg.textContent = scSoFar >= 3 ? `☢️ ${scSoFar}개! 프리스핀 확정! 더 나오면 더 많이…` : `☢️ ${scSoFar}개! 하나만 더…!`;
+        }
+        continue;
+      }
+      for (let r = 0; r < ROWS; r++) { setCell(c, r, ALL_SYMS[Math.random() * ALL_SYMS.length | 0]); document.getElementById(`cell${c}${r}`).classList.add('spin'); }
+    }
+    if (!done[REELS - 1]) tone(scSoFar >= 2 ? 900 + Math.random() * 300 : 520 + Math.random() * 160, 0.02, 0.025, 'square');
+    if (done.every(Boolean)) { clearInterval(iv); curGrid = g; finishSpin(g, inFS, false); }
+  }, 55);
+}
+function finishSpin(g, inFS, rerolled) {
+  const msg = document.getElementById('slotMsg');
+  let res = evalGrid(g, inFS ? 2 : 1);
+  if (!res.units && !res.fs && !rerolled && Math.random() < 0.08 * stars('goldcarp')) { // 황금잉어 ★: 꽝이면 5번째 릴 다시
+    msg.className = 'slotmsg tease'; msg.textContent = '✨ 황금잉어의 가호! 5번째 릴 다시!';
     [1318, 1568, 2093].forEach((f, i) => tone(f, 0.08, 0.06, 'square', null, i * 0.06));
-    const r = reels[2]; let n = 0;
+    let n = 0;
     const iv = setInterval(() => {
-      r.classList.add('spin'); r.textContent = SLOT_SYMS[Math.random() * SLOT_SYMS.length | 0].s; tone(1000 + Math.random() * 300, 0.02, 0.03, 'square');
-      if (++n > 18) { clearInterval(iv); res[2] = slotPick(); r.textContent = res[2]; r.classList.remove('spin'); r.classList.add('stop'); tone(160, 0.08, 0.2, 'square'); finishSpin(res, reels, true); }
+      for (let r = 0; r < ROWS; r++) { setCell(4, r, ALL_SYMS[Math.random() * ALL_SYMS.length | 0]); document.getElementById(`cell4${r}`).classList.add('spin'); }
+      tone(1000 + Math.random() * 300, 0.02, 0.03, 'square');
+      if (++n > 16) { clearInterval(iv); g[4] = Array.from({ length: ROWS }, () => cellPick(4));
+        for (let r = 0; r < ROWS; r++) { setCell(4, r, g[4][r]); const el = document.getElementById(`cell4${r}`); el.classList.remove('spin'); el.classList.add('stop'); }
+        finishSpin(g, inFS, true); }
     }, 60);
     return;
   }
-  meta.coins += pay.coins; eveWon += pay.coins;
+  const coins = toCoins(res.units * SLOT_K * slotBet);
+  meta.coins += coins; eveWon += coins; if (inFS) fsWin += coins;
   let extra = '';
-  if (pay.ammo) { for (const a of AMMO) meta.ammo[a.id] = Math.min(AMMO_MAX, (meta.ammo[a.id] || 0) + pay.ammo); }
-  if (pay.nuke) { if (meta.nukes < NUKE_MAX) meta.nukes++; else { meta.coins += 300; extra = ' (핵폭탄이 가득 차서 동전 +300)'; } }
-  saveMeta(); slotWallet();
-  if (pay.coins > 0 || pay.ammo || pay.nuke) {
-    // 맞은 릴 반짝
-    const cnt = {}; res.forEach(x => cnt[x] = (cnt[x] || 0) + 1);
-    reels.forEach((r, i) => { if (cnt[res[i]] >= 2 || res[i] === '👹') r.classList.add('win'); });
+  if (res.nuke) { if (meta.nukes < NUKE_MAX) { meta.nukes++; extra = ' + ☢ 핵폭탄!'; } else { meta.coins += 300; eveWon += 300; extra = ' + 동전 300 (핵폭탄 가득)'; } }
+  saveMeta();
+  // 당첨 라인 표시
+  const svg = document.getElementById('lineSvg');
+  const hitCells = new Set();
+  res.wins.forEach((w, i) => {
+    const ln = LINES[w.li];
+    const pts = ln.slice(0, REELS).map((r, c) => `${c + 0.5},${r + 0.5}`).join(' ');
+    svg.insertAdjacentHTML('beforeend', `<polyline points="${pts}" stroke="${LINE_COL[i % LINE_COL.length]}"/>`);
+    for (let c = 0; c < w.n; c++) hitCells.add(`${c}${ln[c]}`);
+  });
+  if (res.sc >= 3) res.scPos.forEach(([c, r]) => hitCells.add(`${c}${r}`));
+  if (hitCells.size) document.querySelectorAll('#slotGrid .cell').forEach(el => { const k = el.id.slice(4); el.classList.toggle('hit', hitCells.has(k)); el.classList.toggle('dim', !hitCells.has(k)); });
+  // 메시지
+  const top = res.wins.slice().sort((a, b2) => b2.v - a.v).slice(0, 3).map(w => `${w.sym}×${w.n}`).join(' · ');
+  const winBet = res.units / (inFS ? 2 : 1);
+  if (coins > 0 || res.fs || res.nuke) {
     msg.className = 'slotmsg win';
-    msg.innerHTML = `${pay.label}<br>${COIN}+${pay.coins.toLocaleString()}${extra}`;
-    if (pay.jackpot) {
-      const pn = document.getElementById('slotPanel'); pn.classList.remove('jackpot'); void pn.offsetWidth; pn.classList.add('jackpot');
-      coinRain(60); vibrate([200, 80, 200, 80, 400]);
-      [523, 659, 784, 1046, 1318, 1568, 2093].forEach((f, i) => tone(f, 0.18, 0.1, 'square', null, i * 0.09));
-      noiseBurst(1.2, 4000, 0.3, 'highpass');
-    } else if (pay.big) {
-      coinRain(18); vibrate([80, 40, 80]);
-      [659, 784, 988, 1318].forEach((f, i) => tone(f, 0.12, 0.08, 'square', null, i * 0.08));
-    } else { tone(988, 0.08, 0.06, 'square'); tone(1318, 0.1, 0.06, 'square', null, 0.08); }
+    msg.innerHTML = `${res.wins.length ? `${res.wins.length}라인 당첨 ${top}` : ''}${res.sc >= 3 ? ` ☢️×${res.sc}` : ''}<br>${COIN}+${coins.toLocaleString()}${inFS ? ' (×2)' : ''}${extra}`;
   } else {
-    msg.className = 'slotmsg'; msg.textContent = pay.label; tone(220, 0.15, 0.06, 'triangle', 160);
+    msg.className = 'slotmsg'; msg.textContent = ['꽝…', '아깝다!', '다시 한 번?', '물고기가 운다…'][Math.random() * 4 | 0];
+    tone(220, 0.15, 0.06, 'triangle', 160);
+  }
+  // 연출
+  let wait = 650;
+  if (res.jackpot) {
+    splash('jack', '👹 JACKPOT 👹', coins, 3200); wait = 3300;
+    const pn = document.getElementById('slotPanel'); pn.classList.remove('jackpot'); void pn.offsetWidth; pn.classList.add('jackpot');
+    coinRain(70); vibrate([200, 80, 200, 80, 400]);
+    [523, 659, 784, 1046, 1318, 1568, 2093].forEach((f, i) => tone(f, 0.18, 0.1, 'square', null, i * 0.09)); noiseBurst(1.2, 4000, 0.3, 'highpass');
+  } else if (winBet >= MEGA_U) {
+    splash('mega', 'MEGA WIN!!', coins, 2600); wait = 2700; coinRain(40); vibrate([120, 60, 160]);
+    [659, 784, 988, 1318, 1568].forEach((f, i) => tone(f, 0.14, 0.09, 'square', null, i * 0.08));
+  } else if (winBet >= BIG_U) {
+    splash('big', 'BIG WIN!', coins, 2000); wait = 2100; coinRain(18); vibrate([80, 40, 80]);
+    [659, 784, 988, 1318].forEach((f, i) => tone(f, 0.12, 0.08, 'square', null, i * 0.08));
+  } else if (coins > 0) { tone(988, 0.08, 0.06, 'square'); tone(1318, 0.1, 0.06, 'square', null, 0.08); }
+  // 프리스핀 발동 / 재발동
+  if (res.fs) {
+    const first = fsLeft === 0 && !inFS;
+    fsLeft += res.fs;
+    if (first) fsWin = 0;
+    document.getElementById('slotPanel').classList.add('fsmode');
+    setTimeout(() => {
+      splash('fs', first ? `FREE SPINS ×${res.fs}!` : `+${res.fs} FREE SPINS!`, null, 1700);
+      [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.14, 0.08, 'triangle', null, i * 0.1));
+    }, Math.max(0, wait - 300));
+    wait += 1700;
+  }
+  const fsEnded = inFS && fsLeft === 0 && !res.fs;
+  if (fsEnded) {
+    setTimeout(() => { splash(fsWin >= BIG_U * SLOT_K * slotBet ? 'mega' : 'fs', '프리스핀 종료', fsWin, 2200); }, wait);
+    wait += 2300;
   }
   updateShopGlow();
-  slotBusy = false; document.getElementById('spinBtn').disabled = false;
+  setTimeout(() => {
+    if (fsEnded) document.getElementById('slotPanel').classList.remove('fsmode');
+    slotBusy = false; document.getElementById('spinBtn').disabled = false; slotWallet();
+    if (fsLeft > 0) { setTimeout(spin, 350); return; }            // 프리스핀은 자동으로 이어서
+    if (autoLeft > 0) setTimeout(spin, 350);
+  }, wait);
 }
 document.getElementById('spinBtn').addEventListener('click', spin);
+document.getElementById('autoBtn').addEventListener('click', () => {
+  if (autoLeft > 0) { autoLeft = 0; slotWallet(); return; }
+  autoLeft = 10; slotWallet(); spin();
+});
 document.querySelectorAll('[data-slot]').forEach(btn => btn.addEventListener('click', () => {
   slotBack = btn.closest('.overlay'); slotBack.classList.add('hidden');
-  renderBets(); slotWallet(); slotOv.classList.remove('hidden');
+  buildGrid(); renderBets(); slotWallet(); slotOv.classList.remove('hidden');
 }));
 document.getElementById('slotClose').addEventListener('click', () => {
-  if (slotBusy) return;
+  if (slotBusy || fsLeft > 0) return;   // 돌아가는 중이거나 프리스핀이 남았으면 못 닫음
+  autoLeft = 0;
   slotOv.classList.add('hidden');
   if (slotBack) { slotBack.classList.remove('hidden'); renderShop(); if (slotBack === clearOv) renderEvening(false); }
   if (slotBack === endOv) { const cb = document.getElementById('charmBtn'); cb.hidden = charmsLeft <= 0 || lastEndBlast; }
@@ -2648,7 +2818,7 @@ function renderDex() {
   document.getElementById('dexProg').textContent = `발견 ${found} / ${DEX.length}` + (found === DEX.length ? ' · 완성!' : '');
   const all = document.getElementById('dexAll');
   all.innerHTML = `🎰 <b>도감 = 도박 부적.</b> 많이 잡을수록 ★이 오르고 슬롯이 유리해집니다.<br>` +
-    (found === DEX.length ? '<b style="color:#8ff0ad">✔ 도감 완성: 아무 두 개 맞추기 배당 ×2!</b>' : `도감 완성 보상: 아무 두 개 맞추기 배당 ×1 → <b>×2</b> (${DEX.length - found}종 남음)`);
+    (found === DEX.length ? '<b style="color:#8ff0ad">✔ 도감 완성: 🧨 와일드 낀 당첨 ×2!</b>' : `도감 완성 보상: 🧨 와일드 낀 당첨 <b>×2</b> (${DEX.length - found}종 남음)`);
 }
 document.querySelectorAll('[data-dex]').forEach(btn => btn.addEventListener('click', () => {
   dexBack = btn.closest('.overlay'); dexBack.classList.add('hidden');
@@ -2716,7 +2886,7 @@ requestAnimationFrame(frame);
 
 // 디버그/테스트용 훅
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; },
-  get fish() { return fish.length; }, get chips() { return eveChips; }, setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), slotPick: () => slotPick(), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotPay: (r, b) => slotPay(r, b), spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), spawnKind: k => spawnSchool(k, false), giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
+  get fish() { return fish.length; }, get chips() { return eveChips; }, setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotSim: n => slotSim(n), forceGrid: g => { forcedGrid = g; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), spawnKind: k => spawnSchool(k, false), giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
 </script>
 </body>
