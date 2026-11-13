@@ -1425,6 +1425,11 @@ function explode(x, y, depth, rs = 1, quiet = false) {
   blasts.push({ x, y, depth, t: 0, big: K >= 10 });
   shake = Math.max(shake, 3 + surf * 5 + Math.min(9, K * 0.4));
   flash = Math.max(flash, 0.25 + surf * 0.5 + Math.min(0.4, K * 0.03));
+  if (ex.fever) { // 🎆 폭발 자체도 불꽃놀이
+    fwBurst(x, y, 6, 70 + Math.min(80, K * 4), 110);
+    fwBurst(x, y, 10, 30, 55, rand(0, 360));   // 안쪽 한 겹 더
+    for (let i = 0; i < 3; i++) setTimeout(() => noiseBurst(0.05, 6000, 0.12, 'highpass'), 120 + i * 90 + Math.random() * 60); // 팡팡 터지는 소리
+  }
   if (K > 0 && !quiet) {
     hitStop = Math.max(hitStop, 0.04 + Math.min(0.12, K * 0.007));          // 히트스톱
     if (K >= (fever ? 20 : 10)) { slowDur = slowT = 0.7 + Math.min(0.5, K * 0.02); camFocus = { x, y }; } // 슬로모션 + 줌인
@@ -1747,6 +1752,15 @@ function updateSchools(dt) {
   schools = schools.filter(s => !s.dead);
 }
 
+// 🎆 피버 불꽃: 무지갯빛 불티 한 다발
+function fwBurst(x, y, z, n, spd, hue) {
+  if (parts.length > 1600) n = Math.min(n, 4);          // 과부하 방지
+  for (let i = 0; i < n; i++) {
+    const a = rand(0, TAU), sp = rand(0.35, 1) * spd;
+    parts.push({ x, y, z, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.7, vz: rand(-0.3, 1) * spd * 0.8,
+      life: rand(0.6, 1.3), max: 1.3, type: 'fw', hue: hue === undefined ? rand(0, 360) : hue + rand(-25, 25) });
+  }
+}
 // 물고기 종류별 비행 개성: 뜨는 힘, 옆으로 나는 속도, 중력, 회전, 꼬리 자국, 무게, 퍼덕임
 const FLY = {
   crucian:  { vz: [75, 105],  sp: [10, 26], g: 260, spin: 20, flop: [5, 8], flopV: 34, heavy: 0 },
@@ -1792,6 +1806,12 @@ function updateFish(dt) {
         const a = Math.atan2(f.y - (f.by ?? f.y), f.x - (f.bx ?? f.x)) + rand(-0.5, 0.5), sp = rand(...P.sp);
         f.fvx = Math.cos(a) * sp; f.fvy = Math.sin(a) * sp * 0.6; f.vz = rand(...P.vz);
         f.rot = rand(0, TAU); f.spin = rand(-P.spin, P.spin) || P.spin;
+        if (f.ex && f.ex.fever) { // 🎆 피버: 사방으로 불꽃처럼 튄다
+          const fa = rand(0, TAU), fs = rand(55, 140);
+          f.fvx = Math.cos(fa) * fs; f.fvy = Math.sin(fa) * fs * 0.8; f.vz = rand(150, 260); f.spin = rand(-30, 30);
+          f.fw = true; f.hue = rand(0, 360); f.bounces = 0;
+          fwBurst(f.x, f.y, 2, 6, 40, f.hue);
+        }
         for (let i = 0; i < 5; i++) parts.push({ x: f.x, y: f.y, z: 0, vx: rand(-12, 12), vy: rand(-8, 8), vz: rand(30, 70), life: 0.5, max: 0.5, type: 'drop' });
       }
     } else if (f.state === 'fly') {
@@ -1799,13 +1819,30 @@ function updateFish(dt) {
       f.vz -= P.g * dt; f.z += f.vz * dt; f.rot += f.spin * dt;
       if (P.trail && Math.random() < dt * 40) // 황다랑어·황금잉어: 꼬리 자국
         parts.push({ x: f.x + rand(-1, 1), y: f.y, z: f.z, vx: 0, vy: 0, vz: -4, life: 0.35, max: 0.35, type: P.trail === '#ffd23f' ? 'glint' : 'streak' });
-      f.x = clamp(f.x + f.fvx * dt, 4, VW - 4); f.y = clamp(f.y + f.fvy * dt, 4, SHORE - 5);
+      if (f.fw) {
+        f.hue = (f.hue + dt * 400) % 360;
+        for (let i = 0; i < 2; i++) if (Math.random() < dt * 40) parts.push({ x: f.x + rand(-1.5, 1.5), y: f.y, z: f.z + rand(-1, 1), vx: rand(-6, 6), vy: rand(-4, 4), vz: rand(-10, 6), life: rand(0.4, 0.8), max: 0.8, type: 'fw', hue: f.hue + rand(-20, 20) });
+        // 화면 가장자리에 맞으면 반사 (위·좌·우·아래)
+        const nx = f.x + f.fvx * dt, ny = f.y + f.fvy * dt;
+        let hit = false;
+        if (nx < 3 || nx > VW - 3) { f.fvx = -f.fvx * 0.9; hit = true; }
+        if (ny < 3 || ny > SHORE - 5) { f.fvy = -f.fvy * 0.9; hit = true; }
+        if (f.y - f.z < 4 && f.vz > 0) { f.vz = -f.vz * 0.7; hit = true; }       // 화면 위쪽 천장
+        if (hit) { fwBurst(clamp(f.x, 3, VW - 3), f.y, f.z, 8, 30, f.hue); f.spin = -f.spin * 1.2; tone(1200 + Math.random() * 800, 0.03, 0.04, 'square'); }
+      }
+      f.x = clamp(f.x + f.fvx * dt, 3, VW - 3); f.y = clamp(f.y + f.fvy * dt, 3, SHORE - 5);
+      if (f.fw && f.z <= 0 && f.vz < 0 && f.bounces < 2 && f.vz < -60) { // 물에 맞고 한두 번 더 튄다
+        f.z = 0; f.vz = -f.vz * 0.55; f.bounces++; f.fvx *= 0.8; f.fvy *= 0.8;
+        ripples.push({ x: f.x, y: f.y, r: 1, max: 8, life: 0.5 }); fwBurst(f.x, f.y, 1, 10, 35, f.hue);
+        noiseBurst(0.04, 5000, 0.08, 'highpass');
+      }
       if (f.z <= 0 && f.vz < 0) { // 철퍽! 착수
         f.z = 0; f.state = 'float'; f.ft = 0; f.ang = f.rot;
         const P2 = f.fly || FLY.carp, hv = P2.heavy;
         ripples.push({ x: f.x, y: f.y, r: 1, max: 7 + hv * 8, life: 0.6 + hv * 0.3 });
         for (let i = 0; i < 4 + hv * 10; i++) parts.push({ x: f.x, y: f.y, z: 0, vx: rand(-10, 10) * (1 + hv * 0.6), vy: rand(-6, 6) * (1 + hv * 0.6), vz: rand(20, 45) * (1 + hv * 0.5), life: 0.4 + hv * 0.15, max: 0.6, type: 'drop' });
         if (hv) { tone(90 - hv * 20, 0.18, 0.18 + hv * 0.1, 'sine', 40); if (hv >= 2) shake = Math.max(shake, 5); } // 쿵!
+        if (f.fw) { fwBurst(f.x, f.y, 1, 14, 45, f.hue); f.fw = false; }
         f.flops = Math.round(rand(...P2.flop)); f.flopV = P2.flopV; f.hopZ = 0; f.hopV = 0; f.flip = 1; f.hopWait = rand(0.05, 0.15);
         if (f.ex) { f.ex.landed = (f.ex.landed || 0) + 1; f.ex.popT = 0.18;
           const n = f.ex.landed; tone(440 * Math.pow(2, Math.min(24, n) / 12), 0.06, 0.06, 'square'); }
@@ -1849,6 +1886,7 @@ function updateAmbient(dt) {
     else if (p.type === 'fire') { p.z += p.vz * dt; p.vx *= 0.92; p.vy *= 0.92; }
     else if (p.type === 'spark') { p.vz -= 90 * dt; p.z += p.vz * dt; p.vx *= 0.96; p.vy *= 0.96; if (p.z < -2) p.life = 0; }
     else if (p.type === 'wisp') { p.z += 10 * dt; p.vx *= 0.97; }
+    else if (p.type === 'fw') { p.vz -= 70 * dt; p.z += p.vz * dt; p.vx *= 1 - dt * 1.2; p.vy *= 1 - dt * 1.2; if (p.z < -1) p.life = 0; }
     else if (p.type === 'mush') { p.z += p.vz * dt; p.vz *= 1 - dt * 0.6; p.vx *= 1 - dt * 0.5; if (p.z > 45) { p.vx += (p.x < VW / 2 ? -1 : 1) * 30 * dt; } }
     else if (p.type === 'gib') {
       p.vz -= 260 * dt; p.z += p.vz * dt; p.rot += p.spin * dt;
@@ -1960,6 +1998,12 @@ function drawSurfaceThings() {
     if (f.state !== 'fly') continue;
     b.fillStyle = 'rgba(0,20,30,0.3)'; b.beginPath(); b.ellipse(f.x, f.y, f.sp.len * 0.4, f.sp.wid * 0.4, 0, 0, TAU); b.fill();
     const pz = 1.5 + Math.min(1.3, f.z / 45);                 // 높이 뜰수록 카메라 쪽으로 커 보인다
+    if (f.fw) { // 피버: 물고기 주위로 제 색깔 빛
+      b.save(); b.globalCompositeOperation = 'lighter';
+      const gl = b.createRadialGradient(f.x, f.y - f.z, 0, f.x, f.y - f.z, 14);
+      gl.addColorStop(0, `hsla(${f.hue},100%,70%,0.8)`); gl.addColorStop(0.5, `hsla(${f.hue},100%,60%,0.3)`); gl.addColorStop(1, `hsla(${f.hue},100%,50%,0)`);
+      b.fillStyle = gl; b.beginPath(); b.arc(f.x, f.y - f.z, 14, 0, TAU); b.fill(); b.restore();
+    }
     b.save(); b.translate(f.x, f.y - f.z); b.rotate(f.rot); b.scale(pz, pz);
     const l = f.sp.len, w = f.sp.wid;
     b.fillStyle = { catfish: '#c9c2a8', carp: '#f0a35a', tuna: '#7fa6d8', goldcarp: '#ffd23f', sturgeon: '#a7b0b8', lord: '#8a7050' }[f.kind] || '#d8e4ea';
@@ -2152,6 +2196,12 @@ function drawParts() {
     else if (p.type === 'fire') { b.fillStyle = k > 0.5 ? '#ffe066' : '#ff7b2a'; b.fillRect(x, y, 2, 2); }
     else if (p.type === 'spark') { b.fillStyle = k > 0.65 ? '#fffbe0' : k > 0.35 ? '#ffd45a' : '#ff7a24'; b.fillRect(x, y, 1, 1); }
     else if (p.type === 'wisp') { b.fillStyle = `rgba(210,210,205,${k * 0.35})`; b.fillRect(x, y, 2, 1); }
+    else if (p.type === 'fw') {
+      b.globalCompositeOperation = 'lighter';
+      b.fillStyle = `hsla(${p.hue},100%,${60 + k * 30}%,${Math.min(1, k * 1.8)})`;
+      const sz = k > 0.7 ? 3 : k > 0.35 ? 2 : 1; b.fillRect(x - (sz >> 1), y - (sz >> 1), sz, sz);
+      b.globalCompositeOperation = 'source-over';
+    }
     else if (p.type === 'streak') { b.fillStyle = `rgba(160,210,255,${k * 0.7})`; b.fillRect(x - 1, y, 2, 1); }
     else if (p.type === 'crumb') { b.fillStyle = `rgba(200,160,90,${k * 0.8})`; b.fillRect(x, y, 1, 1); }
     else if (p.type === 'glint') { b.fillStyle = `rgba(255,225,90,${k})`; b.fillRect(x, y - 1, 1, 3); b.fillRect(x - 1, y, 3, 1); }
