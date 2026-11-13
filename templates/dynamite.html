@@ -569,6 +569,8 @@ applyUpgrades();
 let schools = [], fish = [], bombs = [], parts = [], ripples = [], blasts = [], combos = [], texts = [];
 let big = null, nextBig = 15, schoolSpawnT = 0;
 let hold = null, shake = 0, flash = 0, ink = 0, endT = 0, banner = null;
+// 타격감: 히트스톱(완전 정지), 슬로모션 + 줌인
+let hitStop = 0, slowT = 0, slowDur = 0, camFocus = null, cam = { z: 1, fx: 0, fy: 0, sx: 0, sy: 0 };
 let stats = {};
 
 try { best = +localStorage.getItem('dynfish_best') || 0; bestDay = +localStorage.getItem('dynfish_bestday') || 0; } catch (e) {}
@@ -729,6 +731,7 @@ function nukeBlast() {
   }
   // 연출: 하얀 섬광, 충격파, 버섯구름, 호수 전체 물기둥
   nukeFlash = 1.6; shake = 26; radiation = 1;
+  hitStop = 0.15; slowDur = slowT = 1.3; camFocus = { x: cx, y: cy };
   blasts.push({ x: cx, y: cy, depth: 0, t: 0, nuke: true });
   for (let i = 0; i < 60; i++) {
     const x = rand(0, VW), y = rand(0, SHORE);
@@ -1363,6 +1366,7 @@ function explode(x, y, depth, rs = 1, quiet = false) {
       texts.push(mkText(f.x, f.y - 10, `명중! (${f.sp.hp - f.hp}/${f.sp.hp})`, '#ffcf5b', 1.5, true));
     } else if (d < rr) {
       f.state = 'rise'; f.ex = ex; ex.kills++; ex.pts += f.sp.pts;
+      f.delay = rand(0, 0.22); f.bx = x; f.by = y;
     } else if (d < rr * 2.5) {
       const a = Math.atan2(f.y - y, f.x - x), sp = 70 * (1 - d / (rr * 2.5)) + 25;
       f.vx = Math.cos(a) * sp; f.vy = Math.sin(a) * sp; f.panic = rand(0.8, 1.4);
@@ -1373,11 +1377,17 @@ function explode(x, y, depth, rs = 1, quiet = false) {
   swimmerHit(ex);
   chestHit(ex);
   if (!fatal) bigHit(ex);
-  // 연출
-  const surf = 1 - clamp(ed, 0, 1);
-  blasts.push({ x, y, depth, t: 0 });
-  shake = Math.max(shake, 3 + surf * 5);
-  flash = Math.max(flash, 0.25 + surf * 0.5);
+  // 연출 (많이 잡을수록 크게)
+  const surf = 1 - clamp(ed, 0, 1), K = ex.kills;
+  blasts.push({ x, y, depth, t: 0, big: K >= 10 });
+  shake = Math.max(shake, 3 + surf * 5 + Math.min(9, K * 0.4));
+  flash = Math.max(flash, 0.25 + surf * 0.5 + Math.min(0.4, K * 0.03));
+  if (K > 0 && !quiet) {
+    hitStop = Math.max(hitStop, 0.04 + Math.min(0.12, K * 0.007));          // 히트스톱
+    if (K >= 10) { slowDur = slowT = 0.7 + Math.min(0.5, K * 0.02); camFocus = { x, y }; } // 슬로모션 + 줌인
+    if (K >= 5) { tone(42, 1.0, 0.55, 'sine', 22); noiseBurst(0.5, 3500, 0.3, 'highpass'); } // 묵직한 저음 + 쩍 갈라지는 소리
+    for (let i = 0; i < Math.min(30, K * 2); i++) parts.push({ x: x + rand(-6, 6), y: y + rand(-4, 4), z: rand(2, 8), vx: rand(-40, 40), vy: rand(-30, 20), vz: rand(60, 150), life: rand(0.8, 1.4), max: 1.4, type: 'drop' });
+  }
   const n = Math.round(14 + surf * 34);
   for (let i = 0; i < n; i++) {
     const a = rand(0, TAU), s = rand(5, 30) * (0.4 + surf);
@@ -1388,7 +1398,7 @@ function explode(x, y, depth, rs = 1, quiet = false) {
   for (let i = 0; i < 3; i++) ripples.push({ x, y, r: 2 + i * 5, max: 34 + i * 10 + surf * 12, life: 1.1 + i * 0.2 });
   for (let i = 0; i < 12; i++) parts.push({ x: x + rand(-10, 10), y: y + rand(-8, 8), z: 0, vx: 0, vy: rand(-3, 3), vz: 0, life: rand(0.6, 1.4), max: 1.4, type: 'bubble' });
   sfx.boom(ed);
-  vibrate(depth < 0.3 ? [80, 30, 60] : [50]);
+  vibrate(K >= 5 ? [60 + Math.min(220, K * 14), 30, 90] : depth < 0.3 ? [80, 30, 60] : [50]);
 }
 
 function handBlast() {
@@ -1590,7 +1600,8 @@ function update(dt) {
   // 콤보 판정
   for (const c of combos) {
     c.t += dt;
-    if (c.t > 1.9 && !c.done) {
+    c.popT = Math.max(0, (c.popT || 0) - dt);
+    if (c.t > 1.0 && !c.done && (c.t > 5 || !fish.some(f => f.ex === c && (f.state === 'rise' || f.state === 'fly')))) {
       c.done = true;
       stats.bestCombo = Math.max(stats.bestCombo, c.kills);
       let msg = null, col = '#fff';
@@ -1638,7 +1649,7 @@ function update(dt) {
     if (fatal.t > 2.6) endGame(fatal.reason);
     return;
   }
-  const busy = chests.some(c => c.state !== 'bottom') || pendingBlasts.length || (nuke && !nuke.done) || hold || bombs.length || combos.length || fish.some(f => f.state === 'rise' || f.state === 'float') || (big && big.dead);
+  const busy = chests.some(c => c.state !== 'bottom') || pendingBlasts.length || (nuke && !nuke.done) || hold || bombs.length || combos.length || fish.some(f => f.state === 'rise' || f.state === 'fly' || f.state === 'float') || (big && big.dead);
   if (dyn <= 0 && !busy) { endT += dt; if (endT > 1.3) { startEvening(dayScore >= target); } } else endT = 0;
 }
 
@@ -1713,8 +1724,25 @@ function updateFish(dt) {
       f.ph += dt * (5 + v * 0.25);
       if (f.kind === 'goldcarp' && Math.random() < dt * 1.6) parts.push({ x: f.x + rand(-2, 2), y: f.y + rand(-2, 2), z: 0, vx: 0, vy: 0, vz: 0, life: 0.45, max: 0.45, type: 'glint' });
     } else if (f.state === 'rise') {
-      f.depth -= dt * 0.9; f.vx *= 0.9; f.vy *= 0.9; f.ang += dt * 3;
-      if (f.depth <= 0) { f.depth = 0; f.state = 'float'; f.ft = 0; ripples.push({ x: f.x, y: f.y, r: 1, max: 6, life: 0.6 }); }
+      if (f.delay > 0) { f.delay -= dt; continue; }
+      f.depth -= dt * 2.8; f.vx *= 0.9; f.vy *= 0.9; f.ang += dt * 3;
+      if (f.depth <= 0) { // 수면을 뚫고 하늘로 튀어 오른다
+        f.depth = 0; f.state = 'fly'; f.z = 0;
+        const a = Math.atan2(f.y - (f.by ?? f.y), f.x - (f.bx ?? f.x)) + rand(-0.5, 0.5), sp = rand(10, 30);
+        f.fvx = Math.cos(a) * sp; f.fvy = Math.sin(a) * sp * 0.6; f.vz = rand(70, 120) * (f.sp.len > 14 ? 0.7 : 1);
+        f.rot = rand(0, TAU); f.spin = rand(-16, 16);
+        for (let i = 0; i < 5; i++) parts.push({ x: f.x, y: f.y, z: 0, vx: rand(-12, 12), vy: rand(-8, 8), vz: rand(30, 70), life: 0.5, max: 0.5, type: 'drop' });
+      }
+    } else if (f.state === 'fly') {
+      f.vz -= 240 * dt; f.z += f.vz * dt; f.rot += f.spin * dt;
+      f.x = clamp(f.x + f.fvx * dt, 4, VW - 4); f.y = clamp(f.y + f.fvy * dt, 4, SHORE - 5);
+      if (f.z <= 0 && f.vz < 0) { // 철퍽! 착수
+        f.z = 0; f.state = 'float'; f.ft = 0; f.ang = f.rot;
+        ripples.push({ x: f.x, y: f.y, r: 1, max: 7, life: 0.6 });
+        for (let i = 0; i < 4; i++) parts.push({ x: f.x, y: f.y, z: 0, vx: rand(-10, 10), vy: rand(-6, 6), vz: rand(20, 45), life: 0.4, max: 0.4, type: 'drop' });
+        if (f.ex) { f.ex.landed = (f.ex.landed || 0) + 1; f.ex.popT = 0.18;
+          const n = f.ex.landed; tone(440 * Math.pow(2, Math.min(24, n) / 12), 0.06, 0.06, 'square'); }
+      }
     } else if (f.state === 'float') {
       f.ft += dt;
       if (f.ft > 0.9) {
@@ -1726,7 +1754,7 @@ function updateFish(dt) {
         recordDex(f.kind, f.x, f.y);
         if (f.sp.rare) { texts.push(mkText(f.x, f.y - 10, `✨ ${f.sp.name}!`, '#ffd23f', 1.6, true)); sfx.bonus(); }
         texts.push(mkText(f.x, f.y - 3, '+' + pts, f.sp.pts >= 80 ? '#ffe066' : f.sp.pts >= 30 ? '#ffc58f' : '#e8f4f8', f.sp.pts >= 80 ? 1.1 : 0.85));
-        sfx.collect(ci++);
+        ci++;
       }
     }
   }
@@ -1783,7 +1811,7 @@ function fishShape(L, x, y, ang, len, wid, ph, col) {
 function drawShadows() {
   dctx.clearRect(0, 0, VW, VH); sctx.clearRect(0, 0, VW, VH);
   for (const f of fish) {
-    if (f.state === 'float') continue;
+    if (f.state === 'float' || f.state === 'fly') continue;
     const L = f.depth > 0.5 ? dctx : sctx;
     const sc = 1 - f.depth * 0.32;
     L.globalAlpha = clamp(0.62 - f.depth * 0.42, 0.12, 0.7);
@@ -1847,6 +1875,21 @@ function drawBigShadow() {
 }
 
 function drawSurfaceThings() {
+  // 하늘로 튀어 오른 물고기: 물 위 그림자 + 빙글빙글 도는 몸
+  for (const f of fish) {
+    if (f.state !== 'fly') continue;
+    b.fillStyle = 'rgba(0,20,30,0.3)'; b.beginPath(); b.ellipse(f.x, f.y, f.sp.len * 0.4, f.sp.wid * 0.4, 0, 0, TAU); b.fill();
+    const pz = 1.5 + Math.min(1.3, f.z / 45);                 // 높이 뜰수록 카메라 쪽으로 커 보인다
+    b.save(); b.translate(f.x, f.y - f.z); b.rotate(f.rot); b.scale(pz, pz);
+    const l = f.sp.len, w = f.sp.wid;
+    b.fillStyle = { catfish: '#c9c2a8', carp: '#f0a35a', tuna: '#7fa6d8', goldcarp: '#ffd23f', sturgeon: '#a7b0b8', lord: '#8a7050' }[f.kind] || '#d8e4ea';
+    b.strokeStyle = '#13262e'; b.lineWidth = 1 / pz;
+    b.beginPath(); b.ellipse(0, 0, l / 2, w / 2, 0, 0, TAU); b.fill(); b.stroke();
+    b.beginPath(); b.moveTo(-l / 2 + 1, 0); b.lineTo(-l / 2 - l * 0.3, -w * 0.6); b.lineTo(-l / 2 - l * 0.3, w * 0.6); b.closePath(); b.fill(); b.stroke();
+    b.fillStyle = 'rgba(255,255,255,0.7)'; b.fillRect(-l / 4, -w / 2 + 0.5, l / 2, 1);   // 비늘 반짝
+    b.fillStyle = '#222'; b.fillRect(Math.round(l / 2 - 2), -1, 1, 1);
+    b.restore();
+  }
   // 수면 위로 드러난 것들 (떠오른 물고기, 상어 지느러미, 촉수 끝)
   for (const f of fish) {
     if (f.state !== 'float') continue;
@@ -2091,10 +2134,17 @@ function render() {
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = '#0b1d26'; ctx.fillRect(0, 0, cvs.width, cvs.height);
   const sx = shake ? Math.round(rand(-shake, shake)) * S / 2 : 0, sy = shake ? Math.round(rand(-shake, shake)) * S / 2 : 0;
-  ctx.drawImage(buf, sx, sy, VW * S, VH * S);
+  // 슬로모션 중 폭발 지점으로 살짝 줌인
+  const zk = slowT > 0 && slowDur ? Math.sin(Math.min(1, (slowDur - slowT) / slowDur) * Math.PI) : 0;
+  cam.z = 1 + 0.14 * zk; cam.sx = sx; cam.sy = sy;
+  if (camFocus) { cam.fx = camFocus.x * S; cam.fy = camFocus.y * S; }
+  ctx.setTransform(cam.z, 0, 0, cam.z, cam.fx * (1 - cam.z) + sx, cam.fy * (1 - cam.z) + sy);
+  ctx.drawImage(buf, 0, 0, VW * S, VH * S);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (state !== 'menu') drawHUD();
 }
 
+const w2s = (x, y) => [cam.fx * (1 - cam.z) + cam.sx + x * S * cam.z, cam.fy * (1 - cam.z) + cam.sy + y * S * cam.z];
 function txt(str, x, y, size, col, align = 'left', stroke = true) {
   ctx.font = `800 ${size}px system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
   ctx.textAlign = align; ctx.textBaseline = 'middle';
@@ -2307,8 +2357,18 @@ function drawHUD() {
     const k = t.t / t.life;
     const sc = t.pop ? (t.t < 0.15 ? 0.6 + t.t / 0.15 * 0.6 : 1.2 - Math.min(0.2, (t.t - 0.15))) : 1;
     ctx.globalAlpha = k > 0.7 ? (1 - k) / 0.3 : 1;
-    txt(t.str, t.x * S, (t.y - t.t * 10) * S, u * 1.3 * t.size * sc, t.col, 'center');
+    const [tx, ty] = w2s(t.x, t.y - t.t * 10);
+    txt(t.str, tx, ty, u * 1.3 * t.size * sc, t.col, 'center');
     ctx.globalAlpha = 1;
+  }
+  // 마릿수 카운터: 물고기가 떨어질 때마다 ×N이 커진다
+  for (const c of combos) {
+    if (c.quiet || c.nuke || !(c.landed >= 2)) continue;
+    const n = c.landed; let [tx, ty] = w2s(c.x, c.y - 26);
+    ty = Math.max(ty, u * 9); tx = clamp(tx, u * 4, cvs.width - u * 4);   // 화면 밖으로 잘리지 않게
+    const pop = 1 + (c.popT || 0) * 2.2, size = u * (1.5 + Math.min(2.2, n * 0.09)) * pop;
+    const col = n >= 15 ? '#ff5bd1' : n >= 9 ? '#ffd23f' : n >= 4 ? '#8fe3ff' : '#ffffff';
+    txt(`×${n}`, tx, ty, size, col, 'center');
   }
   if (banner) {
     ctx.globalAlpha = Math.min(1, banner.t * 2) * (0.7 + Math.sin(time * 8) * 0.3);
@@ -3059,8 +3119,11 @@ newGame();
 
 let last = performance.now();
 function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  frameDt = dt; updateFuseFx(dt);
+  const rdt = Math.min(0.05, (now - last) / 1000); last = now;
+  frameDt = rdt; updateFuseFx(rdt);
+  if (hitStop > 0) { hitStop -= rdt; shake = Math.max(shake, 2); render(); requestAnimationFrame(frame); return; } // 히트스톱: 화면 정지
+  let dt = rdt;
+  if (slowT > 0) { slowT -= rdt; const k = Math.max(0, slowT / slowDur); dt = rdt * (1 - 0.72 * Math.min(1, k * 1.4)); } // 슬로모션
   if (state === 'menu' || state === 'end' || state === 'clear') { updateSchools(dt); updateFish(dt); }
   if (!slotOv.classList.contains('hidden')) { // 연동 잭팟: 다른 손님들도 돌리고 있어 슬롯 화면에선 조금씩 오른다
     meta.jp.mini += dt * 0.003; meta.jp.major += dt * 0.012; meta.jp.grand += dt * 0.05;
