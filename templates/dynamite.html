@@ -1697,6 +1697,16 @@ function updateSchools(dt) {
   schools = schools.filter(s => !s.dead);
 }
 
+// 물고기 종류별 비행 개성: 뜨는 힘, 옆으로 나는 속도, 중력, 회전, 꼬리 자국, 무게, 퍼덕임
+const FLY = {
+  crucian:  { vz: [75, 105],  sp: [10, 26], g: 260, spin: 20, flop: [5, 8], flopV: 34, heavy: 0 },
+  carp:     { vz: [70, 115],  sp: [10, 30], g: 240, spin: 15, flop: [3, 5], flopV: 30, heavy: 0 },
+  catfish:  { vz: [45, 65],   sp: [6, 16],  g: 320, spin: 5,  flop: [1, 2], flopV: 18, heavy: 1 },
+  tuna:     { vz: [130, 165], sp: [35, 55], g: 190, spin: 7,  flop: [4, 6], flopV: 38, heavy: 0, trail: '#9fd0ff' },
+  goldcarp: { vz: [95, 125],  sp: [12, 28], g: 220, spin: 12, flop: [4, 6], flopV: 32, heavy: 0, trail: '#ffd23f' },
+  sturgeon: { vz: [55, 75],   sp: [8, 18],  g: 280, spin: 3,  flop: [2, 3], flopV: 20, heavy: 1 },
+  lord:     { vz: [45, 60],   sp: [4, 10],  g: 300, spin: 1.5, flop: [1, 1], flopV: 14, heavy: 2 },
+};
 function updateFish(dt) {
   let ci = 0;
   for (const f of fish) {
@@ -1728,24 +1738,44 @@ function updateFish(dt) {
       f.depth -= dt * 2.8; f.vx *= 0.9; f.vy *= 0.9; f.ang += dt * 3;
       if (f.depth <= 0) { // 수면을 뚫고 하늘로 튀어 오른다
         f.depth = 0; f.state = 'fly'; f.z = 0;
-        const a = Math.atan2(f.y - (f.by ?? f.y), f.x - (f.bx ?? f.x)) + rand(-0.5, 0.5), sp = rand(10, 30);
-        f.fvx = Math.cos(a) * sp; f.fvy = Math.sin(a) * sp * 0.6; f.vz = rand(70, 120) * (f.sp.len > 14 ? 0.7 : 1);
-        f.rot = rand(0, TAU); f.spin = rand(-16, 16);
+        const P = FLY[f.kind] || FLY.carp; f.fly = P;
+        const a = Math.atan2(f.y - (f.by ?? f.y), f.x - (f.bx ?? f.x)) + rand(-0.5, 0.5), sp = rand(...P.sp);
+        f.fvx = Math.cos(a) * sp; f.fvy = Math.sin(a) * sp * 0.6; f.vz = rand(...P.vz);
+        f.rot = rand(0, TAU); f.spin = rand(-P.spin, P.spin) || P.spin;
         for (let i = 0; i < 5; i++) parts.push({ x: f.x, y: f.y, z: 0, vx: rand(-12, 12), vy: rand(-8, 8), vz: rand(30, 70), life: 0.5, max: 0.5, type: 'drop' });
       }
     } else if (f.state === 'fly') {
-      f.vz -= 240 * dt; f.z += f.vz * dt; f.rot += f.spin * dt;
+      const P = f.fly || FLY.carp;
+      f.vz -= P.g * dt; f.z += f.vz * dt; f.rot += f.spin * dt;
+      if (P.trail && Math.random() < dt * 40) // 황다랑어·황금잉어: 꼬리 자국
+        parts.push({ x: f.x + rand(-1, 1), y: f.y, z: f.z, vx: 0, vy: 0, vz: -4, life: 0.35, max: 0.35, type: P.trail === '#ffd23f' ? 'glint' : 'streak' });
       f.x = clamp(f.x + f.fvx * dt, 4, VW - 4); f.y = clamp(f.y + f.fvy * dt, 4, SHORE - 5);
       if (f.z <= 0 && f.vz < 0) { // 철퍽! 착수
         f.z = 0; f.state = 'float'; f.ft = 0; f.ang = f.rot;
-        ripples.push({ x: f.x, y: f.y, r: 1, max: 7, life: 0.6 });
-        for (let i = 0; i < 4; i++) parts.push({ x: f.x, y: f.y, z: 0, vx: rand(-10, 10), vy: rand(-6, 6), vz: rand(20, 45), life: 0.4, max: 0.4, type: 'drop' });
+        const P2 = f.fly || FLY.carp, hv = P2.heavy;
+        ripples.push({ x: f.x, y: f.y, r: 1, max: 7 + hv * 8, life: 0.6 + hv * 0.3 });
+        for (let i = 0; i < 4 + hv * 10; i++) parts.push({ x: f.x, y: f.y, z: 0, vx: rand(-10, 10) * (1 + hv * 0.6), vy: rand(-6, 6) * (1 + hv * 0.6), vz: rand(20, 45) * (1 + hv * 0.5), life: 0.4 + hv * 0.15, max: 0.6, type: 'drop' });
+        if (hv) { tone(90 - hv * 20, 0.18, 0.18 + hv * 0.1, 'sine', 40); if (hv >= 2) shake = Math.max(shake, 5); } // 쿵!
+        f.flops = Math.round(rand(...P2.flop)); f.flopV = P2.flopV; f.hopZ = 0; f.hopV = 0; f.flip = 1; f.hopWait = rand(0.05, 0.15);
         if (f.ex) { f.ex.landed = (f.ex.landed || 0) + 1; f.ex.popT = 0.18;
           const n = f.ex.landed; tone(440 * Math.pow(2, Math.min(24, n) / 12), 0.06, 0.06, 'square'); }
       }
     } else if (f.state === 'float') {
       f.ft += dt;
-      if (f.ft > 0.9) {
+      // 퍼덕퍼덕: 작은 점프를 몇 번 하고 잠잠해진다
+      if (f.hopZ > 0 || f.hopV > 0) {
+        f.hopV -= 260 * dt; f.hopZ += f.hopV * dt;
+        if (f.hopZ <= 0) { f.hopZ = 0; f.hopV = 0; if (Math.random() < 0.6) ripples.push({ x: f.x, y: f.y, r: 0, max: 4, life: 0.35 });
+          parts.push({ x: f.x + rand(-2, 2), y: f.y, z: 0, vx: rand(-6, 6), vy: rand(-4, 4), vz: rand(12, 25), life: 0.3, max: 0.3, type: 'drop' }); }
+      } else if (f.flops > 0) {
+        f.hopWait -= dt;
+        if (f.hopWait <= 0) {
+          f.flops--; f.hopV = f.flopV * rand(0.7, 1.1); f.flip *= -1; f.ang += rand(-0.6, 0.6);
+          f.hopWait = rand(0.08, 0.18);
+          tone(700 + Math.random() * 300, 0.025, 0.025, 'triangle');
+        }
+      }
+      if (f.ft > 0.9 && f.flops <= 0 && f.hopZ <= 0 || f.ft > 2.5) {
         f.state = 'got';
         const pts = Math.round(f.sp.pts * (f.ex ? f.ex.mult : 1));
         addScore(pts); stats.fish++; stats.kinds[f.kind]++;
@@ -1893,8 +1923,9 @@ function drawSurfaceThings() {
   // 수면 위로 드러난 것들 (떠오른 물고기, 상어 지느러미, 촉수 끝)
   for (const f of fish) {
     if (f.state !== 'float') continue;
-    const bob = Math.sin(time * 6 + f.ph) * 0.5;
-    b.save(); b.translate(f.x, f.y + bob); b.rotate(f.ang);
+    const bob = Math.sin(time * 6 + f.ph) * 0.5, hz = f.hopZ || 0;
+    if (hz > 0) { b.fillStyle = 'rgba(0,20,30,0.25)'; b.beginPath(); b.ellipse(f.x, f.y, f.sp.len * 0.35, f.sp.wid * 0.35, 0, 0, TAU); b.fill(); }
+    b.save(); b.translate(f.x, f.y + bob - hz); b.rotate(f.ang + (hz > 0 ? Math.sin(time * 40) * 0.25 : 0)); b.scale(1, f.flip || 1);
     const l = f.sp.len, w = f.sp.wid;
     b.fillStyle = { catfish: '#c9c2a8', carp: '#f0d9b5', tuna: '#9fb8d8', goldcarp: '#ffd23f', sturgeon: '#a7b0b8', lord: '#8a7050' }[f.kind] || '#e8ecef';
     b.beginPath(); b.ellipse(0, 0, l / 2, w / 2, 0, 0, TAU); b.fill();
@@ -2071,6 +2102,7 @@ function drawParts() {
     else if (p.type === 'fire') { b.fillStyle = k > 0.5 ? '#ffe066' : '#ff7b2a'; b.fillRect(x, y, 2, 2); }
     else if (p.type === 'spark') { b.fillStyle = k > 0.65 ? '#fffbe0' : k > 0.35 ? '#ffd45a' : '#ff7a24'; b.fillRect(x, y, 1, 1); }
     else if (p.type === 'wisp') { b.fillStyle = `rgba(210,210,205,${k * 0.35})`; b.fillRect(x, y, 2, 1); }
+    else if (p.type === 'streak') { b.fillStyle = `rgba(160,210,255,${k * 0.7})`; b.fillRect(x - 1, y, 2, 1); }
     else if (p.type === 'crumb') { b.fillStyle = `rgba(200,160,90,${k * 0.8})`; b.fillRect(x, y, 1, 1); }
     else if (p.type === 'glint') { b.fillStyle = `rgba(255,225,90,${k})`; b.fillRect(x, y - 1, 1, 3); b.fillRect(x - 1, y, 3, 1); }
     else if (p.type === 'mush') {
