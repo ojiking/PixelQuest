@@ -2422,6 +2422,7 @@ function startEvening(success) {
   if (hiss) hiss.g.gain.setTargetAtTime(0, ac.currentTime, 0.03);
   eveFail = !success;
   eveChips = todayChips; todayChips = 0; eveBet = 0; eveWon = 0; eveSpins = 0;
+  resetSlotSession();
   eveBonusChips = eveChips > 0 ? Math.round(eveChips * 0.1 * stars('sturgeon')) : 0;   // 철갑상어 ★
   eveChips += eveBonusChips;
   eveFree = stars('tuna');                                                             // 황다랑어 ★
@@ -2771,7 +2772,39 @@ function slotSim(n) {
 }
 
 const slotOv = document.getElementById('slotOv');
-let slotBack = null, slotBusy = false, slotBet = 1, fsLeft = 0, fsWin = 0, autoLeft = 0, curGrid = null;
+let slotBack = null, slotBusy = false, slotBet = 1, fsLeft = 0, fsWin = 0, autoLeft = 0, curGrid = null, slotFresh = true;
+const freshGrid = () => Array.from({ length: REELS }, (_, c) => Array.from({ length: ROWS }, () => cellPick(c)));
+// 새 저녁 = 새 판: 전날의 릴, 당첨 표시, 메시지, 배수, 프리스핀 흔적을 모두 지운다
+function resetSlotSession() {
+  slotBet = 1; fsLeft = 0; fsWin = 0; autoLeft = 0; slotBusy = false; slotFresh = true;
+  curGrid = freshGrid();
+  if (document.getElementById('slotGrid').children.length) { clearWinFx(); setGrid(curGrid); }
+  const pn = document.getElementById('slotPanel'); pn.classList.remove('fsmode', 'jackpot');
+  document.getElementById('slotSplash').hidden = true;
+  document.getElementById('lineSvg').innerHTML = '';
+  document.querySelectorAll('.jpbar .hit').forEach(el => el.classList.remove('hit'));
+  const sb = document.getElementById('spinBtn'); sb.disabled = false;
+}
+// 그날 저녁 처음 열면 릴을 한 번 섞어 '새 판' 느낌
+function slotIntro() {
+  const msg = document.getElementById('slotMsg');
+  msg.className = 'slotmsg'; msg.textContent = `🌙 ${day}일차 저녁 · 새 판! 오늘 생선칩 ${eveChips}개`;
+  slotBusy = true; document.getElementById('spinBtn').disabled = true;
+  const t0 = performance.now(), g = curGrid;
+  const iv = setInterval(() => {
+    const t = performance.now() - t0;
+    for (let c = 0; c < REELS; c++) {
+      const stopAt = 250 + c * 110;
+      for (let r = 0; r < ROWS; r++) {
+        const el = document.getElementById(`cell${c}${r}`);
+        if (t >= stopAt) { setCell(c, r, g[c][r]); el.classList.remove('spin'); }
+        else { setCell(c, r, ALL_SYMS[Math.random() * ALL_SYMS.length | 0]); el.classList.add('spin'); }
+      }
+    }
+    if (t < 250 + REELS * 110) tone(600 + Math.random() * 300, 0.015, 0.02, 'square');
+    else { clearInterval(iv); slotBusy = false; document.getElementById('spinBtn').disabled = false; tone(1046, 0.08, 0.06, 'triangle'); tone(1318, 0.1, 0.06, 'triangle', null, 0.08); }
+  }, 50);
+}
 // 이번 저녁 결산: 건 칩과 딴 동전, 같은 칩을 팔았을 때와 비교한 이득/손해
 function tallyHtml() {
   if (!eveSpins) return '아직 안 돌렸어요. 칩을 팔면 10개당 동전 1개입니다';
@@ -3036,6 +3069,7 @@ document.getElementById('autoBtn').addEventListener('click', () => {
 document.querySelectorAll('[data-slot]').forEach(btn => btn.addEventListener('click', () => {
   slotBack = btn.closest('.overlay'); slotBack.classList.add('hidden');
   buildGrid(); renderBets(); slotWallet(); slotOv.classList.remove('hidden');
+  if (slotFresh) { slotFresh = false; clearWinFx(); slotIntro(); }
 }));
 document.getElementById('slotClose').addEventListener('click', () => {
   if (slotBusy || fsLeft > 0) return;   // 돌아가는 중이거나 프리스핀이 남았으면 못 닫음
