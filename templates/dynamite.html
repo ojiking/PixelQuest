@@ -476,7 +476,7 @@ const UPGRADES = [
   { id: 'charm', name: '재기의 부적',       desc: '목표 미달 때 그날을 한 번 더 (판마다)', costs: [1500, 4000] },
 ];
 let meta = { coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0 }, dex: {}, nukes: 0 };
-try { const m = JSON.parse(localStorage.getItem('dynfish_meta') || 'null'); if (m && m.up) meta = { coins: m.coins | 0, up: Object.assign(meta.up, m.up), dex: m.dex || {}, nukes: m.nukes | 0, ammo: m.ammo, chips: m.chips, jp: m.jp }; } catch (e) {}
+try { const m = JSON.parse(localStorage.getItem('dynfish_meta') || 'null'); if (m && m.up) meta = { coins: m.coins | 0, up: Object.assign(meta.up, m.up), dex: m.dex || {}, nukes: m.nukes | 0, ammo: m.ammo, chips: m.chips, jp: m.jp, fever: m.fever, change: m.change }; } catch (e) {}
 const NUKE_COST = 1500, NUKE_MAX = 2;
 
 // ===== 특수 다이너마이트 (던질 때 기본 다이너마이트 1개를 특수탄으로 바꿔 던진다) =====
@@ -493,6 +493,10 @@ const JP = {
   major: { name: 'MAJOR', seed: 80,  rate: 0.010, odds: 2000 },
   grand: { name: 'GRAND', seed: 800, rate: 0.015, odds: 30000 },
 };
+// 🔥 피버 게이지: 연속 명중으로만 차고, 날이 바뀌어도/게임이 끝나도 남는다
+const FEVER_MAX = 60, FEVER_TIME = 10;
+if (typeof meta.fever !== 'number') meta.fever = 0;
+let fever = null;                         // 발동 중이면 { t: 남은 초 }
 if (!meta.jp) meta.jp = { mini: JP.mini.seed, major: JP.major.seed, grand: JP.grand.seed };
 // 물고기 → 생선칩 환산
 const CHIP = { crucian: 1, carp: 3, catfish: 8, tuna: 15, goldcarp: 50, sturgeon: 80, lord: 300, shark: 50, squid: 100, kaiju: 1000 };
@@ -597,6 +601,7 @@ function startDay() {
   banner = { str: `${day}일차 · 목표 ${target}점`, t: 2.8 };
   tunaT = rand(10, 18); swimT = firstSwimDelay(); swimmer = null; fatal = null; emptyTube = null;
   chests = []; pendingBlasts = []; chestQueue = 1 + (Math.random() < 0.6 ? 1 : 0) + (day >= 3 && Math.random() < 0.4 ? 1 : 0); chestT = rand(6, 18);
+  fever = null;
   rareT = rand(18, 30); nuke = null; radiation = 0; nukeFlash = 0;
   bossDay = day % 5 === 0; bossSpawned = false;
   if (bossDay) { nextBig = 12; banner = { str: `👹 ${day}일차 · 보스의 날! 목표 ${target}점`, t: 3.6 }; }
@@ -744,6 +749,44 @@ function nukeBlast() {
   schoolSpawnT = 7;
 }
 
+// ===== 🔥 피버 타임 =====
+let feverPulse = 0;
+function startFever() {
+  if (fever || state !== 'play' || player.dead || fatal) return;
+  fever = { t: FEVER_TIME, beat: 0 };
+  meta.fever = 0; saveMeta();
+  banner = { str: '🔥 FEVER TIME! 다이너마이트 무제한 · 점수 ×2', t: 2.6 };
+  shake = Math.max(shake, 8); flash = Math.max(flash, 0.8); hitStop = Math.max(hitStop, 0.12);
+  [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, 0.12, 0.09, 'square', null, i * 0.06));
+  vibrate([100, 50, 100, 50, 200]);
+  // 수영객은 물 밖으로
+  if (swimmer && !swimmer.dead) { for (let i = 0; i < 10; i++) parts.push({ x: swimmer.x, y: swimmer.y, z: 0, vx: rand(-10, 10), vy: rand(-6, 6), vz: rand(20, 50), life: 0.6, max: 0.6, type: 'drop' });
+    texts.push(mkText(swimmer.x, swimmer.y - 12, '🏊 수영객은 잠시 물 밖으로', '#ffb3e6', 1.0)); swimmer = null; swimT = rand(25, 40); }
+  // 호수가 얕게 뜬 물고기로 가득
+  const kinds = ['crucian', 'crucian', 'crucian', 'carp', 'carp', 'carp', 'catfish', 'crucian', 'carp', 'crucian'];
+  for (const k of kinds) {
+    spawnSchool(k, false);
+    const sc = schools[schools.length - 1];
+    sc.fever = true; sc.mult = 0.7; sc.depth = sc.td = rand(0.06, 0.32); sc.dT = 99;
+    for (const f of sc.fish) f.depth = sc.depth;
+  }
+  for (const sc of schools) if (!sc.transit) { sc.td = Math.min(sc.td, 0.4); sc.scared = 0; }
+}
+function updateFever(dt) {
+  feverPulse = Math.max(0, feverPulse - dt);
+  if (!fever) return;
+  fever.t -= dt; fever.beat -= dt;
+  if (fever.beat <= 0) { fever.beat = fever.t < 3 ? 0.25 : 0.5; tone(fever.t < 3 ? 1046 : 784, 0.05, 0.05, 'square'); } // 둥둥 박자, 끝나갈수록 빠르게
+  if (Math.random() < dt * 6) { const x = rand(0, VW), y = rand(0, SHORE); ripples.push({ x, y, r: 0, max: 5, life: 0.6 }); } // 물이 들끓는다
+  if (fever.t <= 0) endFever();
+}
+function endFever() {
+  fever = null;
+  banner = { str: '피버 종료! 게이지는 처음부터', t: 2 };
+  tone(784, 0.12, 0.07, 'triangle'); tone(523, 0.2, 0.07, 'triangle', null, 0.12);
+  for (const sc of schools) if (sc.fever) { sc.transit = true; sc.mult = 2.2; sc.wa = sc.x < VW / 2 ? Math.PI : 0; } // 남은 떼는 빠져나간다
+}
+
 // ===== 🧰 보물상자: 바닥에 가라앉아 있다가 폭발에 휘말리면 떠올라 열린다 =====
 let chests = [], chestQueue = 0, chestT = 0, pendingBlasts = [];
 const LOOT = [
@@ -860,7 +903,7 @@ function updateSwimmer(dt) {
   }
   if (!swimmer) {
     swimT -= dt;
-    if (swimT <= 0 && !fatal) spawnSwimmer();
+    if (swimT <= 0 && !fatal && !fever) spawnSwimmer();
     return;
   }
   const w = swimmer;
@@ -1354,7 +1397,7 @@ function addScore(n) { score = Math.max(0, score + n); dayScore += n; }
 
 // ===== 폭발 =====
 function explode(x, y, depth, rs = 1, quiet = false) {
-  const ex = { x, y, depth, kills: 0, pts: 0, t: 0, mult: streakMult(streak), rs, quiet };
+  const ex = { x, y, depth, kills: 0, pts: 0, t: 0, mult: streakMult(streak) * (fever ? 2 : 1), rs, quiet, fever: !!fever };
   combos.push(ex);
   const ed = Math.max(0, depth), rr = (depth < 0 ? R * 0.7 : R) * rs;
   for (const f of fish) {
@@ -1384,7 +1427,7 @@ function explode(x, y, depth, rs = 1, quiet = false) {
   flash = Math.max(flash, 0.25 + surf * 0.5 + Math.min(0.4, K * 0.03));
   if (K > 0 && !quiet) {
     hitStop = Math.max(hitStop, 0.04 + Math.min(0.12, K * 0.007));          // 히트스톱
-    if (K >= 10) { slowDur = slowT = 0.7 + Math.min(0.5, K * 0.02); camFocus = { x, y }; } // 슬로모션 + 줌인
+    if (K >= (fever ? 20 : 10)) { slowDur = slowT = 0.7 + Math.min(0.5, K * 0.02); camFocus = { x, y }; } // 슬로모션 + 줌인
     if (K >= 5) { tone(42, 1.0, 0.55, 'sine', 22); noiseBurst(0.5, 3500, 0.3, 'highpass'); } // 묵직한 저음 + 쩍 갈라지는 소리
     for (let i = 0; i < Math.min(30, K * 2); i++) parts.push({ x: x + rand(-6, 6), y: y + rand(-4, 4), z: rand(2, 8), vx: rand(-40, 40), vy: rand(-30, 20), vz: rand(60, 150), life: rand(0.8, 1.4), max: 1.4, type: 'drop' });
   }
@@ -1474,12 +1517,12 @@ cvs.addEventListener('pointerdown', e => {
   // 원격 기폭: 물속에 원격탄이 있으면 탭 = 폭발
   const rb = bombs.find(b2 => b2.type === 'remote' && b2.state === 'water');
   if (rb) { rb.fuse = 0; tone(1400, 0.06, 0.1, 'square'); tone(1800, 0.06, 0.1, 'square', null, 0.06); return; }
-  if (dyn <= 0) return;
+  if (dyn <= 0 && !fever) return;
   try { cvs.setPointerCapture(e.pointerId); } catch (err) {}
   const p = ptr(e);
   const type = selAmmo !== 'basic' && meta.ammo[selAmmo] > 0 ? selAmmo : 'basic';
-  hold = { id: e.pointerId, sx: p.x, sy: p.y, cx: p.x, cy: p.y, fuse: FUSE, type };
-  dyn--;
+  hold = { id: e.pointerId, sx: p.x, sy: p.y, cx: p.x, cy: p.y, fuse: FUSE, type, free: !!fever };
+  if (!hold.free) dyn--;   // 피버 중엔 다이너마이트가 줄지 않는다
   if (type !== 'basic') { meta.ammo[type]--; saveMeta(); }
   if (type === 'remote') tone(900, 0.08, 0.06, 'square'); else sfx.light();
 });
@@ -1492,7 +1535,7 @@ function release(e) {
   const h = hold; hold = null;
   const a = aimInfo(h);
   if (a.len < 6) { // 거의 안 당겼으면 취소
-    dyn++;
+    if (!h.free) dyn++;
     if (h.type !== 'basic') { meta.ammo[h.type]++; saveMeta(); }
     texts.push(mkText(player.x, player.y - 18, '불 끔', '#cfd8dc', 1));
     return;
@@ -1584,6 +1627,7 @@ function update(dt) {
   updateBig(dt);
   updateSwimmer(dt);
   updateChests(dt);
+  updateFever(dt);
   tunaT -= dt;
   if (tunaT <= 0 && !fatal) { spawnTuna(); tunaT = rand(18, 30) * Math.max(0.5, 1 - (day - 1) * 0.08); }
   rareT -= dt;
@@ -1617,7 +1661,7 @@ function update(dt) {
       if (msg) texts.push(mkText(c.x, c.y - 14, msg, col, c.kills >= 9 ? 1.8 : 1.3, c.kills >= 4));
       // 실력 보상: 한 방에 많이 잡으면 다이너마이트 환급
       const earned = (c.kills >= 12 ? 2 : c.kills >= 6 ? 1 : 0) + (c.bigKill ? 2 : 0);
-      const refund = Math.min(earned, REFUND_CAP - refundsToday); // 하루 상한
+      const refund = c.fever ? 0 : Math.min(earned, REFUND_CAP - refundsToday); // 하루 상한 (피버 중엔 환급 없음)
       if (refund > 0) {
         dyn += refund; refundsToday += refund; sfx.bonus();
         texts.push(mkText(c.x, c.y + 4, `+${refund} 다이너마이트!` + (refundsToday >= REFUND_CAP ? ' (오늘 환급 끝)' : ''), '#ff9f43', 1.3, true));
@@ -1628,6 +1672,12 @@ function update(dt) {
       if (c.kills >= 3) {
         streak++;
         if (streak >= 2) texts.push(mkText(c.x, c.y + 14, `연속 ${streak}! 점수 x${streakMult(streak)}`, '#ffb3e6', 1.05));
+        if (streak >= 2 && !fever && !c.fever) { // 연속 명중만 피버 게이지를 채운다
+          const g = Math.min(streak, 5);
+          meta.fever = Math.min(FEVER_MAX, meta.fever + g); feverPulse = 0.5; saveMeta();
+          texts.push(mkText(c.x, c.y + 24, `🔥 피버 +${g}`, '#ff9a3a', 1.0));
+          if (meta.fever >= FEVER_MAX) startFever();
+        }
       } else if (streak > 0) {
         if (streak >= 2) texts.push(mkText(c.x, c.y + 14, '연속 끊김', '#9aa', 0.95));
         streak = 0;
@@ -1649,7 +1699,7 @@ function update(dt) {
     if (fatal.t > 2.6) endGame(fatal.reason);
     return;
   }
-  const busy = chests.some(c => c.state !== 'bottom') || pendingBlasts.length || (nuke && !nuke.done) || hold || bombs.length || combos.length || fish.some(f => f.state === 'rise' || f.state === 'fly' || f.state === 'float') || (big && big.dead);
+  const busy = !!fever || chests.some(c => c.state !== 'bottom') || pendingBlasts.length || (nuke && !nuke.done) || hold || bombs.length || combos.length || fish.some(f => f.state === 'rise' || f.state === 'fly' || f.state === 'float') || (big && big.dead);
   if (dyn <= 0 && !busy) { endT += dt; if (endT > 1.3) { startEvening(dayScore >= target); } } else endT = 0;
 }
 
@@ -1779,7 +1829,7 @@ function updateFish(dt) {
         f.state = 'got';
         const pts = Math.round(f.sp.pts * (f.ex ? f.ex.mult : 1));
         addScore(pts); stats.fish++; stats.kinds[f.kind]++;
-        todayChips += toCoins((CHIP[f.kind] || 1) * (f.ex ? f.ex.mult : 1)); // 연속 명중 배율은 생선칩에도
+        todayChips += toCoins((CHIP[f.kind] || 1) * (f.ex ? f.ex.mult / (f.ex.fever ? 2 : 1) : 1)); // 연속 명중 배율은 생선칩에도
         todayKinds[f.kind] = (todayKinds[f.kind] || 0) + 1;
         recordDex(f.kind, f.x, f.y);
         if (f.sp.rare) { texts.push(mkText(f.x, f.y - 10, `✨ ${f.sp.name}!`, '#ffd23f', 1.6, true)); sfx.bonus(); }
@@ -2156,6 +2206,7 @@ function render() {
   drawBombs(false);
   drawParts();
 
+  if (fever) { b.fillStyle = `rgba(255,180,50,${0.1 + Math.sin(time * 8) * 0.04})`; b.fillRect(0, 0, VW, SHORE); }
   if (radiation > 0) { b.fillStyle = `rgba(120,255,90,${radiation * 0.22 * (0.8 + Math.sin(time * 3) * 0.2)})`; b.fillRect(0, 0, VW, SHORE); }
   if (nuke && !nuke.done) { b.fillStyle = `rgba(255,0,0,${0.12 + Math.sin(time * 12) * 0.08})`; b.fillRect(0, 0, VW, VH); }
   if (nukeFlash > 0) { b.fillStyle = `rgba(255,255,245,${Math.min(1, nukeFlash)})`; b.fillRect(0, 0, VW, VH); }
@@ -2354,11 +2405,25 @@ function drawHUD() {
   }
   if (streak >= 1) txt(`🔥 연속 ${streak} · 점수 x${streakMult(streak)}`, W / 2, 20, u * 1.2, '#ffb3e6', 'center');
   // 다이너마이트 개수
-  for (let i = 0; i < dyn; i++) {
+  for (let i = 0; i < (fever ? 0 : dyn); i++) {
     const x = W - 18 - i * u * 1.6, y = 12;
     ctx.fillStyle = '#000'; ctx.fillRect(x - 1, y - 1, u * 0.9 + 2, u * 2.2 + 2);
     ctx.fillStyle = '#d0362a'; ctx.fillRect(x, y, u * 0.9, u * 2.2);
     ctx.fillStyle = '#f4ead2'; ctx.fillRect(x, y + u * 0.8, u * 0.9, u * 0.4);
+  }
+  if (state === 'play') { // 🔥 피버 게이지 (연속 명중으로만 찬다)
+    const gw = Math.min(W * 0.34, 170), gh = Math.max(7, u * 0.8), gx = W - 14 - gw, gy = 18 + u * 4.7;
+    const k = fever ? fever.t / FEVER_TIME : meta.fever / FEVER_MAX;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(gx - 2, gy - 2, gw + 4, gh + 4);
+    const gg = ctx.createLinearGradient(gx, 0, gx + gw, 0); gg.addColorStop(0, '#ff5b2a'); gg.addColorStop(1, '#ffd23f');
+    ctx.fillStyle = gg; ctx.fillRect(gx, gy, gw * k, gh);
+    if (feverPulse > 0 || (!fever && k > 0.8)) { ctx.strokeStyle = `rgba(255,220,120,${0.5 + Math.sin(time * 10) * 0.4})`; ctx.lineWidth = 2; ctx.strokeRect(gx - 3, gy - 3, gw + 6, gh + 6); }
+    txt(fever ? `🔥 FEVER ${Math.ceil(fever.t)}초` : `🔥 피버 ${Math.floor(meta.fever)}/${FEVER_MAX}`, W - 14, gy + gh + u * 0.9, u * 1.0, fever ? '#ffd23f' : '#ffb07a', 'right');
+  }
+  if (fever) { // 화면 테두리가 금빛으로 맥박친다
+    ctx.strokeStyle = `rgba(255,${170 + Math.sin(time * 12) * 60 | 0},40,${0.55 + Math.sin(time * 12) * 0.25})`; ctx.lineWidth = Math.max(6, u * 0.9);
+    ctx.strokeRect(0, 0, W, cvs.height);
+    if (fever.t < 3) txt(`${Math.ceil(fever.t)}`, W / 2, cvs.height * 0.22, u * 4, '#fff36a', 'center');
   }
   if (state === 'play') { // 오늘 남은 환급
     const left = REFUND_CAP - refundsToday;
@@ -2372,7 +2437,8 @@ function drawHUD() {
     ctx.fillStyle = big.flash > 0 ? '#fff' : '#e8473a'; ctx.fillRect(bx, by, bw * big.hp / big.maxHp, bh);
     ctx.fillStyle = 'rgba(0,0,0,0.5)'; for (let i = 1; i < big.maxHp; i++) ctx.fillRect(bx + bw * i / big.maxHp - 1, by, 2, bh);
   }
-  if (dyn === 0 && !hold) txt('다이너마이트 소진', W - 14, 22, u * 1.1, '#f88', 'right');
+  if (fever) txt('∞ 무제한!', W - 14, 22, u * 1.4, '#ffd23f', 'right');
+  else if (dyn === 0 && !hold) txt('다이너마이트 소진', W - 14, 22, u * 1.1, '#f88', 'right');
 
   if (hold && hold.type === 'remote') {
     txt('📡 원격 기폭탄 · 놓은 뒤 화면을 탭하면 폭발', W / 2, cvs.height * 0.16, u * 1.15, '#7dff9e', 'center');
@@ -2571,6 +2637,7 @@ const RULES = [
   ['💀', '손에서 터지면 끝', '도화선을 끝까지 쥐고 있으면 <b>손에서 터져 그대로 게임 오버</b>. 부적으로도 못 살립니다.'],
   ['🦈', '거대한 그림자', '<b>상어</b> 2발 = +500 · <b>대왕오징어</b> 촉수 3발 = +1000. <b>고래</b>는 보호종이라 맞히면 -300. 물을 뿜으면 고래입니다.'],
   ['📅', '하루와 목표', '하루에 다이너마이트 <b>6개</b>. 그날 <b>목표 점수</b>를 넘기면 다음 날로. 넘긴 점수 <b>100점마다</b> 내일 다이너마이트 +1.'],
+  ['🔥', '피버 타임', '<b>연속 명중</b>(3마리 이상을 연달아)할 때만 피버 게이지가 찹니다(2연속 +2 … 최대 +5). 게이지는 <b>날이 바뀌어도 남고</b>, 다 차면 <b>10초 피버</b>: 호수가 얕은 물고기로 가득, <b>다이너마이트 무제한</b>, 점수 ×2! 끝나면 게이지는 처음부터.'],
   ['🧰', '보물상자', '하루 1~3개가 <b>호수 바닥</b>에 가라앉아 있습니다. 흐린 네모 그림자와 <b>금빛 반짝임</b>을 찾아 <b>깊게</b> 터뜨리세요. 동전, 생선칩, 특수탄, 다이너마이트, 드물게 <b>핵폭탄</b>… 가끔은 <b>불발탄</b>이 들어 있어 큰 2차 폭발이!'],
   ['🎯', '실력 보상', '한 방에 <b>6마리 이상</b>이면 다이너마이트 환급(12마리 이상 2개). 단, <b>하루 최대 3개</b>까지(오른쪽 위 ●). 3마리 이상을 <b>연속</b>으로 잡으면 점수와 <b>생선칩</b>이 최대 2배.'],
   ['⚡', '황다랑어', '가끔 <b>아주 빠른 그림자</b>가 호수를 가로지릅니다. 황다랑어 한 마리 <b>150점</b>. 지나갈 길목을 미리 노리세요.'],
@@ -3163,7 +3230,7 @@ twoStep('resetGear', '장비만 초기화', '정말? 한 번 더 누르면 실�
   renderShop();
 });
 twoStep('resetAll', '처음부터 다시', '정말? 모든 기록이 지워집니다', () => {
-  meta = { coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0 }, dex: {}, nukes: 0, ammo: { remote: 2, cluster: 2, bait: 2 }, chips: 40, jp: { mini: JP.mini.seed, major: JP.major.seed, grand: JP.grand.seed } };
+  meta = { coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0 }, dex: {}, nukes: 0, ammo: { remote: 2, cluster: 2, bait: 2 }, chips: 40, jp: { mini: JP.mini.seed, major: JP.major.seed, grand: JP.grand.seed }, fever: 0 };
   saveMeta(); applyUpgrades();
   best = 0; bestDay = 0;
   try { localStorage.removeItem('dynfish_best'); localStorage.removeItem('dynfish_bestday'); } catch (e) {}
@@ -3203,7 +3270,7 @@ requestAnimationFrame(frame);
 
 // 디버그/테스트용 훅
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; },
-  get fish() { return fish.length; }, get chips() { return eveChips; }, spawnChestAt: (x, y) => { spawnChest(); const c = chests[chests.length - 1]; c.x = x; c.y = y; c.depth = 0.95; }, chestsInfo: () => chests.map(c => ({ state: c.state, loot: c.loot })), setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotSim: n => slotSim(n), get jp() { return meta.jp; }, forceJP: t => { rollJP.force = t; }, forceGrid: g => { forcedGrid = g; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), spawnKind: k => spawnSchool(k, false), giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
+  get fish() { return fish.length; }, get chips() { return eveChips; }, setFever: n => { meta.fever = n; }, get fever() { return fever ? fever.t : null; }, get feverGauge() { return meta.fever; }, startFever: () => startFever(), spawnChestAt: (x, y) => { spawnChest(); const c = chests[chests.length - 1]; c.x = x; c.y = y; c.depth = 0.95; }, chestsInfo: () => chests.map(c => ({ state: c.state, loot: c.loot })), setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotSim: n => slotSim(n), get jp() { return meta.jp; }, forceJP: t => { rollJP.force = t; }, forceGrid: g => { forcedGrid = g; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), spawnKind: k => spawnSchool(k, false), giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
 </script>
 </body>
