@@ -557,7 +557,7 @@ const JP = {
   grand: { name: 'GRAND', seed: 800, rate: 0.015, odds: 30000 },
 };
 // 🔥 피버 게이지: 연속 명중으로만 차고, 날이 바뀌어도/게임이 끝나도 남는다
-const FEVER_MAX = 60, FEVER_TIME = 10, FEVER_FISH = 230;   // 피버: 10초, 호수에 물고기 약 230마리 유지
+const FEVER_MAX = 60, FEVER_TIME = 10, FEVER_FISH = 170;   // 피버: 10초, 호수에 물고기 약 230마리 유지
 if (typeof meta.fever !== 'number') meta.fever = 0;
 if (typeof meta.bestMile !== 'number') meta.bestMile = 0;   // 처음 도달한 이정표(최초 돌파 보너스용)
 // 🤖 동료: 고용한 로봇과 장착 슬롯
@@ -1266,6 +1266,8 @@ function startFever() {
   fever.refill = 0;
 }
 let feverIntro = -1;
+let fwTick = 0;
+function fwFlying() { let n = 0; for (const f of fish) if (f.fw && f.state === 'fly') n++; return n; }
 function feverSchool(fromEdge, x, y) {
   const r = Math.random();
   const k = r < 0.5 ? 'crucian' : r < 0.85 ? 'carp' : 'catfish';
@@ -2134,13 +2136,13 @@ function explode(x, y, depth, rs = 1, quiet = false, safe = false) {
   shake = Math.max(shake, 3 + surf * 5 + Math.min(9, K * 0.4));
   flash = Math.max(flash, 0.25 + surf * 0.5 + Math.min(0.4, K * 0.03));
   if (ex.fever) { // 🎆 폭발 자체도 불꽃놀이
-    fwBurst(x, y, 6, 70 + Math.min(80, K * 4), 110);
-    fwBurst(x, y, 10, 30, 55, rand(0, 360));   // 안쪽 한 겹 더
+    fwBurst(x, y, 6, 24 + Math.min(20, K), 110);
+    fwBurst(x, y, 10, 10, 55, rand(0, 360));   // 안쪽 한 겹 더
     for (let i = 0; i < 3; i++) setTimeout(() => noiseBurst(0.05, 6000, 0.12, 'highpass'), 120 + i * 90 + Math.random() * 60); // 팡팡 터지는 소리
   }
   if (K > 0 && !quiet) {
-    hitStop = Math.max(hitStop, 0.04 + Math.min(0.12, K * 0.007));          // 히트스톱
-    if (K >= (fever ? 20 : 10)) { slowDur = slowT = 0.7 + Math.min(0.5, K * 0.02); camFocus = { x, y }; } // 슬로모션 + 줌인
+    if (!fever) hitStop = Math.max(hitStop, 0.04 + Math.min(0.12, K * 0.007));          // 히트스톱 (피버 땐 템포 우선)
+    if (!fever && K >= 10) { slowDur = slowT = 0.7 + Math.min(0.5, K * 0.02); camFocus = { x, y }; } // 슬로모션 + 줌인
     if (K >= 5) { tone(42, 1.0, 0.55, 'sine', 22); noiseBurst(0.5, 3500, 0.3, 'highpass'); } // 묵직한 저음 + 쩍 갈라지는 소리
     for (let i = 0; i < Math.min(30, K * 2); i++) parts.push({ x: x + rand(-6, 6), y: y + rand(-4, 4), z: rand(2, 8), vx: rand(-40, 40), vy: rand(-30, 20), vz: rand(60, 150), life: rand(0.8, 1.4), max: 1.4, type: 'drop' });
   }
@@ -2526,12 +2528,12 @@ function updateFish(dt) {
         const a = Math.atan2(f.y - (f.by ?? f.y), f.x - (f.bx ?? f.x)) + rand(-0.5, 0.5), sp = rand(...P.sp);
         f.fvx = Math.cos(a) * sp; f.fvy = Math.sin(a) * sp * 0.6; f.vz = rand(...P.vz);
         f.rot = rand(0, TAU); f.spin = rand(-P.spin, P.spin) || P.spin;
-        if (f.ex && f.ex.fever) { // 🎆 피버: 사방으로 불꽃처럼 튄다
+        if (f.ex && f.ex.fever && fwFlying() < 14) { // 🎆 피버: 사방으로 불꽃처럼 튄다 (화면이 안 보일 만큼은 말고)
           const fa = rand(0, TAU), fs = rand(55, 140);
           f.fvx = Math.cos(fa) * fs; f.fvy = Math.sin(fa) * fs * 0.8; f.vz = rand(150, 260); f.spin = rand(-30, 30);
           f.fw = true; f.hue = rand(0, 360); f.bounces = 0;
-          fwBurst(f.x, f.y, 2, 6, 40, f.hue);
-        }
+          fwBurst(f.x, f.y, 2, 4, 40, f.hue);
+        } else if (f.ex && f.ex.fever) { f.vz *= 0.6; f.fvx *= 0.5; f.fvy *= 0.5; }   // 나머지는 낮게 튀어 금방 떨어진다
         for (let i = 0; i < 5; i++) parts.push({ x: f.x, y: f.y, z: 0, vx: rand(-12, 12), vy: rand(-8, 8), vz: rand(30, 70), life: 0.5, max: 0.5, type: 'drop' });
       }
     } else if (f.state === 'fly') {
@@ -2541,20 +2543,20 @@ function updateFish(dt) {
         parts.push({ x: f.x + rand(-1, 1), y: f.y, z: f.z, vx: 0, vy: 0, vz: -4, life: 0.35, max: 0.35, type: P.trail === '#ffd23f' ? 'glint' : 'streak' });
       if (f.fw) {
         f.hue = (f.hue + dt * 400) % 360;
-        for (let i = 0; i < 2; i++) if (Math.random() < dt * 40) parts.push({ x: f.x + rand(-1.5, 1.5), y: f.y, z: f.z + rand(-1, 1), vx: rand(-6, 6), vy: rand(-4, 4), vz: rand(-10, 6), life: rand(0.4, 0.8), max: 0.8, type: 'fw', hue: f.hue + rand(-20, 20) });
+        if (Math.random() < dt * 25) parts.push({ x: f.x + rand(-1.5, 1.5), y: f.y, z: f.z + rand(-1, 1), vx: rand(-6, 6), vy: rand(-4, 4), vz: rand(-10, 6), life: rand(0.3, 0.6), max: 0.6, type: 'fw', hue: f.hue + rand(-20, 20) });
         // 화면 가장자리에 맞으면 반사 (위·좌·우·아래)
         const nx = f.x + f.fvx * dt, ny = f.y + f.fvy * dt;
         let hit = false;
         if (nx < 3 || nx > VW - 3) { f.fvx = -f.fvx * 0.9; hit = true; }
         if (ny < 3 || ny > SHORE - 5) { f.fvy = -f.fvy * 0.9; hit = true; }
         if (f.y - f.z < 4 && f.vz > 0) { f.vz = -f.vz * 0.7; hit = true; }       // 화면 위쪽 천장
-        if (hit) { fwBurst(clamp(f.x, 3, VW - 3), f.y, f.z, 8, 30, f.hue); f.spin = -f.spin * 1.2; tone(1200 + Math.random() * 800, 0.03, 0.04, 'square'); }
+        if (hit) { fwBurst(clamp(f.x, 3, VW - 3), f.y, f.z, 5, 30, f.hue); f.spin = -f.spin * 1.2; if (time - (fwTick || 0) > 0.07) { fwTick = time; tone(1200 + Math.random() * 800, 0.03, 0.04, 'square'); } }
       }
       f.x = clamp(f.x + f.fvx * dt, 3, VW - 3); f.y = clamp(f.y + f.fvy * dt, 3, SHORE - 5);
       if (f.fw && f.z <= 0 && f.vz < 0 && f.bounces < 2 && f.vz < -60) { // 물에 맞고 한두 번 더 튄다
         f.z = 0; f.vz = -f.vz * 0.55; f.bounces++; f.fvx *= 0.8; f.fvy *= 0.8;
-        ripples.push({ x: f.x, y: f.y, r: 1, max: 8, life: 0.5 }); fwBurst(f.x, f.y, 1, 10, 35, f.hue);
-        noiseBurst(0.04, 5000, 0.08, 'highpass');
+        ripples.push({ x: f.x, y: f.y, r: 1, max: 8, life: 0.5 }); fwBurst(f.x, f.y, 1, 5, 35, f.hue);
+        if (time - (fwTick || 0) > 0.07) { fwTick = time; noiseBurst(0.04, 5000, 0.08, 'highpass'); }
       }
       if (f.z <= 0 && f.vz < 0) { // 철퍽! 착수
         f.z = 0; f.state = 'float'; f.ft = 0; f.ang = f.rot;
@@ -2843,14 +2845,16 @@ function drawAimGuide() {
   const a = aimInfo(hold);
   if (a.len < 4) return;
   const arc = 14 + a.fd * 0.22;
-  b.fillStyle = 'rgba(255,255,255,0.8)';
+  const bold = !!fever;   // 피버 땐 화면이 정신없으니 조준선을 굵고 진하게
   for (let t = 0.06; t < 1; t += 0.07) {
     const x = lerp(a.hx, a.lx, t), y = lerp(a.hy, a.ly, t) - arc * 4 * t * (1 - t);
-    b.fillRect(Math.round(x), Math.round(y), 1, 1);
+    if (bold) { b.fillStyle = 'rgba(0,0,0,0.85)'; b.fillRect(Math.round(x) - 1, Math.round(y) - 1, 3, 3); }
+    b.fillStyle = bold ? '#fff' : 'rgba(255,255,255,0.8)'; b.fillRect(Math.round(x), Math.round(y), 1, 1);
   }
   const zc = ZONES[zoneOf(a.pdepth)].col;
-  b.strokeStyle = zc; b.lineWidth = 1;
-  b.globalAlpha = 0.5 + Math.sin(time * 10) * 0.2;
+  if (bold) { b.strokeStyle = 'rgba(0,0,0,0.85)'; b.lineWidth = 3; b.beginPath(); b.ellipse(a.lx, a.ly, R, R * 0.8, 0, 0, TAU); b.stroke(); }
+  b.strokeStyle = bold ? '#fff' : zc; b.lineWidth = 1;
+  b.globalAlpha = bold ? 1 : 0.5 + Math.sin(time * 10) * 0.2;
   b.beginPath(); b.ellipse(a.lx, a.ly, R, R * 0.8, 0, 0, TAU); b.stroke();
   b.globalAlpha = 1;
   b.fillStyle = zc; b.fillRect(Math.round(a.lx) - 1, Math.round(a.ly), 3, 1); b.fillRect(Math.round(a.lx), Math.round(a.ly) - 1, 1, 3);
@@ -2975,9 +2979,9 @@ function render() {
   drawPier();
   drawPirs();
   if (state === 'play' || state === 'end' || state === 'clear') { drawRobots(); drawTurrets(); drawPlayer(); drawSniper(); }
-  drawAimGuide();
   drawBombs(false);
   drawParts();
+  drawAimGuide();   // 파편·불꽃 위에 그려서 조준이 항상 보이게
 
   if (fever) { b.fillStyle = `rgba(255,180,50,${0.1 + Math.sin(time * 8) * 0.04})`; b.fillRect(0, 0, VW, SHORE); }
   if (radiation > 0) { b.fillStyle = `rgba(120,255,90,${radiation * 0.22 * (0.8 + Math.sin(time * 3) * 0.2)})`; b.fillRect(0, 0, VW, SHORE); }
