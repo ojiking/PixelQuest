@@ -264,6 +264,7 @@
     </ol>
     <div class="coins" id="startCoins"></div>
     <div class="btns"><button id="startBtn">시작</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button><button class="ghost" data-crew>🤖 동료·터렛</button></div>
+    <button class="link" id="feverTry">🔥 피버타임 체험하기 (연습 · 기록 저장 안 됨)</button>
     <button class="link" id="rulesBtn">📖 자세한 규칙 보기</button>
     <a class="home" href="/">← PixelQuest로 돌아가기</a>
   </div>
@@ -635,7 +636,7 @@ function recordDex(id, x, y) {
   }
   saveMeta();
 }
-function saveMeta() { try { localStorage.setItem('dynfish_meta', JSON.stringify(meta)); } catch (e) {} }
+function saveMeta() { if (practice) return; try { localStorage.setItem('dynfish_meta', JSON.stringify(meta)); } catch (e) {} }
 // 예전 장비 단계 → 새 단계 (효과가 줄지 않게)
 if ((meta.upVer || 1) < 2) {
   meta.up.power = [0, 2, 4, 5][meta.up.power] ?? meta.up.power;   // +10%/단계 → +6%/단계
@@ -1292,6 +1293,7 @@ function updateFever(dt) {
 }
 function endFever() {
   fever = null; feverIntro = -1;
+  if (practice) { banner = { str: '체험 끝! 처음 화면으로 돌아갑니다', t: 3 }; setTimeout(endPractice, 2500); }
   banner = { str: '피버 종료! 게이지는 처음부터', t: 2 };
   tone(784, 0.12, 0.07, 'triangle'); tone(523, 0.2, 0.07, 'triangle', null, 0.12);
   for (const sc of schools) if (sc.fever) { sc.transit = true; sc.mult = 2.2; sc.wa = sc.x < VW / 2 ? Math.PI : 0; } // 남은 떼는 빠져나간다
@@ -3330,6 +3332,7 @@ document.getElementById('mileBtn').addEventListener('click', () => {
 });
 
 function startEvening(success) {
+  if (practice) { state = 'clear'; endPractice(); return; }
   state = 'clear';
   if (hiss) hiss.g.gain.setTargetAtTime(0, ac.currentTime, 0.03);
   eveFail = !success;
@@ -3439,6 +3442,7 @@ function retryDay() {
   endOv.classList.add('hidden');
 }
 function endGame(reason) {
+  if (practice) { state = 'end'; banner = { str: '체험 끝! 처음 화면으로 돌아갑니다', t: 3 }; setTimeout(endPractice, 1500); return; }
   state = 'end';
   const blast = reason === 'blast', murder = reason === 'murder';
   todayChips = 0; eveChips = 0; // 즉사하면 그날 잡은 생선도 끝
@@ -3474,6 +3478,17 @@ function endGame(reason) {
   endOv.classList.remove('hidden');
 }
 document.getElementById('startBtn').addEventListener('click', startGame);
+// 🔥 피버 체험: 저장 상태를 떠 두고 바로 피버로 들어간다. 끝나면 원래 저장으로 되돌리고 처음 화면으로
+var practice = null;   // var: saveMeta가 먼저 불려도 안전
+document.getElementById('feverTry').addEventListener('click', () => {
+  practice = { save: localStorage.getItem('dynfish_meta'), gauge: meta.fever };
+  startGame();
+  setTimeout(() => { startFever(); banner = { str: '🔥 피버 체험 중 · 끝나면 처음 화면으로 (저장 안 됨)', t: 3 }; }, 400);
+});
+function endPractice() {
+  try { if (practice.save === null) localStorage.removeItem('dynfish_meta'); else localStorage.setItem('dynfish_meta', practice.save); } catch (e) {}
+  location.reload();
+}
 document.getElementById('againBtn').addEventListener('click', startGame);
 document.getElementById('nextBtn').addEventListener('click', nextDay);
 document.getElementById('charmBtn').addEventListener('click', retryDay);
