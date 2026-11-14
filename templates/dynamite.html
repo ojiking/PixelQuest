@@ -554,7 +554,7 @@ const JP = {
   grand: { name: 'GRAND', seed: 800, rate: 0.015, odds: 30000 },
 };
 // 🔥 피버 게이지: 연속 명중으로만 차고, 날이 바뀌어도/게임이 끝나도 남는다
-const FEVER_MAX = 60, FEVER_TIME = 10;
+const FEVER_MAX = 60, FEVER_TIME = 22, FEVER_FISH = 230;   // 피버: 22초, 호수에 물고기 약 230마리 유지
 if (typeof meta.fever !== 'number') meta.fever = 0;
 if (typeof meta.bestMile !== 'number') meta.bestMile = 0;   // 처음 도달한 이정표(최초 돌파 보너스용)
 // 🤖 동료: 고용한 로봇과 장착 슬롯
@@ -1242,33 +1242,52 @@ function startFever() {
   if (fever || state !== 'play' || player.dead || fatal) return;
   fever = { t: FEVER_TIME, beat: 0 };
   meta.fever = 0; saveMeta();
-  banner = { str: '🔥 FEVER TIME! 다이너마이트 무제한 · 점수 ×2', t: 2.6 };
+  feverIntro = 0;   // 화면 가득 FEVER TIME 연출 (HUD에서 그림)
   shake = Math.max(shake, 8); flash = Math.max(flash, 0.8); hitStop = Math.max(hitStop, 0.12);
   [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, 0.12, 0.09, 'square', null, i * 0.06));
   vibrate([100, 50, 100, 50, 200]);
+  for (let i = 0; i < 6; i++) fwBurst(rand(20, VW - 20), rand(20, SHORE - 30), rand(6, 14), 40, rand(80, 130));
+  noiseBurst(0.8, 5000, 0.3, 'highpass'); tone(60, 0.8, 0.5, 'sine', 30);
   // 수영객은 물 밖으로
   if (swimmer && !swimmer.dead) { for (let i = 0; i < 10; i++) parts.push({ x: swimmer.x, y: swimmer.y, z: 0, vx: rand(-10, 10), vy: rand(-6, 6), vz: rand(20, 50), life: 0.6, max: 0.6, type: 'drop' });
     texts.push(mkText(swimmer.x, swimmer.y - 12, '🏊 수영객은 잠시 물 밖으로', '#ffb3e6', 1.0)); swimmer = null; swimT = rand(25, 40); }
-  // 호수가 얕게 뜬 물고기로 가득
-  const kinds = ['crucian', 'crucian', 'crucian', 'carp', 'carp', 'carp', 'catfish', 'crucian', 'carp', 'crucian'];
-  for (const k of kinds) {
-    spawnSchool(k, false);
-    const sc = schools[schools.length - 1];
-    sc.fever = true; sc.mult = 0.7; sc.depth = sc.td = rand(0.06, 0.32); sc.dT = 99;
-    for (const f of sc.fish) f.depth = sc.depth;
+  // 호수가 말 그대로 물고기로 꽉 찬다: 호수 전체를 격자로 나눠 칸마다 떼를 깔아 둔다
+  const COLS = 6, ROWS_F = 5;
+  for (let gy = 0; gy < ROWS_F; gy++) for (let gx = 0; gx < COLS; gx++) {
+    const x = (gx + 0.5) / COLS * VW + rand(-8, 8), y = 18 + (gy + 0.5) / ROWS_F * (SHORE - 40) + rand(-6, 6);
+    feverSchool(false, x, y);
   }
   for (const sc of schools) if (!sc.transit) { sc.td = Math.min(sc.td, 0.4); sc.scared = 0; }
+  fever.refill = 0;
+}
+let feverIntro = -1;
+function feverSchool(fromEdge, x, y) {
+  const r = Math.random();
+  const k = r < 0.5 ? 'crucian' : r < 0.85 ? 'carp' : 'catfish';
+  spawnSchool(k, fromEdge);
+  const sc = schools[schools.length - 1];
+  if (x !== undefined) { const dx = x - sc.x, dy = y - sc.y; sc.x = x; sc.y = y; for (const f of sc.fish) { f.x += dx; f.y += dy; } }
+  if (k === 'carp' && Math.random() < 0.25 && sc.fish[0].kind !== 'goldcarp') { const g = sc.fish[0]; g.kind = 'goldcarp'; g.sp = SPECIES.goldcarp; } // 피버엔 황금잉어도 자주
+  sc.fever = true; sc.mult = 0.7; sc.depth = sc.td = rand(0.06, 0.32); sc.dT = 99;
+  for (const f of sc.fish) f.depth = sc.depth;
 }
 function updateFever(dt) {
   feverPulse = Math.max(0, feverPulse - dt);
   if (!fever) return;
   fever.t -= dt; fever.beat -= dt;
   if (fever.beat <= 0) { fever.beat = fever.t < 3 ? 0.25 : 0.5; tone(fever.t < 3 ? 1046 : 784, 0.05, 0.05, 'square'); } // 둥둥 박자, 끝나갈수록 빠르게
-  if (Math.random() < dt * 6) { const x = rand(0, VW), y = rand(0, SHORE); ripples.push({ x, y, r: 0, max: 5, life: 0.6 }); } // 물이 들끓는다
+  if (Math.random() < dt * 14) { const x = rand(0, VW), y = rand(0, SHORE); ripples.push({ x, y, r: 0, max: 6, life: 0.6 }); } // 물이 들끓는다
+  if (feverIntro >= 0) { feverIntro += dt; if (feverIntro > 2.4) feverIntro = -1; }
+  // 잡아도 잡아도 가장자리에서 계속 몰려 들어와 호수가 비지 않는다
+  if (fever.t > 1.5 && (fever.refill -= dt) <= 0) {
+    fever.refill = 0.25;
+    let n = 0; for (const f of fish) if (f.state === 'swim' && f.school.fever && !f.school.transit) n++;
+    if (n < FEVER_FISH) feverSchool(true);
+  }
   if (fever.t <= 0) endFever();
 }
 function endFever() {
-  fever = null;
+  fever = null; feverIntro = -1;
   banner = { str: '피버 종료! 게이지는 처음부터', t: 2 };
   tone(784, 0.12, 0.07, 'triangle'); tone(523, 0.2, 0.07, 'triangle', null, 0.12);
   for (const sc of schools) if (sc.fever) { sc.transit = true; sc.mult = 2.2; sc.wa = sc.x < VW / 2 ? Math.PI : 0; } // 남은 떼는 빠져나간다
@@ -2971,6 +2990,17 @@ function render() {
 }
 
 const w2s = (x, y) => [cam.fx * (1 - cam.z) + cam.sx + x * S * cam.z, cam.fy * (1 - cam.z) + cam.sy + y * S * cam.z];
+// 불타는 무지개 그라데이션 + 두꺼운 외곽선의 큰 글자
+function feverText(str, x, y, size, hue) {
+  ctx.font = `900 ${size}px system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  const w = ctx.measureText(str).width;
+  ctx.lineWidth = size * 0.22; ctx.strokeStyle = '#3a0a00'; ctx.strokeText(str, x, y + size * 0.06);
+  ctx.lineWidth = size * 0.1; ctx.strokeStyle = '#fff6c0'; ctx.strokeText(str, x, y);
+  const g = ctx.createLinearGradient(x - w / 2, y - size / 2, x + w / 2, y + size / 2);
+  for (let i = 0; i <= 4; i++) g.addColorStop(i / 4, `hsl(${(hue + i * 22) % 60 + 5}, 100%, ${55 + (i % 2) * 12}%)`);
+  ctx.fillStyle = g; ctx.fillText(str, x, y);
+}
 function txt(str, x, y, size, col, align = 'left', stroke = true) {
   ctx.font = `800 ${size}px system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
   ctx.textAlign = align; ctx.textBaseline = 'middle';
@@ -3166,7 +3196,24 @@ function drawHUD() {
   if (fever) { // 화면 테두리가 금빛으로 맥박친다
     ctx.strokeStyle = `rgba(255,${170 + Math.sin(time * 12) * 60 | 0},40,${0.55 + Math.sin(time * 12) * 0.25})`; ctx.lineWidth = Math.max(6, u * 0.9);
     ctx.strokeRect(0, 0, W, cvs.height);
-    if (fever.t < 3) txt(`${Math.ceil(fever.t)}`, W / 2, cvs.height * 0.22, u * 4, '#fff36a', 'center');
+    // 상단 큰 머리글: 🔥 FEVER TIME 🔥 + 남은 초 (계속 꿈틀거림)
+    const hk = 1 + Math.sin(time * 9) * 0.06, hs = Math.min(W * 0.085, u * 3.2) * hk;
+    feverText('🔥 FEVER TIME 🔥', W / 2, cvs.height * 0.17, hs, time * 120);
+    const sec = Math.ceil(fever.t), last = fever.t < 5;
+    txt(`${sec}`, W / 2, cvs.height * 0.17 + hs * 1.05, hs * (last ? 1.4 + (fever.t % 1) * 0.5 : 0.8), last ? '#ff4a2a' : '#fff36a', 'center');
+    // 시작 순간: 화면을 꽉 채우는 FEVER / TIME!! 이 쾅 하고 박힌다
+    if (feverIntro >= 0) {
+      const t = feverIntro, inK = Math.min(1, t / 0.22), out = t > 1.9 ? (t - 1.9) / 0.5 : 0;
+      const sc = (t < 0.22 ? 3.2 - 2.2 * inK : 1 + Math.sin(Math.min(1, (t - 0.22) / 0.3) * Math.PI) * 0.12) * (1 + out * 0.6);
+      ctx.save(); ctx.globalAlpha = 1 - out;
+      ctx.fillStyle = `rgba(255,120,20,${0.28 * (1 - out)})`; ctx.fillRect(0, 0, W, cvs.height);
+      const big = Math.min(W * 0.26, cvs.height * 0.14) * sc;
+      ctx.translate(W / 2, cvs.height * 0.42); ctx.rotate(-0.08 + Math.sin(t * 20) * 0.02 * (1 - inK));
+      feverText('FEVER', 0, -big * 0.55, big, t * 300);
+      feverText('TIME!!', 0, big * 0.5, big * 0.92, t * 300 + 60);
+      txt('다이너마이트 무제한 · 점수 ×2', 0, big * 1.35, Math.max(14, big * 0.2), '#fff', 'center');
+      ctx.restore();
+    }
   }
   if (state === 'play') { // 오늘 남은 환급
     const left = REFUND_CAP - refundsToday;
