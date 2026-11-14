@@ -3820,6 +3820,33 @@ function splash(cls, title, amount, ms) {
 // 💥 슬롯 당첨 연출: 당첨 칸의 물고기가 다이너마이트처럼 터지고, 동전이 지갑으로 휘리릭 날아간다
 const SYM_COL = { '🐟': ['#6fa8dc', '#cfe2f3'], '🐠': ['#ff9a3a', '#ffe08a'], '🐡': ['#e8c35a', '#fff2b0'], '🦑': ['#ff7a9a', '#ffd0dc'],
   '🦈': ['#8a9aa8', '#dfe6ec'], '🐋': ['#4a7ab8', '#bcd6f2'], '👹': ['#d9483b', '#ffb08a'], '🧨': ['#ff4a2a', '#ffd44a'], '☢️': ['#b8ff6a', '#f0ffb0'] };
+const shardCache = {};
+function emojiCanvas(sym, size) {
+  const key = sym + size;
+  if (shardCache[key]) return shardCache[key];
+  const c = document.createElement('canvas'); c.width = c.height = Math.ceil(size * 1.25);
+  const g = c.getContext('2d');
+  g.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(sym, c.width / 2, c.height / 2 + size * 0.05);
+  let alpha = null; try { alpha = g.getImageData(0, 0, c.width, c.height).data; } catch (e) {}
+  return (shardCache[key] = { c, alpha });
+}
+// 물고기가 산산조각: 그림을 불규칙한 조각으로 잘라 사방으로 날린다
+function shatter(sym, x, y, size, power) {
+  const { c, alpha } = emojiCanvas(sym, Math.round(size));
+  const W2 = c.width, n = power >= 2 ? 4 : 3, cs = W2 / n;
+  for (let gy = 0; gy < n; gy++) for (let gx = 0; gx < n; gx++) {
+    const sx = gx * cs, sy = gy * cs;
+    if (alpha) { // 비어 있는 조각은 건너뛴다
+      let filled = 0; for (let yy = 0; yy < cs; yy += 3) for (let xx = 0; xx < cs; xx += 3) if (alpha[((sy + yy | 0) * W2 + (sx + xx | 0)) * 4 + 3] > 40) filled++;
+      if (filled < 3) continue;
+    }
+    const ox = sx + cs / 2 - W2 / 2, oy = sy + cs / 2 - W2 / 2, a = Math.atan2(oy, ox) + (Math.random() - 0.5) * 0.6;
+    const sp = 90 + Math.random() * (130 + power * 60);
+    slotFx.parts.push({ shard: true, img: c, sx, sy, sw: cs, sh: cs, x: x + ox, y: y + oy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 170 - Math.random() * 100,
+      rot: 0, vr: (Math.random() - 0.5) * 12, g: 900, life: 1.0 + Math.random() * 0.4, max: 1.4, s: 0 });
+  }
+}
 const slotFx = { parts: [], coins: [], running: false, counting: false, shown: 0, target: 0, cv: null, ctx: null };
 function fxCanvas() {
   if (!slotFx.cv) {
@@ -3840,9 +3867,11 @@ function fxLoop() {
     const ctx = fxCanvas(); ctx.clearRect(0, 0, innerWidth, innerHeight);
     // 파편 / 물방울 / 불꽃
     for (const p of slotFx.parts) {
-      p.life -= dt; p.vy += (p.g || 600) * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 1 - 1.5 * dt;
+      p.life -= dt; p.vy += (p.g === undefined ? 600 : p.g) * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 1 - (p.shard ? 0.6 : 1.5) * dt;
       const a = Math.max(0, Math.min(1, p.life / p.max));
       ctx.globalAlpha = a;
+      if (p.shard) { p.rot += p.vr * dt; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.drawImage(p.img, p.sx, p.sy, p.sw, p.sh, -p.sw / 2, -p.sh / 2, p.sw, p.sh); ctx.restore(); continue; }
       if (p.ring) { ctx.strokeStyle = p.c; ctx.lineWidth = 3 * a; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (1 - a) + 4, 0, 6.283); ctx.stroke(); }
       else { ctx.fillStyle = p.c; const z = p.s * (p.fire ? a : 1); ctx.fillRect(p.x - z / 2, p.y - z / 2, z, z); }
     }
@@ -3890,8 +3919,9 @@ function cellBlast(el, sym, power) {
   const r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
   const col = SYM_COL[sym] || ['#ffd44a', '#fff'];
   el.classList.remove('boom', 'regrow', 'hit', 'swell'); void el.offsetWidth; el.classList.add('boom');
+  shatter(sym, x, y, parseFloat(getComputedStyle(el).fontSize) * 1.6, power); el.textContent = '';
   // 파편: 물고기 조각 + 물보라 + 불꽃 + 충격파 (물고기 자체는 동전으로 변해 튀어나온다)
-  const n = 10 + power * 8;
+  const n = 4 + power * 3;
   for (let i = 0; i < n; i++) {
     const a = Math.random() * 6.283, sp = 80 + Math.random() * (160 + power * 80);
     slotFx.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 120, s: 3 + Math.random() * 4, c: col[Math.random() * 2 | 0], life: 0.6 + Math.random() * 0.5, max: 1.1 });
@@ -3939,15 +3969,16 @@ function slotWinFx(cells, total, power) {
           slotFx.coins.push({ x: o.x + (Math.random() - 0.5) * 10, y: o.y + (Math.random() - 0.5) * 10, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
             r: 6 + Math.random() * 3 + power, t: 0, delay: i * 0.012, hang: 0.32 + Math.random() * 0.18 + i * 0.01, ph: Math.random() * 6, v: share });
         }
-        setTimeout(() => { el.classList.remove('boom'); void el.offsetWidth; el.classList.add('regrow'); }, 750);
+        setTimeout(() => { el.textContent = curGrid[+k[0]][+k[1]]; el.classList.remove('boom'); void el.offsetWidth; el.classList.add('regrow'); }, 750);
       }
       machine.classList.remove('shk1', 'shk2'); void machine.offsetWidth; machine.classList.add(power >= 2 ? 'shk2' : 'shk1');
       noiseBurst(0.5 + power * 0.15, 900 + c * 150, 0.35 + power * 0.08); tone(80 - c * 6, 0.35, 0.3 + power * 0.06, 'sine', 30);
       vibrate(power >= 2 ? [40 + power * 20] : [25]);
     }, at);
   });
-  const blastEnd = pre + (col - 1) * gap;
-  return blastEnd + 500 + Math.min(700, N * 12);
+  const blastEnd = pre + (col - 1) * gap, dur = blastEnd + 500 + Math.min(700, N * 12);
+  setTimeout(() => { if (slotFx.counting && !slotFx.coins.length) { slotFx.counting = false; setCoinText(meta.coins); document.querySelector('.wallet .cn').classList.remove('hot'); } }, dur);
+  return dur;
 }
 function spin() {
   if (slotBusy) return;
