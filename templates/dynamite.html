@@ -2320,6 +2320,15 @@ function update(dt) {
       if (bm.type === 'remote' && bm.wt > 12) bm.fuse = 0; // 원격탄 자동 폭발
       if (bm.type === 'bait' && Math.random() < dt * 14) parts.push({ x: bm.x + rand(-6, 6), y: bm.y + rand(-5, 5), z: 0, vx: rand(-4, 4), vy: rand(-4, 4), vz: 0, life: 0.8, max: 0.8, type: 'crumb' });
       if (Math.random() < dt * 8) parts.push({ x: bm.x + rand(-2, 2), y: bm.y + rand(-2, 2), z: 0, vx: 0, vy: 0, vz: 0, life: 0.5, max: 0.5, type: 'bubble' });
+      // 🔥 피버: 물고기에 닿기만 하면 깊이와 상관없이 즉시 폭발 (그 물고기 깊이에서 터진다)
+      if (fever && !bm.robot && bm.fuse > 0) {
+        for (const f of fish) {
+          if (f.state !== 'swim' || Math.hypot(f.x - bm.x, f.y - bm.y) > f.sp.len * 0.6 + 6) continue;
+          bm.depth = f.depth; bm.fuse = 0;
+          texts.push(mkText(bm.x, bm.y - 10, '💥 접촉!', '#ffd23f', 0.8));
+          break;
+        }
+      }
     }
     if (bm.fuse <= 0) { bm.dead = true; explode(bm.x, bm.y, bm.state === 'air' ? -0.05 : bm.depth, (bm.small ? 0.72 : 1) * (bm.type === 'remote' ? 1 + 0.15 * (meta.up.remote || 0) : 1) * (bm.robot ? 0.75 : 1), bm.child || bm.robot); }
   }
