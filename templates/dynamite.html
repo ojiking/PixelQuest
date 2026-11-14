@@ -528,7 +528,7 @@ if (typeof meta.bestMile !== 'number') meta.bestMile = 0;   // 처음 도달한 
 let fever = null;                         // 발동 중이면 { t: 남은 초 }
 if (!meta.jp) meta.jp = { mini: JP.mini.seed, major: JP.major.seed, grand: JP.grand.seed };
 // 물고기 → 생선칩 환산
-const CHIP = { crucian: 1, carp: 3, catfish: 8, tuna: 15, goldcarp: 50, sturgeon: 80, lord: 300, shark: 50, squid: 100, kaiju: 1000 };
+const CHIP = { crucian: 1, carp: 3, catfish: 8, tuna: 15, goldcarp: 50, sturgeon: 80, lord: 300, shark: 50, squid: 100, kaiju: 1000, leviathan: 3000 };
 let todayChips = 0, todayKinds = {};
 let eveChips = 0, eveFail = false;   // 저녁에 처분할 생선칩, 목표 미달로 맞은 저녁인지
 let eveBet = 0, eveWon = 0, eveSpins = 0, eveFree = 0, eveBonusChips = 0;  // 이번 저녁 슬롯 결산: 건 칩, 딴 동전, 판 수
@@ -547,6 +547,7 @@ const DEX = [
   { id: 'lord',     name: '호수의 주인', col: '#6b5236', hint: '4일차부터 아주 드물게. 세 번은 맞혀야 한다', bonus: 500, rare: true },
   { id: 'shark',    name: '상어',        col: '#7b8c96', hint: '두 발을 맞혀야 잡힌다', bonus: 80 },
   { id: 'squid',    name: '대왕오징어',  col: '#c86a8a', hint: '물빛이 검어질 때. 촉수 세 발', bonus: 120 },
+  { id: 'leviathan', name: '호수의 군주 그란모르', col: '#2c3d4a', hint: '10일차마다 호수를 가득 채우는 초거대 보스. 눈과 혀가 약점', bonus: 3000, rare: true },
   { id: 'kaiju',    name: '대괴수 쿠르가', col: '#35574a', hint: '5일차마다 심연에서 올라오는 보스. 머리를 노려라', bonus: 1000, rare: true },
   { id: 'whale',    name: '고래',        col: '#3e5f78', hint: '보호종. 목격하면 기록된다', bonus: 50, seen: true },
 ];
@@ -555,7 +556,7 @@ const DEX_BY = Object.fromEntries(DEX.map(d => [d.id, d]));
 const STAR_TH = {
   crucian: [10, 50, 200], carp: [10, 50, 200], catfish: [5, 25, 100], tuna: [3, 15, 50],
   goldcarp: [1, 5, 15], sturgeon: [1, 5, 15], lord: [1, 3, 6],
-  shark: [1, 3, 8], squid: [1, 3, 6], whale: [1, 3, 6], kaiju: [1, 2, 4],
+  shark: [1, 3, 8], squid: [1, 3, 6], whale: [1, 3, 6], kaiju: [1, 2, 4], leviathan: [1, 2, 3],
 };
 const stars = id => (STAR_TH[id] || []).filter(t => (meta.dex[id] || 0) >= t).length;
 const dexComplete = () => DEX.every(d => (meta.dex[d.id] || 0) > 0);
@@ -568,6 +569,7 @@ function perkText(id, st) {
   switch (id) {
     case 'lord': return `👹 등장 확률 +${st * 25}%`;
     case 'tuna': return `저녁 무료 판 ${st}회`;
+    case 'leviathan': return `저녁 무료 판 +${st * 5}회`;
     case 'goldcarp': return `꽝이면 ${st * 8}% 확률로 5번째 릴 다시`;
     case 'sturgeon': return `저녁 생선칩 +${st * 10}%`;
     case 'whale': return `프리스핀 +${st * 2}회`;
@@ -640,7 +642,7 @@ function startDay() {
   fever = null;
   rareT = rand(18, 30); nuke = null; radiation = 0; nukeFlash = 0;
   bossDay = day % 5 === 0; bossSpawned = false;
-  if (bossDay) { nextBig = 12; banner = { str: `👹 ${day}일차 · 보스의 날! 목표 ${target}점`, t: 3.6 }; }
+  if (bossDay) { nextBig = 12; banner = { str: day % 10 === 0 ? `👑 ${day}일차 · 초거대 보스의 날! 목표 ${target}점` : `👹 ${day}일차 · 보스의 날! 목표 ${target}점`, t: 3.6 }; }
   if (day === SWIM_DAY) banner = { str: `${day}일차 · 목표 ${target}점 · 오늘부터 수영객이 나옵니다`, t: 3.4 };
 }
 const maxSchools = () => 6 + Math.min(3, day - 1);
@@ -768,6 +770,7 @@ function nukeBlast() {
   if (big && !big.dead) {
     if (big.type === 'whale') { big.dive = 6; stats.whaleHits++; addScore(-300); texts.push(mkText(big.x, big.y, '고래는 보호종! -300', '#ff5b5b', 2.2, true)); }
     else if (big.type === 'kaiju') { kaijuDamage(5, ex, '☢ 핵 직격! -5'); }
+    else if (big.type === 'leviathan') { levDamage(15, ex, '☢ 핵 직격! -15', true); }
     else { big.dead = true; ex.bigKill = true; ex.kills += big.type === 'shark' ? 3 : 5; }
   }
   // 연출: 하얀 섬광, 충격파, 버섯구름, 호수 전체 물기둥
@@ -792,6 +795,9 @@ function sniperTargetPos(tg) {
   if (tg.kind === 'fish') { const f = tg.f; return f.state === 'swim' ? { x: f.x, y: f.y, depth: f.depth } : null; }
   if (!big || big.dead || big !== tg.big) return null;
   if (big.type === 'shark') return { x: big.x, y: big.y, depth: big.depth };
+  if (big.type === 'leviathan') { if (!['idle', 'charge', 'fire', 'close', 'flinch'].includes(big.phase)) return null;
+    const L = levGeo(); if (big.open > 0.5) return { x: L.tx, y: L.ty, depth: 0 };
+    const e = (Math.floor(time / 3) % 2) ? L.e1 : L.e2; return { x: e.x, y: e.y, depth: 0 }; }
   if (big.type === 'kaiju') { if (big.phase === 'leave' || big.phase === 'rise') return null;
     if (big.headUp > 0.5) { const h = kHead(big); return { x: h.x, y: h.y, depth: h.depth, head: true }; }
     return { x: big.x, y: big.y, depth: big.depth }; }
@@ -1138,6 +1144,198 @@ function drawSwimmer() {
   if ((w.t * 2 | 0) % 5 === 0) { b.fillStyle = '#fff'; b.fillRect(x + w.dir * 1, y - 5, 1, 1); }
 }
 
+// ===== 👑 초거대 보스: 호수의 군주 그란모르 (머리만으로 호수를 채운다) =====
+function spawnLeviathan() {
+  bossSpawned = true;
+  if (swimmer) { swimmer = null; swimT = 999; }
+  big = { type: 'leviathan', x: VW / 2, y: SHORE * 0.38, hp: 40, maxHp: 40, t: 0, life: 100, phase: 'rise', pt: 3.2, up: 0,
+    open: 0, flash: 0, hitCd: 0, eyeHit: 0, beam: null, dead: false, depth: 0, len: VW * 0.9, wid: SHORE * 0.6, duck: 0 };
+  ink = 0.8; shake = 16;
+  banner = { str: '👑 호수의 군주 그란모르가 깨어났다!', t: 3.6 };
+  tone(30, 4, 0.7, 'sawtooth', 18); tone(45, 3.5, 0.5, 'sine', 25); noiseBurst(3.5, 250, 0.6);
+  vibrate([300, 100, 300, 100, 600]);
+  for (const sc of schools) { sc.scared = 6; sc.wa = Math.atan2(sc.y - big.y, sc.x - big.x); }
+}
+// 머리 위치·크기, 눈·혀·입 좌표 (화면 크기에 맞춰)
+function levGeo() {
+  const B = big, rx = VW * 0.44, ry = SHORE * 0.3;
+  const cx = B.x, cy = B.y + (1 - B.up) * ry * 0.9 + B.duck * ry * 0.18;
+  return { cx, cy, rx, ry,
+    e1: { x: cx - rx * 0.45, y: cy - ry * 0.25 }, e2: { x: cx + rx * 0.45, y: cy - ry * 0.25 },
+    mx: cx, my: cy + ry * 0.58, tx: cx, ty: cy + ry * 0.64 };
+}
+function updateLev(dt) {
+  const B = big;
+  B.flash = Math.max(0, B.flash - dt); B.hitCd = Math.max(0, B.hitCd - dt); B.eyeHit = Math.max(0, B.eyeHit - dt);
+  B.duck = Math.max(0, B.duck - dt * 1.2);
+  if (B.dead) { B.up = Math.max(0, B.up - dt * 0.35); B.open = Math.max(0, B.open - dt);
+    if (Math.random() < dt * 8) { const L = levGeo(); fwBurst(L.cx + rand(-L.rx, L.rx), L.cy + rand(-L.ry, L.ry), 2, 6, 40, rand(20, 60)); }
+    B.ft = (B.ft || 0) + dt; if (B.ft > 3) finishBig(); return; }
+  if (B.phase !== 'leave' && B.t > B.life) { B.phase = 'leave'; B.beam = null; banner = { str: '그란모르가 깊은 곳으로 돌아갔다…', t: 2.6 }; }
+  B.pt -= dt;
+  if (Math.random() < dt * 5) { const L = levGeo(); ripples.push({ x: L.cx + rand(-L.rx, L.rx), y: L.cy + L.ry * rand(0.6, 1), r: 2, max: 10, life: 0.8 }); }
+  switch (B.phase) {
+    case 'rise':
+      B.up = Math.min(1, B.up + dt / 3); shake = Math.max(shake, 3);
+      if (B.pt <= 0) { B.phase = 'idle'; B.pt = rand(3, 4.5); }
+      break;
+    case 'idle':
+      B.open = Math.max(0, B.open - dt * 2);
+      if (B.pt <= 0) { B.phase = 'charge'; B.pt = 3; const L = levGeo(); texts.push(mkText(L.mx, L.my - 30, '⚠ 입을 벌린다! 눈이나 혀를 노려라', '#ff8a7a', 1.4, true)); }
+      break;
+    case 'charge':
+      B.open = Math.min(1, B.open + dt / 1.6);
+      if (Math.random() < dt * 8) tone(200 + (3 - B.pt) * 260, 0.08, 0.05, 'sine');
+      if (Math.random() < dt * 40) { const L = levGeo(), a = rand(0, TAU); parts.push({ x: L.mx + Math.cos(a) * 30, y: L.my + Math.sin(a) * 18, z: 4, vx: -Math.cos(a) * 60, vy: -Math.sin(a) * 36, vz: 0, life: 0.5, max: 0.5, type: 'fw', hue: 190 }); }
+      if (B.pt <= 0) { // 발사!
+        B.phase = 'fire'; B.pt = 1.8;
+        const left = Math.random() < 0.5;
+        B.beam = { x0: left ? -10 : VW + 10, x1: left ? VW + 10 : -10, t: 0, hit: false, ex: null, x: left ? -10 : VW + 10, y: SHORE + 8 };
+        shake = 18; flash = 1; noiseBurst(1.8, 1800, 0.9); tone(70, 1.8, 0.6, 'sawtooth', 40); vibrate([500]);
+      }
+      break;
+    case 'fire': {
+      const bm = B.beam; bm.t += dt;
+      const k = Math.min(1, bm.t / 1.8), L = levGeo();
+      bm.x = lerp(bm.x0, bm.x1, k); bm.y = SHORE + 8;
+      shake = Math.max(shake, 6);
+      // 레이저가 지나간 자리의 물고기는 익어서 떠오른다 (내 것이 된다)
+      for (const f of fish) {
+        if (f.state !== 'swim' || f.depth > 0.6) continue;
+        if (segDist(f.x, f.y, L.mx, L.my, bm.x, bm.y) < 6) {
+          if (!bm.ex) { bm.ex = { x: bm.x, y: bm.y, depth: 0, kills: 0, pts: 0, t: 0, mult: 1, quiet: true }; combos.push(bm.ex); }
+          f.state = 'rise'; f.ex = bm.ex; f.delay = 0; f.bx = L.mx; f.by = L.my; bm.ex.kills++; bm.ex.pts += f.sp.pts;
+        }
+      }
+      for (let i = 0; i < 3; i++) { const u2 = Math.random(); parts.push({ x: lerp(L.mx, bm.x, u2), y: lerp(L.my, bm.y, u2), z: 0, vx: rand(-8, 8), vy: rand(-8, 8), vz: rand(10, 40), life: 0.6, max: 0.6, type: 'smoke' }); }
+      if (!bm.hit && Math.abs(bm.x - player.x) < 14 && !player.dead && !fatal) { // 주인공 직격
+        bm.hit = true; hold = null;
+        const lost = Math.min(2, dyn); dyn -= lost; player.stun = 2.2;
+        texts.push(mkText(player.x, player.y - 22, `레이저 직격!! 다이너마이트 -${lost}`, '#9fe9ff', 1.5, true));
+        flash = 1.2; shake = 22; vibrate([400, 80, 300]);
+      }
+      if (B.pt <= 0) { B.phase = 'close'; B.pt = 1.2; B.beam = null; }
+      break;
+    }
+    case 'close':
+      B.open = Math.max(0, B.open - dt * 1.2);
+      if (B.pt <= 0) { B.phase = 'idle'; B.pt = rand(3, 5); }
+      break;
+    case 'flinch': // 움찔! 몸을 움츠린다
+      B.open = Math.max(0, B.open - dt * 3);
+      if (B.pt <= 0) { B.phase = 'idle'; B.pt = rand(2.5, 4); }
+      break;
+    case 'leave':
+      B.open = Math.max(0, B.open - dt); B.up -= dt * 0.4;
+      if (B.up <= 0) { big = null; nextBig = bigDelay(18, 26); }
+      break;
+  }
+}
+function levDamage(dmg, ex, label, flinch) {
+  const B = big, L = levGeo();
+  B.hp -= dmg; B.flash = 0.35; B.hitCd = 0.15;
+  texts.push(mkText(L.cx, L.cy - L.ry * 0.7, label, '#ffd23f', 1.6, true));
+  tone(120, 0.3, 0.3, 'sawtooth', 50);
+  if (flinch && B.phase !== 'rise' && B.phase !== 'leave') {
+    const was = B.phase; B.phase = 'flinch'; B.pt = 2; B.beam = null; B.duck = 1;
+    if (was === 'charge' || was === 'fire') texts.push(mkText(L.mx, L.my - 10, '움찔!! 레이저 저지!', '#7fffb0', 1.6, true));
+    else texts.push(mkText(L.mx, L.my - 10, '움찔!', '#7fffb0', 1.3, true));
+    tone(400, 0.25, 0.2, 'sawtooth', 120);
+  }
+  if (B.hp <= 0) {
+    B.hp = 0; B.dead = true; B.phase = 'dead'; B.beam = null;
+    if (ex) { ex.bigKill = true; ex.kills += 20; }
+    shake = 26; flash = 1.3; hitStop = 0.25; slowDur = slowT = 1.6; camFocus = { x: L.cx, y: L.cy };
+    texts.push(mkText(L.cx, L.cy, '그란모르 격파!!!', '#ff5b3a', 3, true));
+    noiseBurst(3, 300, 0.9); tone(25, 3, 0.7, 'sawtooth', 15);
+  }
+}
+function levHit(ex) {
+  const B = big;
+  if (B.hitCd > 0 || ['rise', 'leave', 'dead'].includes(B.phase)) return;
+  const ed = Math.max(0, ex.depth);
+  if (ed > 0.45) return;                                   // 머리는 물 위에 있다: 얕게 터뜨려야 맞는다
+  const rr = (ex.depth < 0 ? R * 0.7 : R) * (ex.rs || 1), L = levGeo();
+  if (B.open > 0.5 && Math.hypot(ex.x - L.tx, ex.y - L.ty) < rr * 0.7 + 9) { levDamage(5, ex, '혀 명중! -5', true); return; }
+  for (const e of [L.e1, L.e2]) if (Math.hypot(ex.x - e.x, ex.y - e.y) < rr * 0.7 + 8) { B.eyeHit = 0.6; levDamage(3, ex, '눈 명중! -3', true); return; }
+  if (((ex.x - L.cx) / L.rx) ** 2 + ((ex.y - L.cy) / L.ry) ** 2 < 1.1) levDamage(1, ex, '-1', false);
+}
+function coinRainCanvas() { for (let i = 0; i < 60; i++) parts.push({ x: rand(0, VW), y: rand(0, SHORE * 0.6), z: rand(20, 80), vx: rand(-10, 10), vy: rand(-5, 5), vz: rand(-20, 20), life: rand(1, 2), max: 2, type: 'fw', hue: rand(40, 55) }); }
+function drawLeviathan() {
+  const B = big, L = levGeo(), { cx, cy, rx, ry } = L;
+  const al = Math.min(1, B.up * 1.4);
+  if (al <= 0) return;
+  b.save(); b.globalAlpha = al;
+  // 그림자와 목 둘레 물거품
+  b.fillStyle = 'rgba(0,10,20,0.4)'; b.beginPath(); b.ellipse(cx, cy + ry * 0.2, rx * 1.08, ry * 1.0, 0, 0, TAU); b.fill();
+  b.strokeStyle = `rgba(230,250,255,${0.5 + Math.sin(time * 6) * 0.2})`; b.lineWidth = 2;
+  b.beginPath(); b.ellipse(cx, cy + ry * 0.25, rx * 1.05, ry * 0.95, 0, 0, TAU); b.stroke();
+  const skin = B.flash > 0 ? '#7a3030' : '#2c3d4a', dark = '#1b2732', lite = '#46606f';
+  // 뿔·가시 (머리 윗변)
+  b.fillStyle = dark;
+  for (let i = 0; i < 9; i++) {
+    const a = Math.PI * (1.08 + i * 0.105), bx = cx + Math.cos(a) * rx * 0.92, by = cy + Math.sin(a) * ry * 0.82;
+    const h = (i === 2 || i === 6 ? 26 : 14) * (0.8 + 0.2 * Math.sin(i * 2));
+    b.beginPath(); b.moveTo(bx - 5, by + 2); b.lineTo(bx + Math.cos(a) * h, by + Math.sin(a) * h); b.lineTo(bx + 5, by + 2); b.fill();
+  }
+  // 머리
+  b.fillStyle = skin; b.beginPath(); b.ellipse(cx, cy, rx, ry * 0.86, 0, 0, TAU); b.fill();
+  b.beginPath(); b.ellipse(cx, cy + ry * 0.45, rx * 0.6, ry * 0.42, 0, 0, TAU); b.fill();          // 주둥이
+  // 비늘 무늬
+  b.fillStyle = lite;
+  for (let gy = -3; gy <= 3; gy++) for (let gx = -6; gx <= 6; gx++) {
+    const px = cx + gx * rx * 0.14 + (gy % 2) * rx * 0.07, py = cy + gy * ry * 0.2;
+    if (((px - cx) / rx) ** 2 + ((py - cy) / (ry * 0.86)) ** 2 < 0.85 && Math.hypot(px - L.e1.x, py - L.e1.y) > 14 && Math.hypot(px - L.e2.x, py - L.e2.y) > 14)
+      b.fillRect(Math.round(px), Math.round(py), 2, 1);
+  }
+  // 눈썹뼈 + 눈 (약점)
+  for (const [i, e] of [L.e1, L.e2].entries()) {
+    b.fillStyle = dark; b.beginPath(); b.ellipse(e.x, e.y - 6, 13, 4, i ? -0.25 : 0.25, 0, TAU); b.fill();
+    b.fillStyle = '#0a0a0a'; b.beginPath(); b.ellipse(e.x, e.y, 10, 7, 0, 0, TAU); b.fill();
+    if (B.phase === 'flinch' || B.eyeHit > 0) { b.strokeStyle = '#ff9a8a'; b.lineWidth = 2; b.beginPath(); b.moveTo(e.x - 8, e.y); b.lineTo(e.x + 8, e.y); b.stroke(); continue; }
+    const glow = B.phase === 'charge' || B.phase === 'fire' ? 1 : 0.7 + Math.sin(time * 3) * 0.15;
+    b.save(); b.globalCompositeOperation = 'lighter';
+    const g = b.createRadialGradient(e.x, e.y, 0, e.x, e.y, 14); g.addColorStop(0, `rgba(255,80,40,${0.8 * glow})`); g.addColorStop(1, 'rgba(255,40,0,0)');
+    b.fillStyle = g; b.beginPath(); b.arc(e.x, e.y, 14, 0, TAU); b.fill(); b.restore();
+    b.fillStyle = '#ffcc33'; b.beginPath(); b.ellipse(e.x, e.y, 7, 5, 0, 0, TAU); b.fill();
+    b.fillStyle = '#111'; b.fillRect(Math.round(e.x) - 1, Math.round(e.y) - 4, 2, 8);           // 세로 동공
+  }
+  // 콧구멍
+  b.fillStyle = '#0d141a'; b.fillRect(Math.round(cx - 10), Math.round(cy + ry * 0.3), 4, 2); b.fillRect(Math.round(cx + 6), Math.round(cy + ry * 0.3), 4, 2);
+  // 입 (벌어지면 이빨·혀·빛)
+  const o = B.open;
+  if (o > 0.05) {
+    const mw = rx * 0.4, mh = ry * 0.24 * o;
+    b.fillStyle = '#2a0508'; b.beginPath(); b.ellipse(L.mx, L.my, mw, mh, 0, 0, TAU); b.fill();
+    if (B.phase === 'charge' || B.phase === 'fire') {
+      b.save(); b.globalCompositeOperation = 'lighter';
+      const k = B.phase === 'fire' ? 1 : Math.max(0, 1 - B.pt / 3);
+      const g = b.createRadialGradient(L.mx, L.my, 0, L.mx, L.my, mw * (0.4 + k));
+      g.addColorStop(0, `rgba(220,255,255,${0.9 * k})`); g.addColorStop(0.4, `rgba(80,220,255,${0.6 * k})`); g.addColorStop(1, 'rgba(0,120,255,0)');
+      b.fillStyle = g; b.beginPath(); b.arc(L.mx, L.my, mw * (0.4 + k), 0, TAU); b.fill(); b.restore();
+    }
+    b.fillStyle = B.flash > 0 ? '#ff6b8a' : '#d0506a'; b.beginPath(); b.ellipse(L.tx, L.ty, mw * 0.42, mh * 0.45, 0, 0, TAU); b.fill(); // 혀 (약점)
+    b.fillStyle = '#f2efe4';
+    for (let i = -4; i <= 4; i++) {
+      const tx = L.mx + i * mw * 0.22;
+      b.beginPath(); b.moveTo(tx - 3, L.my - mh * 0.85); b.lineTo(tx, L.my - mh * 0.3); b.lineTo(tx + 3, L.my - mh * 0.85); b.fill();
+      b.beginPath(); b.moveTo(tx - 3, L.my + mh * 0.85); b.lineTo(tx, L.my + mh * 0.35); b.lineTo(tx + 3, L.my + mh * 0.85); b.fill();
+    }
+  } else { b.strokeStyle = dark; b.lineWidth = 2; b.beginPath(); b.moveTo(L.mx - rx * 0.4, L.my); b.quadraticCurveTo(L.mx, L.my + 4, L.mx + rx * 0.4, L.my); b.stroke(); }
+  b.restore();
+  // 초강력 레이저
+  if (B.phase === 'fire' && B.beam) {
+    const bm = B.beam, w = 1 + Math.sin(time * 60) * 0.12;
+    b.save(); b.globalCompositeOperation = 'lighter'; b.lineCap = 'round';
+    for (const [lw, col] of [[22 * w, 'rgba(0,140,255,0.35)'], [13 * w, 'rgba(90,220,255,0.7)'], [6 * w, 'rgba(230,255,255,1)']]) {
+      b.strokeStyle = col; b.lineWidth = lw; b.beginPath(); b.moveTo(L.mx, L.my); b.lineTo(bm.x, bm.y); b.stroke();
+    }
+    const g = b.createRadialGradient(bm.x, bm.y, 0, bm.x, bm.y, 26); g.addColorStop(0, 'rgba(255,255,255,0.9)'); g.addColorStop(1, 'rgba(80,200,255,0)');
+    b.fillStyle = g; b.beginPath(); b.arc(bm.x, bm.y, 26, 0, TAU); b.fill();
+    b.restore();
+  }
+}
+
 // ===== 보스: 심연의 대괴수 쿠르가 =====
 function spawnKaiju() {
   bossSpawned = true;
@@ -1334,6 +1532,7 @@ function drawKaijuSurface() {
 
 // ===== 대형 생물 =====
 function spawnBig() {
+  if (bossDay && !bossSpawned && day % 10 === 0) { spawnLeviathan(); return; }
   if ((bossDay && !bossSpawned) || (day >= 6 && Math.random() < 0.08)) { spawnKaiju(); return; }
   const r = Math.random();
   const type = r < 0.42 ? 'shark' : r < 0.78 ? 'whale' : 'squid';
@@ -1370,6 +1569,7 @@ function updateBig(dt) {
   }
   big.t += dt;
   if (big.type === 'kaiju') { updateKaiju(dt); return; }
+  if (big.type === 'leviathan') { updateLev(dt); return; }
   if (big.type === 'shark') {
     const B = big;
     if (B.dead) { B.depth -= dt * 0.6; if (B.depth <= 0) { B.depth = 0; B.ft = (B.ft || 0) + dt; if (B.ft > 1.4) finishBig(); } return; }
@@ -1457,12 +1657,13 @@ function tentTip(t) {
   return { x: big.x + Math.cos(a) * L, y: big.y + Math.sin(a) * L * 0.8, depth: lerp(big.depth, 0.04, t.rise), a };
 }
 function finishBig() {
-  const pts = big.type === 'kaiju' ? 10000 : big.type === 'shark' ? 500 : 1000;
+  const pts = big.type === 'leviathan' ? 30000 : big.type === 'kaiju' ? 10000 : big.type === 'shark' ? 500 : 1000;
   recordDex(big.type, big.x, big.y);
   todayChips += CHIP[big.type] || 0; todayKinds[big.type] = (todayKinds[big.type] || 0) + 1;
   addScore(pts);
   sfx.bonus();
-  stats.catches.push(big.type === 'kaiju' ? '👹 대괴수 쿠르가' : big.type === 'shark' ? '상어' : '대왕오징어');
+  stats.catches.push(big.type === 'leviathan' ? '👑 호수의 군주 그란모르' : big.type === 'kaiju' ? '👹 대괴수 쿠르가' : big.type === 'shark' ? '상어' : '대왕오징어');
+  if (big.type === 'leviathan') { dyn += 5; texts.push(mkText(big.x, big.y + 20, '+5 다이너마이트!', '#ff9f43', 1.6, true)); banner = { str: '👑 호수의 군주 그란모르 격파!!', t: 3.5 }; coinRainCanvas(); }
   if (big.type === 'kaiju') { dyn += 3; texts.push(mkText(big.x, big.y + 10, '+3 다이너마이트!', '#ff9f43', 1.4, true)); banner = { str: '🏆 대괴수 쿠르가 격파!', t: 3 }; }
   texts.push(mkText(big.x, big.y - 8, '+' + pts, '#ffe066', 1.8, true));
   for (let i = 0; i < 4; i++) ripples.push({ x: big.x, y: big.y, r: i * 4, max: 30 + i * 6, life: 1.2 });
@@ -1472,6 +1673,7 @@ function finishBig() {
 function bigHit(ex) {
   if (!big || big.dead) return;
   if (big.type === 'kaiju') { kaijuHit(ex); return; }
+  if (big.type === 'leviathan') { levHit(ex); return; }
   const ed = Math.max(0, ex.depth), rr = (ex.depth < 0 ? R * 0.7 : R) * (ex.rs || 1);
   if (big.type === 'shark' || big.type === 'whale') {
     const [ax, ay, bx, by] = bigBody();
@@ -1861,7 +2063,7 @@ function updateSchools(dt) {
       if (big.type === 'whale' && d < 160 && big.dive <= 0) { // 고래 곁으로 몰려듦
         const tx = big.x - big.dir * 10, ty = big.y + (s.y < big.y ? -20 : 20);
         s.wa = angLerp(s.wa, Math.atan2(ty - s.y, tx - s.x), dt * 1.4);
-      } else if ((big.type === 'shark' && d < 60) || (big.type === 'squid' && d < 45) || (big.type === 'kaiju' && d < 75)) {
+      } else if ((big.type === 'shark' && d < 60) || (big.type === 'squid' && d < 45) || (big.type === 'kaiju' && d < 75) || (big.type === 'leviathan' && d < VW * 0.5)) {
         s.wa = angLerp(s.wa, Math.atan2(s.y - big.y, s.x - big.x), dt * 4); s.scared = Math.max(s.scared, 1.2);
       }
     }
@@ -2066,6 +2268,7 @@ function drawShadows() {
 function drawBigShadow() {
   const B = big;
   if (B.type === 'kaiju') { drawKaijuShadow(); return; }
+  if (B.type === 'leviathan') return;
   if ((B.type === 'shark' && B.dead && B.depth <= 0) || (B.type === 'squid' && B.dead && B.depth <= 0)) return;
   const L = B.depth > 0.45 ? dctx : sctx;
   L.globalAlpha = clamp(0.6 - B.depth * 0.4, 0.12, 0.65) * (B.type === 'squid' && B.t > B.life ? clamp(1.3 - B.depth, 0, 1) : 1);
@@ -2152,6 +2355,7 @@ function drawSurfaceThings() {
   }
   if (!big) return;
   if (big.type === 'kaiju') { drawKaijuSurface(); return; }
+  if (big.type === 'leviathan') { drawLeviathan(); return; }
   if (big.type === 'shark' && !big.dead && big.depth < 0.16) {
     // 등지느러미
     const fx = big.x + Math.cos(big.ang) * 1, fy = big.y + Math.sin(big.ang) * 1;
@@ -2602,9 +2806,10 @@ function drawHUD() {
     const left = REFUND_CAP - refundsToday;
     txt(`환급 ${'●'.repeat(left)}${'○'.repeat(REFUND_CAP - left)}`, W - 14, 18 + u * 3.2, u * 1.0, left ? '#ffb347' : '#8a9aa0', 'right');
   }
-  if (big && big.type === 'kaiju' && !big.dead && big.phase !== 'leave') {
-    const bw = Math.min(W * 0.62, 340), bx = (W - bw) / 2, by = 58 + u * 1.2, bh = Math.max(9, u * 1.0);
-    txt('👹 심연의 대괴수 쿠르가', W / 2, by - u * 1.0, u * 1.25, '#ff8a7a', 'center');
+  if (big && (big.type === 'kaiju' || big.type === 'leviathan') && !big.dead && big.phase !== 'leave') {
+    const lev = big.type === 'leviathan';
+    const bw = Math.min(W * (lev ? 0.8 : 0.62), lev ? 440 : 340), bx = (W - bw) / 2, by = 58 + u * 1.2, bh = Math.max(9, u * (lev ? 1.3 : 1.0));
+    txt(lev ? '👑 호수의 군주 그란모르' : '👹 심연의 대괴수 쿠르가', W / 2, by - u * 1.0, u * 1.25, lev ? '#ffd23f' : '#ff8a7a', 'center');
     ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(bx - 3, by - 3, bw + 6, bh + 6);
     ctx.fillStyle = '#3a0d0d'; ctx.fillRect(bx, by, bw, bh);
     ctx.fillStyle = big.flash > 0 ? '#fff' : '#e8473a'; ctx.fillRect(bx, by, bw * big.hp / big.maxHp, bh);
@@ -2709,7 +2914,7 @@ function startEvening(success) {
   resetSlotSession();
   eveBonusChips = eveChips > 0 ? Math.round(eveChips * 0.1 * stars('sturgeon')) : 0;   // 철갑상어 ★
   eveChips += eveBonusChips;
-  eveFree = stars('tuna');                                                             // 황다랑어 ★
+  eveFree = stars('tuna') + 5 * stars('leviathan');                                                             // 황다랑어 ★
   const extra = dayScore - target;
   nextBonus = success ? Math.min(3, Math.floor(extra / 100)) : 0;
   if (success) sfx.bonus(); else tone(330, 0.5, 0.08, 'triangle', 220);
@@ -2859,6 +3064,7 @@ const RULES = [
   ['📅', '하루와 목표', '하루에 다이너마이트 <b>6개</b>. 그날 <b>목표 점수</b>를 넘기면 다음 날로. 넘긴 점수 <b>100점마다</b> 내일 다이너마이트 +1.'],
   ['🔥', '피버 타임', '<b>연속 명중</b>(3마리 이상을 연달아)할 때만 피버 게이지가 찹니다(2연속 +2 … 최대 +5). 게이지는 <b>날이 바뀌어도 남고</b>, 다 차면 <b>10초 피버</b>: 호수가 얕은 물고기로 가득, <b>다이너마이트 무제한</b>, 점수 ×2! 끝나면 게이지는 처음부터.'],
   ['🏆', '이정표 보상', '<b>5일차마다</b> 하루를 넘기면 보상: 5일차 동전 150 · 무료 판 10 · 특수탄, 10일차 핵폭탄 · MAJOR 잭팟 +100, 15일차 GRAND 잭팟 +500… <b>처음 도달하면 동전 2배!</b>'],
+  ['👑', '초거대 보스: 그란모르', '<b>10일차마다</b> 머리만으로 호수를 가득 채우는 군주가 나타납니다. 입을 벌려 <b>초강력 레이저</b>를 쏘면 맞을 때 다이너마이트 2개를 잃어요. <b>눈(-3)</b>이나 벌린 입 속 <b>혀(-5)</b>를 얕게 터뜨려 맞히면 <b>움찔하며 레이저가 취소</b>됩니다. 체력 40, 격파 +30000.'],
   ['🎯', '스나이퍼', '가게에서 <b>고용</b>하면 부두에서 자동으로 쏩니다. 느리지만 <b>한 발씩 정확</b>하게: 얕은 곳의 비싼 물고기를 한 마리씩, 그리고 <b>상어·쿠르가에 특효</b>(쿠르가 머리를 쏘면 물대포 저지). 수영객과 고래는 쏘지 않아요.'],
   ['🧰', '보물상자', '하루 1~3개가 <b>호수 바닥</b>에 가라앉아 있습니다. 흐린 네모 그림자와 <b>금빛 반짝임</b>을 찾아 <b>깊게</b> 터뜨리세요. 동전, 생선칩, 특수탄, 다이너마이트, 드물게 <b>핵폭탄</b>… 가끔은 <b>불발탄</b>이 들어 있어 큰 2차 폭발이!'],
   ['🎯', '실력 보상', '한 방에 <b>6마리 이상</b>이면 다이너마이트 환급(12마리 이상 2개). 단, <b>하루 최대 3개</b>까지(오른쪽 위 ●). 3마리 이상을 <b>연속</b>으로 잡으면 점수와 <b>생선칩</b>이 최대 2배.'],
@@ -3377,7 +3583,11 @@ function drawDexIcon(c, d, known) {
   const col = known ? d.col : '#05161c';
   g.fillStyle = col; g.strokeStyle = col;
   const cx = c.width / 2, cy = c.height / 2;
-  if (d.id === 'kaiju') {
+  if (d.id === 'leviathan') {
+    g.beginPath(); g.ellipse(cx, cy + 2, 24, 12, 0, 0, TAU); g.fill();
+    for (let i = 0; i < 5; i++) { g.beginPath(); g.moveTo(cx - 18 + i * 9, cy - 6); g.lineTo(cx - 15 + i * 9, cy - 14 - (i % 2) * 3); g.lineTo(cx - 12 + i * 9, cy - 6); g.fill(); }
+    if (known) { g.fillStyle = '#ffcc33'; g.fillRect(cx - 12, cy - 1, 4, 3); g.fillRect(cx + 8, cy - 1, 4, 3); g.fillStyle = '#7fe8ff'; g.fillRect(cx - 4, cy + 7, 8, 2); }
+  } else if (d.id === 'kaiju') {
     kaijuPath(g, { x: cx + 4, y: cy, ang: 0, len: 60, wid: 18, t: 0 }, 1);
     for (let i = -3; i <= 3; i++) { g.beginPath(); g.moveTo(cx + 4 + i * 4 - 2, cy); g.lineTo(cx + 4 + i * 4, cy - 6 + Math.abs(i)); g.lineTo(cx + 4 + i * 4 + 2, cy); g.fill(); }
     if (known) { g.fillStyle = '#7ff0ff'; g.fillRect(cx + 30, cy - 3, 2, 2); g.fillRect(cx + 30, cy + 1, 2, 2); }
@@ -3485,15 +3695,15 @@ function frame(now) {
     meta.jp.mini += dt * 0.003; meta.jp.major += dt * 0.012; meta.jp.grand += dt * 0.05;
     jpRender.acc = (jpRender.acc || 0) + dt; if (jpRender.acc > 0.12) { jpRender.acc = 0; jpRender(); }
   }
-  update(dt);
-  render();
+  try { update(dt); render(); }
+  catch (err) { console.error(err); }    // 한 프레임 오류로 게임 전체가 멈추지 않게
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
 // 디버그/테스트용 훅
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; },
-  get fish() { return fish.length; }, get chips() { return eveChips; }, get sniper() { return { aim: !!sniper.aim, kills: sniper.kills, cd: sniper.cd }; }, setFever: n => { meta.fever = n; }, get fever() { return fever ? fever.t : null; }, get feverGauge() { return meta.fever; }, startFever: () => startFever(), spawnChestAt: (x, y) => { spawnChest(); const c = chests[chests.length - 1]; c.x = x; c.y = y; c.depth = 0.95; }, chestsInfo: () => chests.map(c => ({ state: c.state, loot: c.loot })), setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotSim: n => slotSim(n), get jp() { return meta.jp; }, forceJP: t => { rollJP.force = t; }, forceGrid: g => { forcedGrid = g; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), spawnKind: k => spawnSchool(k, false), giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
+  get fish() { return fish.length; }, get chips() { return eveChips; }, spawnLev: () => { big = null; spawnLeviathan(); }, lev: () => big && big.type === 'leviathan' ? { hp: big.hp, phase: big.phase, open: big.open, geo: levGeo(), dead: big.dead } : null, levPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, get sniper() { return { aim: !!sniper.aim, kills: sniper.kills, cd: sniper.cd }; }, setFever: n => { meta.fever = n; }, get fever() { return fever ? fever.t : null; }, get feverGauge() { return meta.fever; }, startFever: () => startFever(), spawnChestAt: (x, y) => { spawnChest(); const c = chests[chests.length - 1]; c.x = x; c.y = y; c.depth = 0.95; }, chestsInfo: () => chests.map(c => ({ state: c.state, loot: c.loot })), setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotSim: n => slotSim(n), get jp() { return meta.jp; }, forceJP: t => { rollJP.force = t; }, forceGrid: g => { forcedGrid = g; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), spawnKind: k => spawnSchool(k, false), giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
 </script>
 </body>
