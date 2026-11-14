@@ -1293,7 +1293,7 @@ function updateFever(dt) {
 }
 function endFever() {
   fever = null; feverIntro = -1;
-  if (practice) { banner = { str: '체험 끝! 처음 화면으로 돌아갑니다', t: 3 }; setTimeout(endPractice, 2500); }
+  if (practice) { banner = { str: '체험 끝! 처음 화면으로 돌아갑니다', t: 3 }; const pr = practice; setTimeout(() => { if (practice === pr) endPractice(); }, 2500); }
   banner = { str: '피버 종료! 게이지는 처음부터', t: 2 };
   tone(784, 0.12, 0.07, 'triangle'); tone(523, 0.2, 0.07, 'triangle', null, 0.12);
   for (const sc of schools) if (sc.fever) { sc.transit = true; sc.mult = 2.2; sc.wa = sc.x < VW / 2 ? Math.PI : 0; } // 남은 떼는 빠져나간다
@@ -3442,7 +3442,7 @@ function retryDay() {
   endOv.classList.add('hidden');
 }
 function endGame(reason) {
-  if (practice) { state = 'end'; banner = { str: '체험 끝! 처음 화면으로 돌아갑니다', t: 3 }; setTimeout(endPractice, 1500); return; }
+  if (practice) { state = 'end'; banner = { str: '체험 끝! 처음 화면으로 돌아갑니다', t: 3 }; const pr = practice; setTimeout(() => { if (practice === pr) endPractice(); }, 1500); return; }
   state = 'end';
   const blast = reason === 'blast', murder = reason === 'murder';
   todayChips = 0; eveChips = 0; // 즉사하면 그날 잡은 생선도 끝
@@ -3481,13 +3481,19 @@ document.getElementById('startBtn').addEventListener('click', startGame);
 // 🔥 피버 체험: 저장 상태를 떠 두고 바로 피버로 들어간다. 끝나면 원래 저장으로 되돌리고 처음 화면으로
 var practice = null;   // var: saveMeta가 먼저 불려도 안전
 document.getElementById('feverTry').addEventListener('click', () => {
-  practice = { save: localStorage.getItem('dynfish_meta'), gauge: meta.fever };
+  if (practice) return;
+  practice = { meta: JSON.parse(JSON.stringify(meta)) };
   startGame();
   setTimeout(() => { startFever(); banner = { str: '🔥 피버 체험 중 · 끝나면 처음 화면으로 (저장 안 됨)', t: 3 }; }, 400);
 });
+// 새로고침 없이 그 자리에서 원래 상태로 되돌린다 (임베드 환경에선 새로고침이 막힐 수 있음)
 function endPractice() {
-  try { if (practice.save === null) localStorage.removeItem('dynfish_meta'); else localStorage.setItem('dynfish_meta', practice.save); } catch (e) {}
-  location.reload();
+  if (!practice) return;
+  meta = practice.meta; practice = null;
+  newGame(); state = 'menu';
+  for (const ov of [endOv, clearOv, slotOv]) ov.classList.add('hidden');
+  startOv.classList.remove('hidden');
+  renderShop(); updateShopGlow();
 }
 document.getElementById('againBtn').addEventListener('click', startGame);
 document.getElementById('nextBtn').addEventListener('click', nextDay);
