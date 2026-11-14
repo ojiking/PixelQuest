@@ -491,21 +491,25 @@ let rareT = 25, nuke = null, radiation = 0, nukeFlash = 0;
 let bossDay = false, bossSpawned = false;   // 5일차마다 보스의 날  // 희귀종 타이머, 핵폭탄 진행, 방사능 잔광  // 황다랑어 떼, 튜브 탄 수영객, 즉사 사유
 
 // ===== 영구 성장: 동전 + 장비 =====
+// 장비: 단계가 오를수록 비싸진다. eff(lv) = 그 단계의 효과 설명
 const UPGRADES = [
-  { id: 'bag',   name: '다이너마이트 가방', desc: '매일 받는 다이너마이트 +1', costs: [400, 1000, 2500] },
-  { id: 'power', name: '화약 강화',         desc: '폭발 범위 +10%',            costs: [500, 1200, 3000] },
-  { id: 'fuse',  name: '긴 도화선',         desc: '도화선 +0.6초 (구간이 넓어져 조절이 쉬움)', costs: [300, 900] },
-  { id: 'charm', name: '재기의 부적',       desc: '목표 미달 때 그날을 한 번 더 (판마다)', costs: [1500, 4000] },
+  { id: 'bag',     name: '🎒 다이너마이트 가방', desc: '매일 받는 다이너마이트', costs: [400, 900, 1800, 3500, 6500, 12000], eff: lv => `+${lv}개` },
+  { id: 'power',   name: '💣 화약 강화',         desc: '모든 폭발 범위',         costs: [500, 1000, 1800, 3000, 5000, 8000, 13000, 20000], eff: lv => `+${lv * 6}%` },
+  { id: 'fuse',    name: '🧵 긴 도화선',         desc: '도화선 길이 (깊이 조절이 쉬워짐)', costs: [300, 800, 2000, 5000], eff: lv => `+${(lv * 0.4).toFixed(1)}초` },
+  { id: 'charm',   name: '🧿 재기의 부적',       desc: '목표 미달 때 그날을 다시 (판마다)', costs: [1500, 4000, 10000], eff: lv => `${lv}회` },
+  { id: 'cluster', name: '💥 산탄 강화',         desc: '산탄이 갈라지는 갈래 수',  costs: [800, 2500, 7000], eff: lv => `${3 + lv}갈래` },
+  { id: 'bait',    name: '🐛 미끼 강화',         desc: '미끼가 떼를 끌어당기는 범위', costs: [600, 1800, 5000], eff: lv => `+${lv * 30}%` },
+  { id: 'remote',  name: '📡 원격 강화',         desc: '원격탄 폭발 범위',        costs: [700, 2000, 6000], eff: lv => `+${lv * 15}%` },
 ];
-let meta = { coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0 }, dex: {}, nukes: 0 };
-try { const m = JSON.parse(localStorage.getItem('dynfish_meta') || 'null'); if (m && m.up) meta = { coins: m.coins | 0, up: Object.assign(meta.up, m.up), dex: m.dex || {}, nukes: m.nukes | 0, ammo: m.ammo, chips: m.chips, jp: m.jp, fever: m.fever, change: m.change, bestMile: m.bestMile }; } catch (e) {}
-const NUKE_COST = 1500, NUKE_MAX = 2;
+let meta = { coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0, cluster: 0, bait: 0, remote: 0 }, dex: {}, nukes: 0 };
+try { const m = JSON.parse(localStorage.getItem('dynfish_meta') || 'null'); if (m && m.up) meta = { coins: m.coins | 0, up: Object.assign(meta.up, m.up), dex: m.dex || {}, nukes: m.nukes | 0, ammo: m.ammo, chips: m.chips, jp: m.jp, fever: m.fever, change: m.change, bestMile: m.bestMile, upVer: m.upVer }; } catch (e) {}
+const NUKE_COST = 2500, NUKE_MAX = 2;
 
 // ===== 특수 다이너마이트 (던질 때 기본 다이너마이트 1개를 특수탄으로 바꿔 던진다) =====
 const AMMO = [
-  { id: 'remote',  icon: '📡', name: '원격 기폭', desc: '도화선 없음. 물에 빠진 뒤 화면을 탭하면 원하는 순간 폭발', pack: 3, cost: 300, col: '#3fae6a' },
-  { id: 'cluster', icon: '💥', name: '산탄',      desc: '물에 닿으면 세 갈래로 갈라져 넓게 폭발 (하나하나는 조금 작음)', pack: 3, cost: 350, col: '#ff8a2a' },
-  { id: 'bait',    icon: '🐛', name: '미끼 폭탄', desc: '가라앉는 동안 떡밥을 뿌려 근처 물고기 떼를 끌어모은 뒤 폭발', pack: 3, cost: 250, col: '#a07040' },
+  { id: 'remote',  icon: '📡', name: '원격 기폭', desc: '도화선 없음. 물에 빠진 뒤 화면을 탭하면 원하는 순간 폭발', pack: 3, cost: 500, col: '#3fae6a' },
+  { id: 'cluster', icon: '💥', name: '산탄',      desc: '물에 닿으면 여러 갈래로 갈라져 넓게 폭발 (기본 3갈래, 산탄 강화로 늘어남)', pack: 3, cost: 600, col: '#ff8a2a' },
+  { id: 'bait',    icon: '🐛', name: '미끼 폭탄', desc: '가라앉는 동안 떡밥을 뿌려 근처 물고기 떼를 끌어모은 뒤 폭발', pack: 3, cost: 400, col: '#a07040' },
 ];
 const AMMO_MAX = 9;
 if (!meta.ammo) { meta.ammo = { remote: 2, cluster: 2, bait: 2 }; } // 처음엔 맛보기로 2개씩
@@ -589,7 +593,14 @@ function recordDex(id, x, y) {
   saveMeta();
 }
 function saveMeta() { try { localStorage.setItem('dynfish_meta', JSON.stringify(meta)); } catch (e) {} }
-function applyUpgrades() { R = 30 * (1 + 0.1 * meta.up.power); FUSE = 4.0 + 0.6 * meta.up.fuse; }
+// 예전 장비 단계 → 새 단계 (효과가 줄지 않게)
+if ((meta.upVer || 1) < 2) {
+  meta.up.power = [0, 2, 4, 5][meta.up.power] ?? meta.up.power;   // +10%/단계 → +6%/단계
+  meta.up.fuse = [0, 2, 3][meta.up.fuse] ?? meta.up.fuse;         // +0.6초 → +0.4초
+  for (const k of ['cluster', 'bait', 'remote']) meta.up[k] = meta.up[k] || 0;
+  meta.upVer = 2;
+}
+function applyUpgrades() { R = 30 * (1 + 0.06 * meta.up.power); FUSE = 4.0 + 0.4 * meta.up.fuse; }
 const dailyDyn = () => START_DYN + meta.up.bag;
 const streakMult = n => 1 + 0.25 * Math.min(n, 4);   // 연속 명중 점수 배율 (최대 x2)
 applyUpgrades();
@@ -1616,9 +1627,10 @@ function update(dt) {
         bm.state = 'water'; bm.z = 0;
         if (bm.type === 'cluster') { // 세 갈래로 갈라짐
           bm.small = true;
-          for (const off of [-1, 1]) {
-            const pa = bm.ang + Math.PI / 2 * off;
-            const nx = clamp(bm.x + Math.cos(pa) * 20 + Math.cos(bm.ang) * 8, 4, VW - 4), ny = clamp(bm.y + Math.sin(pa) * 16 + Math.sin(bm.ang) * 6, 4, SHORE - 5);
+          const extraN = 2 + (meta.up.cluster || 0);            // 기본 3갈래(본탄 + 2), 강화마다 +1
+          for (let i = 0; i < extraN; i++) {
+            const pa = bm.ang + Math.PI / 2 + i * TAU / extraN;   // 착탄점 둘레에 고르게
+            const nx = clamp(bm.x + Math.cos(pa) * 20, 4, VW - 4), ny = clamp(bm.y + Math.sin(pa) * 16, 4, SHORE - 5);
             bombs.push({ ...bm, x: nx, y: ny, sx: nx, sy: ny, tx: nx, ty: ny, child: true });
             ripples.push({ x: nx, y: ny, r: 1, max: 10, life: 0.7 });
           }
@@ -1635,7 +1647,7 @@ function update(dt) {
       if (bm.type === 'bait' && Math.random() < dt * 14) parts.push({ x: bm.x + rand(-6, 6), y: bm.y + rand(-5, 5), z: 0, vx: rand(-4, 4), vy: rand(-4, 4), vz: 0, life: 0.8, max: 0.8, type: 'crumb' });
       if (Math.random() < dt * 8) parts.push({ x: bm.x + rand(-2, 2), y: bm.y + rand(-2, 2), z: 0, vx: 0, vy: 0, vz: 0, life: 0.5, max: 0.5, type: 'bubble' });
     }
-    if (bm.fuse <= 0) { bm.dead = true; explode(bm.x, bm.y, bm.state === 'air' ? -0.05 : bm.depth, bm.small ? 0.72 : 1, bm.child); }
+    if (bm.fuse <= 0) { bm.dead = true; explode(bm.x, bm.y, bm.state === 'air' ? -0.05 : bm.depth, (bm.small ? 0.72 : 1) * (bm.type === 'remote' ? 1 + 0.15 * (meta.up.remote || 0) : 1), bm.child); }
   }
   bombs = bombs.filter(bm => !bm.dead);
 
@@ -1739,7 +1751,7 @@ function updateSchools(dt) {
     // 미끼 폭탄: 근처 떼가 떡밥 쪽으로 몰려들고 그 깊이로 내려간다
     for (const bm of bombs) {
       if (bm.type !== 'bait' || bm.state !== 'water' || s.transit) continue;
-      if (Math.hypot(bm.x - s.x, bm.y - s.y) < 110) {
+      if (Math.hypot(bm.x - s.x, bm.y - s.y) < 110 * (1 + 0.3 * (meta.up.bait || 0))) {
         s.wa = angLerp(s.wa, Math.atan2(bm.y - s.y, bm.x - s.x), dt * 4);
         s.td = clamp(bm.depth, 0.05, 1); s.depth = lerp(s.depth, s.td, dt * 1.2); s.scared = 0;
       }
@@ -2835,7 +2847,8 @@ function renderShop() {
   for (const u of UPGRADES) {
     const lv = meta.up[u.id], max = u.costs.length, cost = u.costs[lv];
     const row = document.createElement('div'); row.className = 'item';
-    row.innerHTML = `<div class="info"><div class="nm">${u.name}</div><div class="ds">${u.desc}</div>` +
+    row.innerHTML = `<div class="info"><div class="nm">${u.name} <span style="font-size:12px;opacity:.75">Lv.${lv}/${max}</span></div>` +
+      `<div class="ds">${u.desc}: <b>${u.eff(lv)}</b>${lv < max ? ` → <b style="color:#8ff0ad">${u.eff(lv + 1)}</b>` : ' (최대)'}</div>` +
       `<div class="lv">${'■'.repeat(lv)}${'□'.repeat(max - lv)}</div></div>`;
     const bt = document.createElement('button');
     bt.id = 'buy-' + u.id;
@@ -3351,7 +3364,7 @@ twoStep('resetGear', '장비만 초기화', '정말? 한 번 더 누르면 실�
   renderShop();
 });
 twoStep('resetAll', '처음부터 다시', '정말? 모든 기록이 지워집니다', () => {
-  meta = { coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0 }, dex: {}, nukes: 0, ammo: { remote: 2, cluster: 2, bait: 2 }, chips: 40, jp: { mini: JP.mini.seed, major: JP.major.seed, grand: JP.grand.seed }, fever: 0, bestMile: 0 };
+  meta = { upVer: 2, coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0, cluster: 0, bait: 0, remote: 0 }, dex: {}, nukes: 0, ammo: { remote: 2, cluster: 2, bait: 2 }, chips: 40, jp: { mini: JP.mini.seed, major: JP.major.seed, grand: JP.grand.seed }, fever: 0, bestMile: 0 };
   saveMeta(); applyUpgrades();
   best = 0; bestDay = 0;
   try { localStorage.removeItem('dynfish_best'); localStorage.removeItem('dynfish_bestday'); } catch (e) {}
