@@ -499,9 +499,11 @@ const UPGRADES = [
   { id: 'charm',   name: '🧿 재기의 부적',       desc: '목표 미달 때 그날을 다시 (판마다)', costs: [1500, 4000, 10000], eff: lv => `${lv}회` },
   { id: 'cluster', name: '💥 산탄 강화',         desc: '산탄이 갈라지는 갈래 수',  costs: [800, 2500, 7000], eff: lv => `${3 + lv}갈래` },
   { id: 'bait',    name: '🐛 미끼 강화',         desc: '미끼가 떼를 끌어당기는 범위', costs: [600, 1800, 5000], eff: lv => `+${lv * 30}%` },
+  { id: 'sniper',  name: '🎯 스나이퍼 고용',     desc: '부두에서 자동 사격 (상어·보스 특효)', costs: [1500, 4000, 9000, 18000, 35000], eff: lv => lv ? `${SNIPER_INT[lv]}초마다 한 발` : '고용 안 함' },
   { id: 'remote',  name: '📡 원격 강화',         desc: '원격탄 폭발 범위',        costs: [700, 2000, 6000], eff: lv => `+${lv * 15}%` },
 ];
-let meta = { coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0, cluster: 0, bait: 0, remote: 0 }, dex: {}, nukes: 0 };
+const SNIPER_INT = [0, 3.0, 2.5, 2.1, 1.8, 1.5];   // 스나이퍼 단계별 사격 간격(초)
+let meta = { coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0, cluster: 0, bait: 0, remote: 0, sniper: 0 }, dex: {}, nukes: 0 };
 try { const m = JSON.parse(localStorage.getItem('dynfish_meta') || 'null'); if (m && m.up) meta = { coins: m.coins | 0, up: Object.assign(meta.up, m.up), dex: m.dex || {}, nukes: m.nukes | 0, ammo: m.ammo, chips: m.chips, jp: m.jp, fever: m.fever, change: m.change, bestMile: m.bestMile, upVer: m.upVer }; } catch (e) {}
 const NUKE_COST = 2500, NUKE_MAX = 2;
 
@@ -597,7 +599,7 @@ function saveMeta() { try { localStorage.setItem('dynfish_meta', JSON.stringify(
 if ((meta.upVer || 1) < 2) {
   meta.up.power = [0, 2, 4, 5][meta.up.power] ?? meta.up.power;   // +10%/단계 → +6%/단계
   meta.up.fuse = [0, 2, 3][meta.up.fuse] ?? meta.up.fuse;         // +0.6초 → +0.4초
-  for (const k of ['cluster', 'bait', 'remote']) meta.up[k] = meta.up[k] || 0;
+  for (const k of ['cluster', 'bait', 'remote', 'sniper']) meta.up[k] = meta.up[k] || 0;
   meta.upVer = 2;
 }
 function applyUpgrades() { R = 30 * (1 + 0.06 * meta.up.power); FUSE = 4.0 + 0.4 * meta.up.fuse; }
@@ -781,6 +783,91 @@ function nukeBlast() {
   noiseBurst(3.5, 700, 1); tone(34, 3.5, 0.8, 'sine', 20); tone(70, 2, 0.4, 'sawtooth', 30);
   vibrate([400, 100, 600, 100, 300]);
   schoolSpawnT = 7;
+}
+
+// ===== 🎯 스나이퍼: 느리지만 한 발씩 정확하게. 상어·보스 특효 =====
+const sniper = { cd: 2, aim: null, tracer: null, kills: 0 };
+const sniperPos = () => ({ x: Math.min(VW - 10, player.x + 30), y: player.y + 2 });
+function sniperTargetPos(tg) {
+  if (tg.kind === 'fish') { const f = tg.f; return f.state === 'swim' ? { x: f.x, y: f.y, depth: f.depth } : null; }
+  if (!big || big.dead || big !== tg.big) return null;
+  if (big.type === 'shark') return { x: big.x, y: big.y, depth: big.depth };
+  if (big.type === 'kaiju') { if (big.phase === 'leave' || big.phase === 'rise') return null;
+    if (big.headUp > 0.5) { const h = kHead(big); return { x: h.x, y: h.y, depth: h.depth, head: true }; }
+    return { x: big.x, y: big.y, depth: big.depth }; }
+  if (big.type === 'squid') { const t = big.tents.find(t2 => t2.rise > 0.5); if (!t) return null; const p = tentTip(t); return { x: p.x, y: p.y, depth: p.depth }; }
+  return null;   // 고래는 절대 쏘지 않는다
+}
+function sniperPick() {
+  if (big && !big.dead && big.type !== 'whale') { const tg = { kind: 'big', big }; if (sniperTargetPos(tg)) return tg; } // 큰 놈 우선
+  let best = null, bv = 0;
+  for (const f of fish) {
+    if (f.state !== 'swim' || f.depth > 0.5 || f.x < 4 || f.x > VW - 4) continue;   // 그림자가 보이는 얕은 곳만
+    const v = (CHIP[f.kind] || 1) * (f.sp.rare ? 3 : 1) / (1 + f.depth * 2);
+    if (v > bv) { bv = v; best = f; }
+  }
+  return best ? { kind: 'fish', f: best } : null;
+}
+function updateSniper(dt) {
+  if (sniper.tracer) { sniper.tracer.t -= dt; if (sniper.tracer.t <= 0) sniper.tracer = null; }
+  const lv = meta.up.sniper || 0;
+  if (!lv || state !== 'play' || fatal || player.dead) { sniper.aim = null; return; }
+  if (!sniper.aim) {
+    sniper.cd -= dt;
+    if (sniper.cd <= 0) { const tg = sniperPick(); if (tg) sniper.aim = { tg, t: 0.55 }; else sniper.cd = 0.4; }
+    return;
+  }
+  const pos = sniperTargetPos(sniper.aim.tg);
+  if (!pos) { sniper.aim = null; sniper.cd = 0.3; return; }   // 표적을 놓침
+  sniper.aim.t -= dt;
+  if (sniper.aim.t <= 0) { sniperFire(sniper.aim.tg, pos); sniper.aim = null; sniper.cd = SNIPER_INT[lv]; }
+}
+function sniperFire(tg, pos) {
+  const sp = sniperPos();
+  sniper.tracer = { x1: sp.x - 9, y1: sp.y - 3, x2: pos.x, y2: pos.y, t: 0.12 };
+  noiseBurst(0.09, 4200, 0.4, 'highpass'); tone(160, 0.12, 0.25, 'square', 60);         // 탕!
+  for (let i = 0; i < 6; i++) parts.push({ x: sp.x - 10, y: sp.y - 3, z: 2, vx: rand(-30, -10), vy: rand(-8, 8), vz: rand(0, 15), life: 0.2, max: 0.2, type: 'spark' });
+  ripples.push({ x: pos.x, y: pos.y, r: 0, max: 7, life: 0.5 });
+  for (let i = 0; i < 5; i++) parts.push({ x: pos.x, y: pos.y, z: 0, vx: rand(-10, 10), vy: rand(-6, 6), vz: rand(25, 50), life: 0.4, max: 0.4, type: 'drop' });
+  const ex = { x: pos.x, y: pos.y, depth: pos.depth, kills: 0, pts: 0, t: 0, mult: streakMult(streak) * (fever ? 2 : 1), rs: 0.3, quiet: true, fever: !!fever };
+  combos.push(ex);
+  if (tg.kind === 'big') {
+    bigHit(ex);                                             // 상어·오징어·쿠르가에 정확히 한 발
+    if (tg.big.type === 'kaiju' && !pos.head) {}            // 몸통 -1, 머리 -2(물대포 저지)는 kaijuHit가 처리
+    texts.push(mkText(pos.x, pos.y - 16, '🎯 저격!', '#ffdf6a', 1.1));
+  } else {
+    const f = tg.f;
+    if (f.hp > 1) { f.hp--; f.panic = 1.2; texts.push(mkText(f.x, f.y - 10, `🎯 명중! (${f.sp.hp - f.hp}/${f.sp.hp})`, '#ffdf6a', 1.2)); }
+    else {
+      f.state = 'rise'; f.ex = ex; f.delay = 0; f.bx = sp.x; f.by = sp.y; ex.kills++; ex.pts += f.sp.pts; sniper.kills++;
+      texts.push(mkText(f.x, f.y - 10, '🎯', '#ffdf6a', 1.1));
+    }
+  }
+}
+function drawSniper() {
+  if (!(meta.up.sniper > 0)) return;
+  const sp = sniperPos(), x = Math.round(sp.x), y = Math.round(sp.y);
+  const tgPos = sniper.aim ? sniperTargetPos(sniper.aim.tg) : null;
+  const ang = tgPos ? Math.atan2(tgPos.y - (y - 3), tgPos.x - (x - 4)) : -Math.PI * 0.75;
+  b.fillStyle = 'rgba(0,0,0,0.3)'; b.fillRect(x - 6, y + 3, 13, 2);
+  b.fillStyle = '#3f5a32'; b.fillRect(x - 4, y - 2, 10, 4);                // 엎드린 몸 (위장복)
+  b.fillStyle = '#2e4425'; b.fillRect(x + 2, y - 1, 2, 2);
+  b.fillStyle = '#f1c27d'; b.fillRect(x - 6, y - 3, 3, 3);                 // 얼굴
+  b.fillStyle = '#4a6a3a'; b.fillRect(x - 7, y - 5, 5, 2);                 // 헬멧
+  b.strokeStyle = '#1d1d1d'; b.lineWidth = 1.5;                            // 저격총
+  b.beginPath(); b.moveTo(x - 4, y - 2); b.lineTo(x - 4 + Math.cos(ang) * 11, y - 2 + Math.sin(ang) * 11); b.stroke();
+  if (tgPos) { // 빨간 조준선 + 조준경 표시
+    const k = 0.45 + Math.sin(time * 30) * 0.25;
+    b.strokeStyle = `rgba(255,40,40,${k})`; b.lineWidth = 1; b.setLineDash([2, 2]);
+    b.beginPath(); b.moveTo(x - 4 + Math.cos(ang) * 11, y - 2 + Math.sin(ang) * 11); b.lineTo(tgPos.x, tgPos.y); b.stroke(); b.setLineDash([]);
+    b.strokeStyle = `rgba(255,60,60,${k + 0.2})`; b.beginPath(); b.arc(tgPos.x, tgPos.y, 4 + sniper.aim.t * 6, 0, TAU); b.stroke();
+    b.fillStyle = '#ff3b3b'; b.fillRect(Math.round(tgPos.x), Math.round(tgPos.y), 1, 1);
+  }
+  if (sniper.tracer) { // 탄환 궤적
+    const tr = sniper.tracer;
+    b.strokeStyle = `rgba(255,240,160,${tr.t / 0.12})`; b.lineWidth = 1.5;
+    b.beginPath(); b.moveTo(tr.x1, tr.y1); b.lineTo(tr.x2, tr.y2); b.stroke();
+  }
 }
 
 // ===== 🔥 피버 타임 =====
@@ -1668,6 +1755,7 @@ function update(dt) {
   updateSwimmer(dt);
   updateChests(dt);
   updateFever(dt);
+  updateSniper(dt);
   tunaT -= dt;
   if (tunaT <= 0 && !fatal) { spawnTuna(); tunaT = rand(18, 30) * Math.max(0.5, 1 - (day - 1) * 0.08); }
   rareT -= dt;
@@ -2286,7 +2374,7 @@ function render() {
   drawChestsSurface();
   drawBlasts();
   drawPier();
-  if (state === 'play' || state === 'end' || state === 'clear') drawPlayer();
+  if (state === 'play' || state === 'end' || state === 'clear') { drawPlayer(); drawSniper(); }
   drawAimGuide();
   drawBombs(false);
   drawParts();
@@ -2771,6 +2859,7 @@ const RULES = [
   ['📅', '하루와 목표', '하루에 다이너마이트 <b>6개</b>. 그날 <b>목표 점수</b>를 넘기면 다음 날로. 넘긴 점수 <b>100점마다</b> 내일 다이너마이트 +1.'],
   ['🔥', '피버 타임', '<b>연속 명중</b>(3마리 이상을 연달아)할 때만 피버 게이지가 찹니다(2연속 +2 … 최대 +5). 게이지는 <b>날이 바뀌어도 남고</b>, 다 차면 <b>10초 피버</b>: 호수가 얕은 물고기로 가득, <b>다이너마이트 무제한</b>, 점수 ×2! 끝나면 게이지는 처음부터.'],
   ['🏆', '이정표 보상', '<b>5일차마다</b> 하루를 넘기면 보상: 5일차 동전 150 · 무료 판 10 · 특수탄, 10일차 핵폭탄 · MAJOR 잭팟 +100, 15일차 GRAND 잭팟 +500… <b>처음 도달하면 동전 2배!</b>'],
+  ['🎯', '스나이퍼', '가게에서 <b>고용</b>하면 부두에서 자동으로 쏩니다. 느리지만 <b>한 발씩 정확</b>하게: 얕은 곳의 비싼 물고기를 한 마리씩, 그리고 <b>상어·쿠르가에 특효</b>(쿠르가 머리를 쏘면 물대포 저지). 수영객과 고래는 쏘지 않아요.'],
   ['🧰', '보물상자', '하루 1~3개가 <b>호수 바닥</b>에 가라앉아 있습니다. 흐린 네모 그림자와 <b>금빛 반짝임</b>을 찾아 <b>깊게</b> 터뜨리세요. 동전, 생선칩, 특수탄, 다이너마이트, 드물게 <b>핵폭탄</b>… 가끔은 <b>불발탄</b>이 들어 있어 큰 2차 폭발이!'],
   ['🎯', '실력 보상', '한 방에 <b>6마리 이상</b>이면 다이너마이트 환급(12마리 이상 2개). 단, <b>하루 최대 3개</b>까지(오른쪽 위 ●). 3마리 이상을 <b>연속</b>으로 잡으면 점수와 <b>생선칩</b>이 최대 2배.'],
   ['⚡', '황다랑어', '가끔 <b>아주 빠른 그림자</b>가 호수를 가로지릅니다. 황다랑어 한 마리 <b>150점</b>. 지나갈 길목을 미리 노리세요.'],
@@ -3364,7 +3453,7 @@ twoStep('resetGear', '장비만 초기화', '정말? 한 번 더 누르면 실�
   renderShop();
 });
 twoStep('resetAll', '처음부터 다시', '정말? 모든 기록이 지워집니다', () => {
-  meta = { upVer: 2, coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0, cluster: 0, bait: 0, remote: 0 }, dex: {}, nukes: 0, ammo: { remote: 2, cluster: 2, bait: 2 }, chips: 40, jp: { mini: JP.mini.seed, major: JP.major.seed, grand: JP.grand.seed }, fever: 0, bestMile: 0 };
+  meta = { upVer: 2, coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0, cluster: 0, bait: 0, remote: 0, sniper: 0 }, dex: {}, nukes: 0, ammo: { remote: 2, cluster: 2, bait: 2 }, chips: 40, jp: { mini: JP.mini.seed, major: JP.major.seed, grand: JP.grand.seed }, fever: 0, bestMile: 0 };
   saveMeta(); applyUpgrades();
   best = 0; bestDay = 0;
   try { localStorage.removeItem('dynfish_best'); localStorage.removeItem('dynfish_bestday'); } catch (e) {}
@@ -3404,7 +3493,7 @@ requestAnimationFrame(frame);
 
 // 디버그/테스트용 훅
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; },
-  get fish() { return fish.length; }, get chips() { return eveChips; }, setFever: n => { meta.fever = n; }, get fever() { return fever ? fever.t : null; }, get feverGauge() { return meta.fever; }, startFever: () => startFever(), spawnChestAt: (x, y) => { spawnChest(); const c = chests[chests.length - 1]; c.x = x; c.y = y; c.depth = 0.95; }, chestsInfo: () => chests.map(c => ({ state: c.state, loot: c.loot })), setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotSim: n => slotSim(n), get jp() { return meta.jp; }, forceJP: t => { rollJP.force = t; }, forceGrid: g => { forcedGrid = g; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), spawnKind: k => spawnSchool(k, false), giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
+  get fish() { return fish.length; }, get chips() { return eveChips; }, get sniper() { return { aim: !!sniper.aim, kills: sniper.kills, cd: sniper.cd }; }, setFever: n => { meta.fever = n; }, get fever() { return fever ? fever.t : null; }, get feverGauge() { return meta.fever; }, startFever: () => startFever(), spawnChestAt: (x, y) => { spawnChest(); const c = chests[chests.length - 1]; c.x = x; c.y = y; c.depth = 0.95; }, chestsInfo: () => chests.map(c => ({ state: c.state, loot: c.loot })), setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotSim: n => slotSim(n), get jp() { return meta.jp; }, forceJP: t => { rollJP.force = t; }, forceGrid: g => { forcedGrid = g; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), spawnKind: k => spawnSchool(k, false), giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
 </script>
 </body>
