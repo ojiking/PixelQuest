@@ -246,7 +246,7 @@
       <li><b>놓으면</b> 던집니다. 늦게 놓을수록 얕은 곳에서 터집니다</li>
     </ol>
     <div class="coins" id="startCoins"></div>
-    <div class="btns"><button id="startBtn">시작</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button><button class="ghost" data-crew>🤖 동료</button></div>
+    <div class="btns"><button id="startBtn">시작</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button><button class="ghost" data-crew>🤖 동료·터렛</button></div>
     <button class="link" id="rulesBtn">📖 자세한 규칙 보기</button>
     <a class="home" href="/">← PixelQuest로 돌아가기</a>
   </div>
@@ -263,7 +263,7 @@
       <button class="sell" id="sellBtn">🐟 헐값에 팔기<small id="sellInfo"></small></button>
       <button class="slotbtn" data-slot>🎰 슬롯으로 도박<small id="slotInfo"></small></button>
     </div>
-    <div class="btns"><button id="nextBtn">🛏 잠자리에 들기</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button><button class="ghost" data-crew>🤖 동료</button></div>
+    <div class="btns"><button id="nextBtn">🛏 잠자리에 들기</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button><button class="ghost" data-crew>🤖 동료·터렛</button></div>
   </div>
 </div>
 
@@ -334,6 +334,9 @@
     <div class="sub">로봇은 다이너마이트에 맞아도 멀쩡해요. 데려갈 동료를 슬롯에 넣으세요</div>
     <div class="crewslots" id="crewSlots"></div>
     <div id="crewList"></div>
+    <h1 style="margin-top:14px">🏗 부두 터렛</h1>
+    <div class="sub">몰려오는 피라냐 떼와 상어·보스를 쏩니다. 일반 물고기는 쏘지 않아요</div>
+    <div id="turList"></div>
     <button class="ghost" id="crewClose">닫기</button>
   </div>
 </div>
@@ -518,7 +521,7 @@ const UPGRADES = [
 ];
 const SNIPER_INT = [0, 3.0, 2.5, 2.1, 1.8, 1.5];   // 스나이퍼 단계별 사격 간격(초)
 let meta = { coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0, cluster: 0, bait: 0, remote: 0, sniper: 0 }, dex: {}, nukes: 0 };
-try { const m = JSON.parse(localStorage.getItem('dynfish_meta') || 'null'); if (m && m.up) meta = { coins: m.coins | 0, up: Object.assign(meta.up, m.up), dex: m.dex || {}, nukes: m.nukes | 0, ammo: m.ammo, chips: m.chips, jp: m.jp, fever: m.fever, change: m.change, bestMile: m.bestMile, upVer: m.upVer, crew: m.crew, equip: m.equip }; } catch (e) {}
+try { const m = JSON.parse(localStorage.getItem('dynfish_meta') || 'null'); if (m && m.up) meta = { coins: m.coins | 0, up: Object.assign(meta.up, m.up), dex: m.dex || {}, nukes: m.nukes | 0, ammo: m.ammo, chips: m.chips, jp: m.jp, fever: m.fever, change: m.change, bestMile: m.bestMile, upVer: m.upVer, crew: m.crew, equip: m.equip, tur: m.tur }; } catch (e) {}
 const NUKE_COST = 2500, NUKE_MAX = 2;
 
 // ===== 특수 다이너마이트 (던질 때 기본 다이너마이트 1개를 특수탄으로 바꿔 던진다) =====
@@ -541,6 +544,8 @@ if (typeof meta.fever !== 'number') meta.fever = 0;
 if (typeof meta.bestMile !== 'number') meta.bestMile = 0;   // 처음 도달한 이정표(최초 돌파 보너스용)
 // 🤖 동료: 고용한 로봇과 장착 슬롯
 if (!meta.crew) meta.crew = {};
+// 🏗 터렛: 부두 자리 3곳 (첫 자리는 기본 개방)
+if (!meta.tur) meta.tur = { open: 1, mounts: [null, null, null] };
 if (!Array.isArray(meta.equip)) meta.equip = meta.up && meta.up.sniper > 0 ? ['sniper'] : [];
 let fever = null;                         // 발동 중이면 { t: 남은 초 }
 if (!meta.jp) meta.jp = { mini: JP.mini.seed, major: JP.major.seed, grand: JP.grand.seed };
@@ -657,6 +662,7 @@ function startDay() {
   tunaT = rand(10, 18); swimT = firstSwimDelay(); swimmer = null; fatal = null; emptyTube = null;
   chests = []; pendingBlasts = []; chestQueue = 1 + (Math.random() < 0.6 ? 1 : 0) + (day >= 3 && Math.random() < 0.4 ? 1 : 0); chestT = rand(6, 18);
   fever = null; initRobots();
+  pirs = []; missiles = []; turRT = []; pirT = day >= 2 ? rand(18, 30) : 999;
   rareT = rand(18, 30); nuke = null; radiation = 0; nukeFlash = 0;
   bossDay = day % 5 === 0; bossSpawned = false;
   if (bossDay) { nextBig = 12; banner = { str: day % 10 === 0 ? `👑 ${day}일차 · 초거대 보스의 날! 목표 ${target}점` : `👹 ${day}일차 · 보스의 날! 목표 ${target}점`, t: 3.6 }; }
@@ -809,6 +815,7 @@ function nukeBlast() {
 const sniper = { cd: 2, aim: null, tracer: null, kills: 0 };
 const sniperPos = () => ({ x: Math.min(VW - 10, player.x + 30), y: player.y + 2 });
 function sniperTargetPos(tg) {
+  if (tg.kind === 'pir') return tg.q.hp > 0 ? { x: tg.q.x, y: tg.q.y, depth: 0 } : null;
   if (tg.kind === 'fish') { const f = tg.f; return f.state === 'swim' ? { x: f.x, y: f.y, depth: f.depth } : null; }
   if (!big || big.dead || big !== tg.big) return null;
   if (big.type === 'shark') return { x: big.x, y: big.y, depth: big.depth };
@@ -822,6 +829,8 @@ function sniperTargetPos(tg) {
   return null;   // 고래는 절대 쏘지 않는다
 }
 function sniperPick() {
+  const pr = pirs.filter(q => q.hp > 0).sort((a, b2) => b2.y - a.y)[0];
+  if (pr && (!big || big.dead || big.type === 'whale')) return { kind: 'pir', q: pr };
   if (big && !big.dead && big.type !== 'whale') { const tg = { kind: 'big', big }; if (sniperTargetPos(tg)) return tg; } // 큰 놈 우선
   let best = null, bv = 0;
   for (const f of fish) {
@@ -854,6 +863,7 @@ function sniperFire(tg, pos) {
   for (let i = 0; i < 5; i++) parts.push({ x: pos.x, y: pos.y, z: 0, vx: rand(-10, 10), vy: rand(-6, 6), vz: rand(25, 50), life: 0.4, max: 0.4, type: 'drop' });
   const ex = { x: pos.x, y: pos.y, depth: pos.depth, kills: 0, pts: 0, t: 0, mult: streakMult(streak) * (fever ? 2 : 1), rs: 0.3, quiet: true, fever: !!fever };
   combos.push(ex);
+  if (tg.kind === 'pir') { pirDamage(tg.q, 2); texts.push(mkText(pos.x, pos.y - 10, '🎯', '#ffdf6a', 1.0)); return; }
   if (tg.kind === 'big') {
     bigHit(ex);                                             // 상어·오징어·쿠르가에 정확히 한 발
     if (tg.big.type === 'kaiju' && !pos.head) {}            // 몸통 -1, 머리 -2(물대포 저지)는 kaijuHit가 처리
@@ -1072,6 +1082,145 @@ function drawRobots() {
   }
 }
 
+// ===== 🦷 피라냐 떼 습격 (부두를 지켜라) =====
+let pirs = [], pirT = 30, pirWave = 0;
+function spawnPirWave() {
+  const n = Math.min(30, 5 + day * 2), hp = 1 + Math.floor(day / 4);
+  pirWave++;
+  for (let i = 0; i < n; i++) {
+    pirs.push({ x: rand(10, VW - 10), y: rand(-60, -4), hp, maxHp: hp, sp: rand(18, 24) + day * 0.6, ph: rand(0, TAU), hit: 0 });
+  }
+  banner = { str: `⚠ 피라냐 떼 습격! (${n}마리) 부두를 지켜라`, t: 2.8 };
+  tone(220, 0.3, 0.12, 'sawtooth', 330); tone(330, 0.3, 0.12, 'sawtooth', 220, 0.3);
+}
+function pirDamage(q, dmg) {
+  if (q.hp <= 0) return;
+  q.hp -= dmg; q.hit = 0.15;
+  if (q.hp <= 0) { // 처치: 배를 뒤집고 둥둥
+    addScore(20); todayChips += 2; stats.pirKills = (stats.pirKills || 0) + 1;
+    texts.push(mkText(q.x, q.y - 6, '+20', '#ffb3a8', 0.85));
+    for (let i = 0; i < 4; i++) parts.push({ x: q.x, y: q.y, z: 0, vx: rand(-10, 10), vy: rand(-6, 6), vz: rand(20, 40), life: 0.4, max: 0.4, type: 'drop' });
+  }
+}
+function pirBlast(x, y, ed, rr) { if (ed > 0.45) return; for (const q of pirs) if (q.hp > 0 && Math.hypot(q.x - x, q.y - y) < rr + 3) pirDamage(q, 3); }
+function updatePirs(dt) {
+  if (state !== 'play' || fatal || player.dead) return;
+  const bossNow = big && (big.type === 'kaiju' || big.type === 'leviathan') && !big.dead;
+  if (day >= 2 && !fever && !bossNow) { pirT -= dt; if (pirT <= 0) { spawnPirWave(); pirT = rand(30, 45); } }
+  for (const q of pirs) {
+    q.hit = Math.max(0, q.hit - dt); q.ph += dt * 6;
+    if (q.hp <= 0) { q.dead = (q.dead || 0) + dt; continue; }
+    q.y += q.sp * dt; q.x = clamp(q.x + Math.sin(q.ph * 0.5) * 18 * dt, 6, VW - 6);
+    if (q.y >= SHORE - 5) { // 부두 도착: 덥석! 칩을 훔친다
+      q.hp = 0; q.dead = 1;
+      const st = Math.min(5, todayChips); todayChips -= st;
+      texts.push(mkText(q.x, SHORE - 10, st ? `덥석! 칩 -${st}` : '덥석!', '#ff6b5b', 1.1, true));
+      shake = Math.max(shake, 3); tone(160, 0.12, 0.15, 'square', 90);
+    }
+  }
+  pirs = pirs.filter(q => !(q.hp <= 0 && q.dead > 0.8));
+}
+function drawPirs() {
+  for (const q of pirs) {
+    const x = Math.round(q.x), y = Math.round(q.y);
+    if (y < -4) continue;
+    if (q.hp <= 0) { b.globalAlpha = Math.max(0, 1 - q.dead / 0.8); b.fillStyle = '#e8d8d0'; b.beginPath(); b.ellipse(x, y, 4, 2, 0, 0, TAU); b.fill(); b.globalAlpha = 1; continue; }
+    b.fillStyle = 'rgba(230,250,255,0.5)'; b.fillRect(x - 4, y + 2, 8, 1);                       // 물살
+    b.fillStyle = q.hit > 0 ? '#ffffff' : '#c8342a'; b.beginPath(); b.ellipse(x, y, 4, 3, Math.PI / 2, 0, TAU); b.fill();
+    b.beginPath(); b.moveTo(x, y - 2); b.lineTo(x - 2, y - 7 + Math.sin(q.ph) ); b.lineTo(x + 2, y - 7 + Math.sin(q.ph)); b.fill();   // 꼬리
+    b.fillStyle = '#7a1a14'; b.beginPath(); b.moveTo(x - 1, y - 1); b.lineTo(x + 1, y - 5); b.lineTo(x + 2, y); b.fill();      // 지느러미
+    b.fillStyle = '#fff'; b.fillRect(x - 2, y + 2, 1, 1); b.fillRect(x, y + 2, 1, 1); b.fillRect(x + 1, y + 2, 1, 1);          // 이빨
+    b.fillStyle = '#ffe27a'; b.fillRect(x - 2, y, 1, 1); b.fillRect(x + 1, y, 1, 1);                                            // 눈
+    if (q.maxHp > 1) { b.fillStyle = '#300'; b.fillRect(x - 3, y - 9, 6, 1); b.fillStyle = '#7fff6a'; b.fillRect(x - 3, y - 9, Math.max(1, Math.round(6 * q.hp / q.maxHp)), 1); }
+  }
+}
+
+// ===== 🏗 부두 터렛: 기관총 / 미사일 =====
+const TUR = {
+  mg: { name: '🔫 기관총', costs: [2500, 4000, 9000], desc: lv => `연사 ${6 + lv * 2}발, ${(2.6 - lv * 0.4).toFixed(1)}초마다` },
+  ms: { name: '🚀 미사일', costs: [4500, 7000, 15000], desc: lv => `미사일 ${lv}발, ${7 - lv}초마다` },
+};
+const MOUNT_COST = [0, 2000, 5000];
+const mountPos = i => ({ x: VW * [0.12, 0.3, 0.88][i], y: SHORE + 9 });
+let turRT = [], missiles = [];
+function turretTarget() { // 표적: 부두에 가장 가까운 피라냐 → 상어·보스(약점). 평범한 물고기는 쏘지 않는다
+  const q = pirs.filter(p2 => p2.hp > 0 && p2.y > 0).sort((a, b2) => b2.y - a.y)[0];
+  if (q) return { kind: 'pir', q, pos: { x: q.x, y: q.y, depth: 0 } };
+  if (big && !big.dead && big.type !== 'whale') { const tg = { kind: 'big', big }, pos = sniperTargetPos(tg); if (pos) return { kind: 'big', big, pos }; }
+  return null;
+}
+function updateTurrets(dt) {
+  for (const m of missiles) {
+    m.t += dt;
+    if (m.tg && m.tg.kind === 'pir' && m.tg.q.hp > 0) { m.tx = m.tg.q.x; m.ty = m.tg.q.y; }
+    const k = Math.min(1, m.t / m.dur);
+    m.x = lerp(m.sx, m.tx, k); m.y = lerp(m.sy, m.ty, k); m.z = Math.sin(k * Math.PI) * m.arc;
+    if (Math.random() < dt * 60) parts.push({ x: m.x, y: m.y, z: m.z, vx: rand(-3, 3), vy: rand(-3, 3), vz: rand(-2, 6), life: 0.6, max: 0.6, type: 'smoke' });
+    if (k >= 1) { m.done = true; explode(m.tx, m.ty, 0.05, 0.75, true, true); }
+  }
+  missiles = missiles.filter(m => !m.done);
+  if (state !== 'play' || fatal || player.dead) return;
+  meta.tur.mounts.forEach((t, i) => {
+    if (!t || i >= meta.tur.open) return;
+    const rt = turRT[i] || (turRT[i] = { cd: 1 + i, burst: 0, bt: 0, ang: -Math.PI / 2, flash: 0, tracer: null, acc: 0 });
+    rt.flash = Math.max(0, rt.flash - dt); if (rt.tracer) { rt.tracer.t -= dt; if (rt.tracer.t <= 0) rt.tracer = null; }
+    const mp = mountPos(i), tg = turretTarget();
+    if (tg) rt.ang = angLerp(rt.ang, Math.atan2(tg.pos.y - mp.y, tg.pos.x - mp.x), dt * 10);
+    if (t.type === 'mg') {
+      if (rt.burst > 0) {
+        rt.bt -= dt;
+        if (rt.bt <= 0 && tg) {
+          rt.burst--; rt.bt = 0.09; rt.flash = 0.05;
+          const jx = tg.pos.x + rand(-2, 2), jy = tg.pos.y + rand(-2, 2);
+          rt.tracer = { x: jx, y: jy, t: 0.06 };
+          parts.push({ x: jx, y: jy, z: 0, vx: rand(-8, 8), vy: rand(-5, 5), vz: rand(15, 30), life: 0.3, max: 0.3, type: 'drop' });
+          if (Math.random() < 0.5) tone(900 + Math.random() * 300, 0.02, 0.04, 'square');
+          if (tg.kind === 'pir') pirDamage(tg.q, 1);
+          else { rt.acc += 0.2; if (rt.acc >= 1) { rt.acc -= 1; const ex = { x: tg.pos.x, y: tg.pos.y, depth: tg.pos.depth, kills: 0, pts: 0, t: 0, mult: 1, rs: 0.3, quiet: true, safe: true }; combos.push(ex); bigHit(ex); } }
+        } else if (!tg) rt.burst = 0;
+      } else if ((rt.cd -= dt) <= 0 && tg) { rt.burst = 6 + t.lv * 2; rt.cd = 2.6 - t.lv * 0.4; }
+    } else if (t.type === 'ms') {
+      if ((rt.cd -= dt) <= 0 && tg) {
+        rt.cd = 7 - t.lv; rt.flash = 0.2;
+        for (let n = 0; n < t.lv; n++) {
+          const tg2 = n === 0 ? tg : (turretTargetN(n) || tg);
+          missiles.push({ sx: mp.x, sy: mp.y - 4, tx: tg2.pos.x, ty: tg2.pos.y, x: mp.x, y: mp.y, z: 0, t: -n * 0.18, dur: 0.9 + Math.hypot(tg2.pos.x - mp.x, tg2.pos.y - mp.y) / 260, arc: 30 + n * 6, tg: tg2 });
+        }
+        noiseBurst(0.4, 900, 0.25, 'bandpass'); tone(300, 0.4, 0.08, 'sawtooth', 900);
+      }
+    }
+  });
+}
+function turretTargetN(n) { const qs = pirs.filter(p2 => p2.hp > 0 && p2.y > 0).sort((a, b2) => b2.y - a.y); const q = qs[n * 3]; return q ? { kind: 'pir', q, pos: { x: q.x, y: q.y, depth: 0 } } : null; }
+function drawTurrets() {
+  meta.tur.mounts.forEach((t, i) => {
+    if (!t || i >= meta.tur.open) return;
+    const rt = turRT[i] || { ang: -Math.PI / 2, flash: 0 }, mp = mountPos(i), x = Math.round(mp.x), y = Math.round(mp.y);
+    b.fillStyle = '#8a7a52'; b.fillRect(x - 6, y - 1, 12, 4); b.fillStyle = '#6a5a3a'; for (let k = 0; k < 3; k++) b.fillRect(x - 6 + k * 4, y - 1, 1, 4); // 모래주머니
+    b.fillStyle = '#4a555c'; b.beginPath(); b.arc(x, y - 3, 4, 0, TAU); b.fill();
+    b.fillStyle = '#ff8a2a'; b.fillRect(x - 4, y - 3, 8, 1);
+    const ca = Math.cos(rt.ang), sa = Math.sin(rt.ang);
+    if (t.type === 'mg') { // 쌍열 총신
+      b.strokeStyle = '#1d2226'; b.lineWidth = 1.5;
+      for (const o of [-1.2, 1.2]) { b.beginPath(); b.moveTo(x - sa * o, y - 3 + ca * o); b.lineTo(x - sa * o + ca * 9, y - 3 + ca * o + sa * 9); b.stroke(); }
+      if (rt.flash > 0) { b.fillStyle = '#ffe27a'; b.beginPath(); b.arc(x + ca * 11, y - 3 + sa * 11, 2.5, 0, TAU); b.fill(); }
+      if (rt.tracer) { b.strokeStyle = 'rgba(255,230,120,0.9)'; b.lineWidth = 1; b.beginPath(); b.moveTo(x + ca * 10, y - 3 + sa * 10); b.lineTo(rt.tracer.x, rt.tracer.y); b.stroke(); }
+    } else { // 미사일 상자 발사대
+      b.save(); b.translate(x, y - 3); b.rotate(rt.ang + Math.PI / 2);
+      b.fillStyle = '#5b6670'; b.fillRect(-4, -8, 8, 9); b.fillStyle = '#d0362a'; for (let k = 0; k < 2; k++) for (let j = 0; j < 2; j++) b.fillRect(-3 + k * 4, -7 + j * 4, 2, 2);
+      b.restore();
+      if (rt.flash > 0) { b.fillStyle = `rgba(255,200,120,${rt.flash * 4})`; b.beginPath(); b.arc(x, y - 6, 5, 0, TAU); b.fill(); }
+    }
+    b.fillStyle = '#ffe27a'; for (let k = 0; k < t.lv; k++) b.fillRect(x - 4 + k * 3, y + 3, 2, 1);  // 단계 표시
+  });
+  for (const m of missiles) { // 미사일 본체
+    if (m.t < 0) continue;
+    const x = Math.round(m.x), y = Math.round(m.y - m.z);
+    b.fillStyle = '#e8eef2'; b.fillRect(x - 1, y - 1, 3, 2); b.fillStyle = '#d0362a'; b.fillRect(x + 1, y - 1, 1, 2);
+    b.fillStyle = (time * 30 | 0) % 2 ? '#ffe27a' : '#ff8a2a'; b.fillRect(x - 2, y, 1, 1);
+  }
+}
+
 // ===== 🔥 피버 타임 =====
 let feverPulse = 0;
 function startFever() {
@@ -1282,7 +1431,7 @@ function eatSwimmer(B) {
 }
 
 function swimmerHit(ex) {
-  if (!swimmer || swimmer.dead || fatal) return;
+  if (!swimmer || swimmer.dead || fatal || ex.safe) return;   // 터렛 공격은 수영객을 다치게 하지 않는다
   const ed = Math.max(0, ex.depth), rr = (ex.depth < 0 ? R * 0.7 : R) * (ex.rs || 1);
   if (Math.hypot(ex.x - swimmer.x, ex.y - swimmer.y, ed * DZ) > rr + 4) return;
   murderSwimmer();
@@ -1890,7 +2039,7 @@ function bigHit(ex) {
         big.flee = 2.5; big.ang = Math.atan2(big.y - ex.y, big.x - ex.x);
         texts.push(mkText(big.x, big.y, '명중! 한 발 더!', '#ff8a5b', 1.6));
       }
-    } else if (big.hitCd <= 0) {
+    } else if (big.hitCd <= 0 && !ex.safe) {
       big.hitCd = 2; big.dive = 6; stats.whaleHits++;
       addScore(-300); sfx.bad();
       texts.push(mkText(big.x, big.y, '고래는 보호종! -300', '#ff5b5b', 2.2, true));
@@ -1915,8 +2064,8 @@ function mkText(x, y, str, col = '#fff', size = 1, pop = false) { return { x, y,
 function addScore(n) { score = Math.max(0, score + n); dayScore += n; }
 
 // ===== 폭발 =====
-function explode(x, y, depth, rs = 1, quiet = false) {
-  const ex = { x, y, depth, kills: 0, pts: 0, t: 0, mult: streakMult(streak) * (fever ? 2 : 1), rs, quiet, fever: !!fever };
+function explode(x, y, depth, rs = 1, quiet = false, safe = false) {
+  const ex = { x, y, depth, kills: 0, pts: 0, t: 0, mult: streakMult(streak) * (fever ? 2 : 1), rs, quiet, fever: !!fever, safe };
   combos.push(ex);
   const ed = Math.max(0, depth), rr = (depth < 0 ? R * 0.7 : R) * rs;
   for (const f of fish) {
@@ -1965,6 +2114,7 @@ function explode(x, y, depth, rs = 1, quiet = false) {
   for (let i = 0; i < 3; i++) ripples.push({ x, y, r: 2 + i * 5, max: 34 + i * 10 + surf * 12, life: 1.1 + i * 0.2 });
   for (let i = 0; i < 12; i++) parts.push({ x: x + rand(-10, 10), y: y + rand(-8, 8), z: 0, vx: 0, vy: rand(-3, 3), vz: 0, life: rand(0.6, 1.4), max: 1.4, type: 'bubble' });
   robotsZap(x, y, rr);
+  pirBlast(x, y, ed, rr);
   sfx.boom(ed);
   vibrate(K >= 5 ? [60 + Math.min(220, K * 14), 30, 90] : depth < 0.3 ? [80, 30, 60] : [50]);
 }
@@ -2156,6 +2306,8 @@ function update(dt) {
   updateFever(dt);
   updateSniper(dt);
   updateRobots(dt);
+  updatePirs(dt);
+  updateTurrets(dt);
   tunaT -= dt;
   if (tunaT <= 0 && !fatal) { spawnTuna(); tunaT = rand(18, 30) * Math.max(0.5, 1 - (day - 1) * 0.08); }
   rareT -= dt;
@@ -2776,7 +2928,8 @@ function render() {
   drawChestsSurface();
   drawBlasts();
   drawPier();
-  if (state === 'play' || state === 'end' || state === 'clear') { drawRobots(); drawPlayer(); drawSniper(); }
+  drawPirs();
+  if (state === 'play' || state === 'end' || state === 'clear') { drawRobots(); drawTurrets(); drawPlayer(); drawSniper(); }
   drawAimGuide();
   drawBombs(false);
   drawParts();
@@ -3004,6 +3157,7 @@ function drawHUD() {
     const left = REFUND_CAP - refundsToday;
     txt(`환급 ${'●'.repeat(left)}${'○'.repeat(REFUND_CAP - left)}`, W - 14, 18 + u * 3.2, u * 1.0, left ? '#ffb347' : '#8a9aa0', 'right');
   }
+  { const left = pirs.filter(q => q.hp > 0).length; if (left && state === 'play') txt(`🦷 남은 피라냐 ${left}`, W / 2, cvs.height * 0.12, u * 1.3, '#ff8a7a', 'center'); }
   if (big && (big.type === 'kaiju' || big.type === 'leviathan') && !big.dead && big.phase !== 'leave') {
     const lev = big.type === 'leviathan';
     const bw = Math.min(W * (lev ? 0.8 : 0.62), lev ? 440 : 340), bx = (W - bw) / 2, by = 58 + u * 1.2, bh = Math.max(9, u * (lev ? 1.3 : 1.0));
@@ -3236,6 +3390,7 @@ function endGame(reason) {
     (stats.catches.length ? `<br>대어: <b>${stats.catches.join(', ')}</b>` : '') +
     (stats.whaleHits ? `<br><span style="color:#ff8a8a">고래 오폭 ${stats.whaleHits}회</span>` : '') +
     (stats.jackpots ? `<br><span style="color:#ffe27a">💰 잭팟 ${stats.jackpots}번</span>` : '') +
+    (stats.pirKills ? `<br><span style="color:#ff8a7a">🦷 피라냐 ${stats.pirKills}마리 격퇴</span>` : '') +
     (stats.chests ? `<br><span style="color:#ffd44a">🧰 보물상자 ${stats.chests}개</span>` : '') +
     (stats.rescues ? `<br><span style="color:#7fffb0">수영객 구조 ${stats.rescues}회</span>` : '') +
     (stats.swimmersLost ? `<br><span style="opacity:.75">상어에게 잃은 수영객 ${stats.swimmersLost}명</span>` : '') +
@@ -3263,6 +3418,7 @@ const RULES = [
   ['🔥', '피버 타임', '<b>연속 명중</b>(3마리 이상을 연달아)할 때만 피버 게이지가 찹니다(2연속 +2 … 최대 +5). 게이지는 <b>날이 바뀌어도 남고</b>, 다 차면 <b>10초 피버</b>: 호수가 얕은 물고기로 가득, <b>다이너마이트 무제한</b>, 점수 ×2! 끝나면 게이지는 처음부터.'],
   ['🏆', '이정표 보상', '<b>5일차마다</b> 하루를 넘기면 보상: 5일차 동전 150 · 무료 판 10 · 특수탄, 10일차 핵폭탄 · MAJOR 잭팟 +100, 15일차 GRAND 잭팟 +500… <b>처음 도달하면 동전 2배!</b>'],
   ['👑', '초거대 보스: 그란모르', '<b>10일차마다</b> 머리만으로 호수를 가득 채우는 군주가 나타납니다. 입을 벌려 <b>초강력 레이저</b>를 쏘면 맞을 때 다이너마이트 2개를 잃어요. <b>눈(-3)</b>이나 벌린 입 속 <b>혀(-5)</b>를 얕게 터뜨려 맞히면 <b>움찔하며 레이저가 취소</b>됩니다. 체력 40, 격파 +30000.'],
+  ['🏗', '부두 터렛 & 피라냐 습격', '<b>2일차부터</b> 피라냐 떼가 부두로 몰려와 닿으면 <b>오늘 칩을 훔쳐 갑니다</b>. 🤖 동료·터렛 화면에서 부두 <b>3자리</b>에 🔫 <b>기관총</b>이나 🚀 <b>미사일</b>을 지어 막으세요(각 3단계). 터렛은 피라냐와 상어·보스를 쏘고, 수영객·고래는 다치게 하지 않아요.'],
   ['🤖', '로봇 동료', '<b>🤖 동료</b> 화면에서 로봇을 고용해 <b>슬롯</b>에 넣으면 함께 낚시합니다(기본 2칸, 10·20일차 이정표에 +1). 🐕 몰이 드론 · 🧺 수거 로봇 · 🔦 탐사 잠수정 · 🧨 투척 로봇 · 🕹 집게 로봇. <b>로봇은 다이너마이트에 맞아도 멀쩡</b>해요.'],
   ['🎯', '스나이퍼', '가게에서 <b>고용</b>하면 부두에서 자동으로 쏩니다. 느리지만 <b>한 발씩 정확</b>하게: 얕은 곳의 비싼 물고기를 한 마리씩, 그리고 <b>상어·쿠르가에 특효</b>(쿠르가 머리를 쏘면 물대포 저지). 수영객과 고래는 쏘지 않아요.'],
   ['🧰', '보물상자', '하루 1~3개가 <b>호수 바닥</b>에 가라앉아 있습니다. 흐린 네모 그림자와 <b>금빛 반짝임</b>을 찾아 <b>깊게</b> 터뜨리세요. 동전, 생선칩, 특수탄, 다이너마이트, 드물게 <b>핵폭탄</b>… 가끔은 <b>불발탄</b>이 들어 있어 큰 2차 폭발이!'],
@@ -3843,6 +3999,7 @@ function crewIcon(c, id) { // 동료 화면용 미니 초상: 실제 게임 그�
   b = saved; robots = savedR; chests = savedC;
 }
 function renderCrew() {
+  renderTurrets();
   const n = meta.equip.filter(onTeam).length, max = crewSlots();
   document.getElementById('crewSlots').innerHTML = `장착 ${n} / ${max} 슬롯 · 보유 동전 ${COIN}${meta.coins.toLocaleString()}` +
     (max < 4 ? `<div style="font-size:12px;opacity:.75;font-weight:600">슬롯은 ${max === 2 ? '10일차' : '20일차'} 이정표를 넘으면 늘어나요</div>` : '');
@@ -3870,6 +4027,24 @@ function renderCrew() {
     }
     row.appendChild(bt); list.appendChild(row);
   }
+}
+function renderTurrets() {
+  const list = document.getElementById('turList'); list.innerHTML = '';
+  meta.tur.mounts.forEach((t, i) => {
+    const row = document.createElement('div'); row.className = 'item';
+    const info = document.createElement('div'); info.className = 'info';
+    const locked = i >= meta.tur.open;
+    info.innerHTML = `<div class="nm">포대 ${i + 1}번 자리 ${locked ? '🔒' : t ? `· ${TUR[t.type].name} Lv.${t.lv}/3` : '· 비어 있음'}</div>` +
+      `<div class="ds">${locked ? '자리를 열면 터렛을 지을 수 있어요' : t ? TUR[t.type].desc(t.lv) + (t.lv < 3 ? ` → <b style="color:#8ff0ad">${TUR[t.type].desc(t.lv + 1)}</b>` : ' (최대)') : '기관총은 빠른 연사, 미사일은 광역 폭발'}</div>`;
+    row.appendChild(info);
+    const box = document.createElement('div'); box.style.display = 'grid'; box.style.gap = '4px';
+    const mk = (html, cost, fn) => { const bt = document.createElement('button'); bt.innerHTML = html; bt.disabled = meta.coins < cost; bt.addEventListener('click', () => { if (meta.coins < cost) return; meta.coins -= cost; fn(); saveMeta(); ensureAudio(); sfx.bonus(); renderCrew(); renderShop(); }); box.appendChild(bt); };
+    if (locked) { if (i === meta.tur.open) mk(`${COIN}${MOUNT_COST[i].toLocaleString()} 자리 열기`, MOUNT_COST[i], () => { meta.tur.open++; }); else { const bt = document.createElement('button'); bt.textContent = '앞 자리 먼저'; bt.disabled = true; box.appendChild(bt); } }
+    else if (!t) { mk(`🔫 ${COIN}${TUR.mg.costs[0].toLocaleString()}`, TUR.mg.costs[0], () => { meta.tur.mounts[i] = { type: 'mg', lv: 1 }; }); mk(`🚀 ${COIN}${TUR.ms.costs[0].toLocaleString()}`, TUR.ms.costs[0], () => { meta.tur.mounts[i] = { type: 'ms', lv: 1 }; }); }
+    else if (t.lv < 3) mk(`${COIN}${TUR[t.type].costs[t.lv].toLocaleString()} 강화`, TUR[t.type].costs[t.lv], () => { t.lv++; });
+    else { const bt = document.createElement('button'); bt.textContent = '최대'; bt.disabled = true; box.appendChild(bt); }
+    row.appendChild(box); list.appendChild(row);
+  });
 }
 document.querySelectorAll('[data-crew]').forEach(btn => btn.addEventListener('click', () => {
   crewBack = btn.closest('.overlay'); crewBack.classList.add('hidden');
@@ -3913,7 +4088,7 @@ twoStep('resetGear', '장비만 초기화', '정말? 한 번 더 누르면 실�
   renderShop();
 });
 twoStep('resetAll', '처음부터 다시', '정말? 모든 기록이 지워집니다', () => {
-  meta = { upVer: 2, coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0, cluster: 0, bait: 0, remote: 0, sniper: 0 }, dex: {}, nukes: 0, ammo: { remote: 2, cluster: 2, bait: 2 }, chips: 40, jp: { mini: JP.mini.seed, major: JP.major.seed, grand: JP.grand.seed }, fever: 0, bestMile: 0, crew: {}, equip: [] };
+  meta = { upVer: 2, coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0, cluster: 0, bait: 0, remote: 0, sniper: 0 }, dex: {}, nukes: 0, ammo: { remote: 2, cluster: 2, bait: 2 }, chips: 40, jp: { mini: JP.mini.seed, major: JP.major.seed, grand: JP.grand.seed }, fever: 0, bestMile: 0, crew: {}, equip: [], tur: { open: 1, mounts: [null, null, null] } };
   saveMeta(); applyUpgrades();
   best = 0; bestDay = 0;
   try { localStorage.removeItem('dynfish_best'); localStorage.removeItem('dynfish_bestday'); } catch (e) {}
@@ -3953,7 +4128,7 @@ requestAnimationFrame(frame);
 
 // 디버그/테스트용 훅
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; },
-  get fish() { return fish.length; }, get chips() { return eveChips; }, get robots() { return Object.keys(robots); }, robotInfo: () => JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(robots).map(([k, r]) => [k, { x: Math.round(r.x), y: Math.round(r.y), zap: r.zap, tgt: !!r.tgt, aim: !!r.aim }])))), spawnLev: () => { big = null; spawnLeviathan(); }, lev: () => big && big.type === 'leviathan' ? { hp: big.hp, phase: big.phase, open: big.open, geo: levGeo(), dead: big.dead } : null, levPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, get sniper() { return { aim: !!sniper.aim, kills: sniper.kills, cd: sniper.cd }; }, setFever: n => { meta.fever = n; }, get fever() { return fever ? fever.t : null; }, get feverGauge() { return meta.fever; }, startFever: () => startFever(), spawnChestAt: (x, y) => { spawnChest(); const c = chests[chests.length - 1]; c.x = x; c.y = y; c.depth = 0.95; }, chestsInfo: () => chests.map(c => ({ state: c.state, loot: c.loot })), setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotSim: n => slotSim(n), get jp() { return meta.jp; }, forceJP: t => { rollJP.force = t; }, forceGrid: g => { forcedGrid = g; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), spawnKind: k => spawnSchool(k, false), giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
+  get fish() { return fish.length; }, get chips() { return eveChips; }, spawnPirWave: () => spawnPirWave(), get pirs() { return pirs.filter(q => q.hp > 0).length; }, get pirKills() { return stats.pirKills || 0; }, get missiles() { return missiles.length; }, get robots() { return Object.keys(robots); }, robotInfo: () => JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(robots).map(([k, r]) => [k, { x: Math.round(r.x), y: Math.round(r.y), zap: r.zap, tgt: !!r.tgt, aim: !!r.aim }])))), spawnLev: () => { big = null; spawnLeviathan(); }, lev: () => big && big.type === 'leviathan' ? { hp: big.hp, phase: big.phase, open: big.open, geo: levGeo(), dead: big.dead } : null, levPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, get sniper() { return { aim: !!sniper.aim, kills: sniper.kills, cd: sniper.cd }; }, setFever: n => { meta.fever = n; }, get fever() { return fever ? fever.t : null; }, get feverGauge() { return meta.fever; }, startFever: () => startFever(), spawnChestAt: (x, y) => { spawnChest(); const c = chests[chests.length - 1]; c.x = x; c.y = y; c.depth = 0.95; }, chestsInfo: () => chests.map(c => ({ state: c.state, loot: c.loot })), setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotSim: n => slotSim(n), get jp() { return meta.jp; }, forceJP: t => { rollJP.force = t; }, forceGrid: g => { forcedGrid = g; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), spawnKind: k => spawnSchool(k, false), giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
 </script>
 </body>
