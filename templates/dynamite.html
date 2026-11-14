@@ -70,6 +70,17 @@
   .item .lv { color: #f2c14e; font-size: 12px; letter-spacing: 2px; }
   .item button { font-size: 13.5px; padding: 7px 10px; white-space: nowrap; }
   .earn { color: #ffd76a; }
+  /* 🏆 이정표 보상 */
+  .milepanel { background: radial-gradient(circle at 50% 0, #4a3a10, #1a1408 75%); border-color: #ffd44a; }
+  .trophy { font-size: 64px; line-height: 1; margin: 4px 0 2px; animation: trophy 1.2s ease-in-out infinite alternate; }
+  @keyframes trophy { from { transform: translateY(0) rotate(-4deg); } to { transform: translateY(-6px) rotate(4deg); } }
+  .milelist { list-style: none; padding: 0; margin: 10px 0 14px; display: grid; gap: 6px; }
+  .milelist li { background: rgba(0,0,0,.35); border: 1px solid rgba(255,212,74,.45); padding: 8px 10px; font-weight: 800; font-size: 16px;
+    opacity: 0; transform: translateY(8px) scale(.95); transition: opacity .3s, transform .3s; }
+  .milelist li.on { opacity: 1; transform: none; }
+  .milelist li.first { color: #7fffb0; }
+  .mileNext { font-size: 13px; opacity: .85; margin-bottom: 12px; }
+  @media (prefers-reduced-motion: reduce) { .trophy { animation: none; } .milelist li { transition: none; } }
   /* 동전 아이콘: 이모지 대신 직접 그린다 (일부 PC에서 동전 이모지가 네모로 깨짐) */
   .coin { display: inline-block; width: .85em; height: .85em; border-radius: 50%; vertical-align: -0.08em; margin-right: .22em;
     background: radial-gradient(circle at 35% 35%, #fff2b0 0 18%, #ffd44a 19% 60%, #d99a12 61%); box-shadow: 0 0 0 1px #7a5208; }
@@ -302,6 +313,17 @@
   </div>
 </div>
 
+<div class="overlay hidden" id="mileOv">
+  <div class="panel milepanel">
+    <div class="trophy">🏆</div>
+    <h1 id="mileTitle">5일차 돌파!</h1>
+    <div class="sub" id="mileSub">이정표 보상</div>
+    <ul class="milelist" id="mileList"></ul>
+    <div class="mileNext" id="mileNext"></div>
+    <button id="mileBtn">받고 저녁으로</button>
+  </div>
+</div>
+
 <div class="overlay hidden" id="dexOv">
   <div class="panel">
     <h1>📘 물고기 도감</h1>
@@ -476,7 +498,7 @@ const UPGRADES = [
   { id: 'charm', name: '재기의 부적',       desc: '목표 미달 때 그날을 한 번 더 (판마다)', costs: [1500, 4000] },
 ];
 let meta = { coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0 }, dex: {}, nukes: 0 };
-try { const m = JSON.parse(localStorage.getItem('dynfish_meta') || 'null'); if (m && m.up) meta = { coins: m.coins | 0, up: Object.assign(meta.up, m.up), dex: m.dex || {}, nukes: m.nukes | 0, ammo: m.ammo, chips: m.chips, jp: m.jp, fever: m.fever, change: m.change }; } catch (e) {}
+try { const m = JSON.parse(localStorage.getItem('dynfish_meta') || 'null'); if (m && m.up) meta = { coins: m.coins | 0, up: Object.assign(meta.up, m.up), dex: m.dex || {}, nukes: m.nukes | 0, ammo: m.ammo, chips: m.chips, jp: m.jp, fever: m.fever, change: m.change, bestMile: m.bestMile }; } catch (e) {}
 const NUKE_COST = 1500, NUKE_MAX = 2;
 
 // ===== 특수 다이너마이트 (던질 때 기본 다이너마이트 1개를 특수탄으로 바꿔 던진다) =====
@@ -496,6 +518,7 @@ const JP = {
 // 🔥 피버 게이지: 연속 명중으로만 차고, 날이 바뀌어도/게임이 끝나도 남는다
 const FEVER_MAX = 60, FEVER_TIME = 10;
 if (typeof meta.fever !== 'number') meta.fever = 0;
+if (typeof meta.bestMile !== 'number') meta.bestMile = 0;   // 처음 도달한 이정표(최초 돌파 보너스용)
 let fever = null;                         // 발동 중이면 { t: 남은 초 }
 if (!meta.jp) meta.jp = { mini: JP.mini.seed, major: JP.major.seed, grand: JP.grand.seed };
 // 물고기 → 생선칩 환산
@@ -2533,6 +2556,51 @@ function startGame() {
   startOv.classList.add('hidden'); endOv.classList.add('hidden'); clearOv.classList.add('hidden');
 }
 // ===== 🌙 저녁: 잡은 생선을 헐값에 팔거나 슬롯에 건다. 잠자리에 들면 남은 생선은 상한다 =====
+// ===== 🏆 이정표 보상: 5일마다 =====
+function mileReward(d) {
+  if (d === 5)  return { coins: 150, free: 10, ammo: 2 };
+  if (d === 10) return { coins: 400, free: 20, nuke: 1, major: 100 };
+  if (d === 15) return { coins: 800, free: 30, nuke: 1, grand: 500 };
+  return { coins: 1000, free: 30, nuke: 1 };
+}
+const mileText = r => [`동전 ${r.coins}`, `무료 판 ${r.free}회`, r.ammo ? `특수탄 각 ${r.ammo}개` : '', r.nuke ? '핵폭탄' : '', r.major ? `MAJOR 잭팟 +${r.major}` : '', r.grand ? `GRAND 잭팟 +${r.grand}` : ''].filter(Boolean).join(' · ');
+function showMilestone(d) {
+  const r = mileReward(d), first = d > meta.bestMile;
+  const coins = r.coins * (first ? 2 : 1);
+  meta.coins += coins; eveFree += r.free;
+  if (r.ammo) for (const a of AMMO) meta.ammo[a.id] = Math.min(AMMO_MAX, (meta.ammo[a.id] || 0) + r.ammo);
+  let nukeNote = '';
+  if (r.nuke) { if (meta.nukes < NUKE_MAX) meta.nukes += 1; else { meta.coins += 300; nukeNote = ' (가득 차서 동전 +300)'; } }
+  if (r.major) meta.jp.major += r.major;
+  if (r.grand) meta.jp.grand += r.grand;
+  if (first) meta.bestMile = d;
+  saveMeta(); updateAmmoBar(true);
+  const items = [
+    `${COIN} 동전 +${coins}${first ? ' <span style="font-size:13px">(최초 돌파 ×2!)</span>' : ''}`,
+    `🎰 오늘 저녁 무료 판 +${r.free}회`,
+    r.ammo ? `🧨 특수탄 각 +${r.ammo}개` : '',
+    r.nuke ? `☢ 핵폭탄 +1${nukeNote}` : '',
+    r.major ? `💰 MAJOR 잭팟 +${r.major}` : '',
+    r.grand ? `💰 GRAND 잭팟 +${r.grand}` : '',
+  ].filter(Boolean);
+  document.getElementById('mileTitle').textContent = `${d}일차 돌파!`;
+  document.getElementById('mileSub').textContent = first ? '처음 도달한 이정표! 보상 2배' : '이정표 보상';
+  const ul = document.getElementById('mileList'); ul.innerHTML = '';
+  items.forEach((h, i) => {
+    const li = document.createElement('li'); li.innerHTML = h; if (first && i === 0) li.className = 'first'; ul.appendChild(li);
+    setTimeout(() => { li.classList.add('on'); tone(784 + i * 130, 0.12, 0.08, 'square'); }, 450 + i * 380);
+  });
+  document.getElementById('mileNext').textContent = `다음 이정표: ${d + 5}일차 · ${mileText(mileReward(d + 5))}`;
+  clearOv.classList.add('hidden');
+  document.getElementById('mileOv').classList.remove('hidden');
+  coinRain(50); vibrate([120, 60, 120, 60, 240]);
+  [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.16, 0.09, 'triangle', null, i * 0.1));
+}
+document.getElementById('mileBtn').addEventListener('click', () => {
+  document.getElementById('mileOv').classList.add('hidden');
+  renderEvening(false); clearOv.classList.remove('hidden');
+});
+
 function startEvening(success) {
   state = 'clear';
   if (hiss) hiss.g.gain.setTargetAtTime(0, ac.currentTime, 0.03);
@@ -2550,11 +2618,13 @@ function startEvening(success) {
   document.getElementById('clearStats').innerHTML = success
     ? `목표 ${target}점 달성 · <b>+${extra}</b> 초과 · 총점 ${score}` +
       (nextBonus ? `<br><span class="newbest">내일 다이너마이트 +${nextBonus}</span>` : '') +
-      `<br><span style="opacity:.8">내일 목표 ${dayTarget(day + 1)}점</span>`
+      `<br><span style="opacity:.8">내일 목표 ${dayTarget(day + 1)}점</span>` +
+      `<br><span style="color:#ffd76a">🏆 다음 이정표: ${(Math.floor(day / 5) + 1) * 5}일차 (${mileText(mileReward((Math.floor(day / 5) + 1) * 5))})</span>`
     : `<span style="color:#ff9a8a">목표 미달 (${dayScore} / ${target}). 오늘이 마지막 밤입니다</span>`;
   renderEvening(true);
   document.getElementById('nextBtn').textContent = success ? `🛏 잠자리에 들기 → ${day + 1}일차` : '🛏 잠자리에 들기 (여기서 끝)';
   clearOv.classList.remove('hidden');
+  if (success && day % 5 === 0) showMilestone(day);   // 🏆 5일마다 이정표 보상
 }
 function renderEvening(countUp) {
   const parts2 = Object.entries(todayKinds).filter(x => x[1] > 0)
@@ -2688,6 +2758,7 @@ const RULES = [
   ['🦈', '거대한 그림자', '<b>상어</b> 2발 = +500 · <b>대왕오징어</b> 촉수 3발 = +1000. <b>고래</b>는 보호종이라 맞히면 -300. 물을 뿜으면 고래입니다.'],
   ['📅', '하루와 목표', '하루에 다이너마이트 <b>6개</b>. 그날 <b>목표 점수</b>를 넘기면 다음 날로. 넘긴 점수 <b>100점마다</b> 내일 다이너마이트 +1.'],
   ['🔥', '피버 타임', '<b>연속 명중</b>(3마리 이상을 연달아)할 때만 피버 게이지가 찹니다(2연속 +2 … 최대 +5). 게이지는 <b>날이 바뀌어도 남고</b>, 다 차면 <b>10초 피버</b>: 호수가 얕은 물고기로 가득, <b>다이너마이트 무제한</b>, 점수 ×2! 끝나면 게이지는 처음부터.'],
+  ['🏆', '이정표 보상', '<b>5일차마다</b> 하루를 넘기면 보상: 5일차 동전 150 · 무료 판 10 · 특수탄, 10일차 핵폭탄 · MAJOR 잭팟 +100, 15일차 GRAND 잭팟 +500… <b>처음 도달하면 동전 2배!</b>'],
   ['🧰', '보물상자', '하루 1~3개가 <b>호수 바닥</b>에 가라앉아 있습니다. 흐린 네모 그림자와 <b>금빛 반짝임</b>을 찾아 <b>깊게</b> 터뜨리세요. 동전, 생선칩, 특수탄, 다이너마이트, 드물게 <b>핵폭탄</b>… 가끔은 <b>불발탄</b>이 들어 있어 큰 2차 폭발이!'],
   ['🎯', '실력 보상', '한 방에 <b>6마리 이상</b>이면 다이너마이트 환급(12마리 이상 2개). 단, <b>하루 최대 3개</b>까지(오른쪽 위 ●). 3마리 이상을 <b>연속</b>으로 잡으면 점수와 <b>생선칩</b>이 최대 2배.'],
   ['⚡', '황다랑어', '가끔 <b>아주 빠른 그림자</b>가 호수를 가로지릅니다. 황다랑어 한 마리 <b>150점</b>. 지나갈 길목을 미리 노리세요.'],
@@ -3280,7 +3351,7 @@ twoStep('resetGear', '장비만 초기화', '정말? 한 번 더 누르면 실�
   renderShop();
 });
 twoStep('resetAll', '처음부터 다시', '정말? 모든 기록이 지워집니다', () => {
-  meta = { coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0 }, dex: {}, nukes: 0, ammo: { remote: 2, cluster: 2, bait: 2 }, chips: 40, jp: { mini: JP.mini.seed, major: JP.major.seed, grand: JP.grand.seed }, fever: 0 };
+  meta = { coins: 0, up: { bag: 0, power: 0, fuse: 0, charm: 0 }, dex: {}, nukes: 0, ammo: { remote: 2, cluster: 2, bait: 2 }, chips: 40, jp: { mini: JP.mini.seed, major: JP.major.seed, grand: JP.grand.seed }, fever: 0, bestMile: 0 };
   saveMeta(); applyUpgrades();
   best = 0; bestDay = 0;
   try { localStorage.removeItem('dynfish_best'); localStorage.removeItem('dynfish_bestday'); } catch (e) {}
