@@ -192,6 +192,21 @@
   .paytable td { padding: 1px 6px; } .paytable td:first-child { white-space: nowrap; }
   .slotpanel.jackpot { animation: jackflash .12s steps(2) 16; }
   @keyframes jackflash { 50% { background: #ffd44a; } }
+  /* 💥 당첨 칸 폭발 연출 */
+  #slotFx { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 8; }
+  .cell.boom { animation: cellboom .5s ease-out forwards; }
+  @keyframes cellboom { 0% { background: #fff; transform: scale(1.25); filter: brightness(2); } 25% { background: #ffcf5b; }
+    100% { background: radial-gradient(#5a3a22, #2a1a10); transform: scale(1); color: transparent; } }
+  .cell.regrow { animation: regrow .3s ease-out; }
+  @keyframes regrow { 0% { transform: scale(.2); } 70% { transform: scale(1.15); } 100% { transform: none; } }
+  .flyfish { position: fixed; z-index: 9; pointer-events: none; line-height: 1; will-change: transform; }
+  #machine.shk1 { animation: mshk .22s linear; } #machine.shk2 { animation: mshk2 .35s linear; }
+  @keyframes mshk { 25% { transform: translate(-3px, 2px); } 50% { transform: translate(3px, -2px); } 75% { transform: translate(-2px, -1px); } }
+  @keyframes mshk2 { 15% { transform: translate(-7px, 4px) rotate(-.6deg); } 35% { transform: translate(6px, -5px) rotate(.5deg); } 55% { transform: translate(-5px, -3px); } 75% { transform: translate(4px, 3px); } }
+  .wallet .cn.pulse { animation: cnpulse .12s ease-out; }
+  @keyframes cnpulse { 50% { transform: scale(1.12); background: rgba(255,212,74,.35); } }
+  .wallet .cn { transition: box-shadow .2s; } .wallet .cn.hot { box-shadow: 0 0 0 2px #ffd44a, 0 0 18px rgba(255,212,74,.8); }
+  @media (prefers-reduced-motion: reduce) { #machine.shk1, #machine.shk2 { animation: none; } }
   .coinrain { position: fixed; top: -30px; z-index: 9; pointer-events: none; font-size: 26px; animation: rain linear forwards; }
   @keyframes rain { to { transform: translateY(110vh) rotate(540deg); } }
   @media (prefers-reduced-motion: reduce) { .reel.win, .slotmsg.tease, .slotpanel.jackpot, button.slotbtn.ready { animation: none; } }
@@ -3676,7 +3691,7 @@ function slotWallet() {
   jpRender();
   const tl = document.getElementById('slotTally'); if (tl) tl.innerHTML = tallyHtml();
   document.getElementById('slotChips').textContent = eveChips.toLocaleString();
-  document.getElementById('slotCoins').textContent = meta.coins.toLocaleString();
+  if (!slotFx.counting) document.getElementById('slotCoins').textContent = meta.coins.toLocaleString();
   const sb = document.getElementById('spinBtn');
   sb.textContent = fsLeft > 0 ? `FREE SPIN! (${fsLeft})` : eveFree > 0 && slotBet === 1 ? `무료 SPIN! (${eveFree}회)` : `SPIN! (🐟${SPIN_COST * slotBet})`;
   const canSpin = eveChips >= SPIN_COST || eveFree > 0 || fsLeft > 0;
@@ -3751,6 +3766,151 @@ function splash(cls, title, amount, ms) {
     requestAnimationFrame(step);
   }
   clearTimeout(splash.t); splash.t = setTimeout(() => { el.hidden = true; }, ms);
+}
+
+// 💥 슬롯 당첨 연출: 당첨 칸의 물고기가 다이너마이트처럼 터지고, 동전이 지갑으로 휘리릭 날아간다
+const SYM_COL = { '🐟': ['#6fa8dc', '#cfe2f3'], '🐠': ['#ff9a3a', '#ffe08a'], '🐡': ['#e8c35a', '#fff2b0'], '🦑': ['#ff7a9a', '#ffd0dc'],
+  '🦈': ['#8a9aa8', '#dfe6ec'], '🐋': ['#4a7ab8', '#bcd6f2'], '👹': ['#d9483b', '#ffb08a'], '🧨': ['#ff4a2a', '#ffd44a'], '☢️': ['#b8ff6a', '#f0ffb0'] };
+const slotFx = { parts: [], coins: [], running: false, counting: false, shown: 0, target: 0, cv: null, ctx: null };
+function fxCanvas() {
+  if (!slotFx.cv) {
+    const cv = document.createElement('canvas'); cv.id = 'slotFx'; document.body.appendChild(cv);
+    slotFx.cv = cv; slotFx.ctx = cv.getContext('2d');
+  }
+  const cv = slotFx.cv, dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (cv.width !== innerWidth * dpr || cv.height !== innerHeight * dpr) { cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; }
+  slotFx.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return slotFx.ctx;
+}
+function fxLoop() {
+  if (slotFx.running) return;
+  slotFx.running = true;
+  let last = performance.now();
+  const step = now => {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    const ctx = fxCanvas(); ctx.clearRect(0, 0, innerWidth, innerHeight);
+    // 파편 / 물방울 / 불꽃
+    for (const p of slotFx.parts) {
+      p.life -= dt; p.vy += (p.g || 600) * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 1 - 1.5 * dt;
+      const a = Math.max(0, Math.min(1, p.life / p.max));
+      ctx.globalAlpha = a;
+      if (p.ring) { ctx.strokeStyle = p.c; ctx.lineWidth = 3 * a; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (1 - a) + 4, 0, 6.283); ctx.stroke(); }
+      else { ctx.fillStyle = p.c; const z = p.s * (p.fire ? a : 1); ctx.fillRect(p.x - z / 2, p.y - z / 2, z, z); }
+    }
+    slotFx.parts = slotFx.parts.filter(p => p.life > 0);
+    // 날아가는 동전
+    const tgt = document.getElementById('slotCoins').getBoundingClientRect();
+    const tx = tgt.left + tgt.width / 2, ty = tgt.top + tgt.height / 2;
+    for (const c of slotFx.coins) {
+      c.t += dt;
+      if (c.t < c.delay) continue;
+      const k = c.t - c.delay;
+      if (k < 0.28) { c.vy += 900 * dt; c.x += c.vx * dt; c.y += c.vy * dt; }   // 먼저 위로 튀었다가
+      else {                                                                  // 지갑으로 빨려 들어간다
+        const dx = tx - c.x, dy = ty - c.y, d = Math.hypot(dx, dy), sp = 300 + (k - 0.28) * 2600;
+        if (d < sp * dt + 8) { c.done = true; coinArrive(c.v); continue; }
+        c.x += dx / d * sp * dt; c.y += dy / d * sp * dt;
+      }
+      const r = c.r, sq = Math.abs(Math.cos(c.t * 14 + c.ph));             // 빙글빙글 도는 동전
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#8a5200'; ctx.beginPath(); ctx.ellipse(c.x, c.y + 1.5, r * Math.max(0.2, sq), r, 0, 0, 6.283); ctx.fill();
+      ctx.fillStyle = '#ffd44a'; ctx.beginPath(); ctx.ellipse(c.x, c.y, r * Math.max(0.2, sq), r, 0, 0, 6.283); ctx.fill();
+      ctx.fillStyle = '#fff6c0'; ctx.fillRect(c.x - r * 0.35 * sq, c.y - r * 0.55, Math.max(1, r * 0.3 * sq), r * 0.5);
+    }
+    slotFx.coins = slotFx.coins.filter(c => !c.done);
+    ctx.globalAlpha = 1;
+    if (slotFx.parts.length || slotFx.coins.length) requestAnimationFrame(step);
+    else {
+      slotFx.running = false; ctx.clearRect(0, 0, innerWidth, innerHeight);
+      if (slotFx.counting) { slotFx.counting = false; setCoinText(meta.coins); document.querySelector('.wallet .cn').classList.remove('hot'); }
+    }
+  };
+  requestAnimationFrame(step);
+}
+function setCoinText(v) { document.getElementById('slotCoins').textContent = Math.floor(v).toLocaleString(); }
+function coinArrive(v) {
+  slotFx.shown = Math.min(slotFx.target, slotFx.shown + v);
+  setCoinText(slotFx.shown);
+  const cn = document.querySelector('.wallet .cn'); cn.classList.remove('pulse'); void cn.offsetWidth; cn.classList.add('pulse');
+  const now = performance.now();
+  if (!coinArrive.t || now - coinArrive.t > 40) { coinArrive.t = now; coinArrive.n = (coinArrive.n || 0) + 1;
+    tone(1400 + (coinArrive.n % 8) * 90, 0.05, 0.05, 'square'); }   // 짤랑짤랑 (음이 조금씩 올라감)
+}
+function cellBlast(el, sym, power) {
+  const r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+  const col = SYM_COL[sym] || ['#ffd44a', '#fff'];
+  el.classList.remove('boom', 'regrow', 'hit'); void el.offsetWidth; el.classList.add('boom');
+  // 물고기가 위로 치솟는다 (게임에서 터진 물고기처럼)
+  const f = document.createElement('span'); f.className = 'flyfish'; f.textContent = sym;
+  const fs = r.width * 0.75; f.style.fontSize = fs + 'px'; f.style.left = (x - fs / 2) + 'px'; f.style.top = (y - fs / 2) + 'px';
+  document.body.appendChild(f);
+  let vx = (Math.random() - 0.5) * 160, vy = -(420 + power * 160 + Math.random() * 120), px = 0, py = 0, rot = 0, vr = (Math.random() - 0.5) * 900, t0 = performance.now(), lt = t0;
+  const fly = now => {
+    const dt = Math.min(0.05, (now - lt) / 1000); lt = now; const t = (now - t0) / 1000;
+    vy += 1300 * dt; px += vx * dt; py += vy * dt; rot += vr * dt;
+    f.style.transform = `translate(${px}px, ${py}px) rotate(${rot}deg) scale(${1 + Math.min(0.6, t * 1.2)})`;
+    f.style.opacity = Math.max(0, 1 - Math.max(0, t - 0.55) * 2.5);
+    if (t < 1 && y + py < innerHeight + 60) requestAnimationFrame(fly); else f.remove();
+  };
+  requestAnimationFrame(fly);
+  // 파편: 물고기 조각 + 물보라 + 불꽃 + 충격파
+  const n = 10 + power * 8;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * 6.283, sp = 80 + Math.random() * (160 + power * 80);
+    slotFx.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 120, s: 3 + Math.random() * 4, c: col[Math.random() * 2 | 0], life: 0.6 + Math.random() * 0.5, max: 1.1 });
+  }
+  for (let i = 0; i < 8 + power * 4; i++) {
+    const a = Math.random() * 6.283, sp = 60 + Math.random() * 140;
+    slotFx.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 200, s: 2 + Math.random() * 3, c: Math.random() < 0.5 ? '#8fd6ff' : '#e8f8ff', life: 0.5 + Math.random() * 0.5, max: 1 });
+  }
+  for (let i = 0; i < 6 + power * 3; i++) {
+    const a = Math.random() * 6.283, sp = 40 + Math.random() * 90;
+    slotFx.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, g: -60, s: 5 + Math.random() * 5, c: Math.random() < 0.5 ? '#ff8a3a' : '#ffd44a', fire: true, life: 0.25 + Math.random() * 0.25, max: 0.5 });
+  }
+  slotFx.parts.push({ x, y, vx: 0, vy: 0, g: 0, ring: true, r: r.width * (0.7 + power * 0.25), c: '#fff6c0', life: 0.35, max: 0.35 });
+  fxLoop();
+  return { x, y };
+}
+// 당첨 칸들을 왼쪽 릴부터 연쇄로 터뜨리고 동전을 날린다. 걸리는 시간(ms)을 돌려준다
+function slotWinFx(cells, total, power) {
+  if (!cells.length) return 0;
+  const byCol = [[], [], [], [], []];
+  for (const k of cells) byCol[+k[0]].push(k);
+  const gap = power >= 3 ? 130 : power >= 2 ? 105 : 85, pre = power >= 3 ? 220 : 60;   // 큰 당첨은 잠깐 숨을 멈췄다가(히트스톱) 터진다
+  const machine = document.getElementById('machine');
+  const origins = [];
+  let col = 0;
+  // 동전 카운터 애니메이션 준비 (돈은 이미 들어왔고, 표시만 휘리릭 올린다)
+  slotFx.counting = true; slotFx.target = meta.coins;
+  slotFx.shown = Math.max(0, meta.coins - Math.floor(total));
+  setCoinText(slotFx.shown); document.querySelector('.wallet .cn').classList.add('hot');
+  byCol.forEach((ks, c) => {
+    if (!ks.length) return;
+    const at = pre + col++ * gap;
+    setTimeout(() => {
+      for (const k of ks) {
+        const el = document.getElementById('cell' + k);
+        origins.push(cellBlast(el, curGrid[+k[0]][+k[1]], power));
+        setTimeout(() => { el.classList.remove('boom'); void el.offsetWidth; el.classList.add('regrow'); }, 750);
+      }
+      machine.classList.remove('shk1', 'shk2'); void machine.offsetWidth; machine.classList.add(power >= 2 ? 'shk2' : 'shk1');
+      noiseBurst(0.5 + power * 0.15, 900 + c * 150, 0.35 + power * 0.08); tone(80 - c * 6, 0.35, 0.3 + power * 0.06, 'sine', 30);
+      vibrate(power >= 2 ? [40 + power * 20] : [25]);
+    }, at);
+  });
+  const blastEnd = pre + (col - 1) * gap;
+  // 동전 발사: 터진 칸들에서 튀어나온다
+  const N = Math.max(3, Math.min(70, Math.round(3 + Math.log2(total + 1) * 5)));
+  const share = Math.floor(total) / N;
+  setTimeout(() => {
+    for (let i = 0; i < N; i++) {
+      const o = origins[i % origins.length] || { x: innerWidth / 2, y: innerHeight / 2 };
+      slotFx.coins.push({ x: o.x + (Math.random() - 0.5) * 20, y: o.y + (Math.random() - 0.5) * 20, vx: (Math.random() - 0.5) * 380, vy: -200 - Math.random() * 300,
+        r: 6 + Math.random() * 3, t: 0, delay: i * Math.min(0.03, 0.9 / N), ph: Math.random() * 6, v: share });
+    }
+    fxLoop();
+  }, blastEnd + 120);
+  return blastEnd + 400 + Math.min(900, N * 30);
 }
 function spin() {
   if (slotBusy) return;
@@ -3855,6 +4015,11 @@ function finishSpin(g, inFS, rerolled) {
   });
   if (res.sc >= 3) res.scPos.forEach(([c, r]) => hitCells.add(`${c}${r}`));
   if (hitCells.size) document.querySelectorAll('#slotGrid .cell').forEach(el => { const k = el.id.slice(4); el.classList.toggle('hit', hitCells.has(k)); el.classList.toggle('dim', !hitCells.has(k)); });
+  // 💥 당첨 칸 폭발 + 동전 휘리릭 (크게 딸수록 크게 터진다)
+  const winU = res.units / (inFS ? 2 : 1);
+  const fxPow = jpTier || res.jackpot ? 3 : winU >= MEGA_U ? 3 : winU >= BIG_U ? 2 : winU >= 15 ? 1 : 0;
+  const fxTotal = coins + jpAmt + (extra.includes('동전 300') ? 300 : 0);
+  const fxT = hitCells.size && (fxTotal >= 1 || res.fs) ? slotWinFx([...hitCells], fxTotal, fxPow) : 0;
   // 메시지
   const top = res.wins.slice().sort((a, b2) => b2.v - a.v).slice(0, 3).map(w => `${w.sym}×${w.n}`).join(' · ');
   const winBet = res.units / (inFS ? 2 : 1);
@@ -3869,26 +4034,28 @@ function finishSpin(g, inFS, rerolled) {
     msg.className = 'slotmsg'; msg.textContent = ['꽝…', '아깝다!', '다시 한 번?', '물고기가 운다…'][Math.random() * 4 | 0];
     tone(220, 0.15, 0.06, 'triangle', 160);
   }
-  // 연출
+  // 연출 (폭발 연쇄가 끝난 뒤 축하 화면)
   let wait = 650;
-  if (jpTier) {
+  const later = fn => fxT ? setTimeout(fn, fxT) : fn();
+  if (jpTier) later(() => {
     splash(jpTier === 'grand' ? 'jack' : jpTier === 'major' ? 'mega' : 'big', `💰 ${JP[jpTier].name} JACKPOT!`, Math.round(jpAmt + coins), jpTier === 'mini' ? 2200 : 3400);
-    wait = jpTier === 'mini' ? 2300 : 3500;
     const pn = document.getElementById('slotPanel'); pn.classList.remove('jackpot'); void pn.offsetWidth; pn.classList.add('jackpot');
     coinRain(jpTier === 'grand' ? 90 : jpTier === 'major' ? 50 : 22); vibrate([200, 80, 200, 80, 400]);
     [523, 659, 784, 1046, 1318, 1568, 2093].forEach((f, i) => tone(f, 0.18, 0.1, 'square', null, i * 0.09)); noiseBurst(1.2, 4000, 0.3, 'highpass');
-  } else if (res.jackpot) {
-    splash('jack', '👹 JACKPOT 👹', Math.round(coins), 3200); wait = 3300;
+  }); else if (res.jackpot) later(() => {
+    splash('jack', '👹 JACKPOT 👹', Math.round(coins), 3200);
     const pn = document.getElementById('slotPanel'); pn.classList.remove('jackpot'); void pn.offsetWidth; pn.classList.add('jackpot');
     coinRain(70); vibrate([200, 80, 200, 80, 400]);
     [523, 659, 784, 1046, 1318, 1568, 2093].forEach((f, i) => tone(f, 0.18, 0.1, 'square', null, i * 0.09)); noiseBurst(1.2, 4000, 0.3, 'highpass');
-  } else if (winBet >= MEGA_U) {
-    splash('mega', 'MEGA WIN!!', Math.round(coins), 2600); wait = 2700; coinRain(40); vibrate([120, 60, 160]);
+  }); else if (winBet >= MEGA_U) later(() => {
+    splash('mega', 'MEGA WIN!!', Math.round(coins), 2600); coinRain(40); vibrate([120, 60, 160]);
     [659, 784, 988, 1318, 1568].forEach((f, i) => tone(f, 0.14, 0.09, 'square', null, i * 0.08));
-  } else if (winBet >= BIG_U) {
-    splash('big', 'BIG WIN!', Math.round(coins), 2000); wait = 2100; coinRain(18); vibrate([80, 40, 80]);
+  }); else if (winBet >= BIG_U) later(() => {
+    splash('big', 'BIG WIN!', Math.round(coins), 2000); coinRain(18); vibrate([80, 40, 80]);
     [659, 784, 988, 1318].forEach((f, i) => tone(f, 0.12, 0.08, 'square', null, i * 0.08));
-  } else if (coins > 0) { tone(988, 0.08, 0.06, 'square'); tone(1318, 0.1, 0.06, 'square', null, 0.08); }
+  }); else if (coins > 0) { tone(988, 0.08, 0.06, 'square'); tone(1318, 0.1, 0.06, 'square', null, 0.08); }
+  if (jpTier) wait = jpTier === 'mini' ? 2300 : 3500; else if (res.jackpot) wait = 3300; else if (winBet >= MEGA_U) wait = 2700; else if (winBet >= BIG_U) wait = 2100;
+  wait += fxT;
   // 프리스핀 발동 / 재발동
   if (res.fs) {
     const first = fsLeft === 0 && !inFS;
