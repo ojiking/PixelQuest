@@ -406,7 +406,9 @@ let R = 30;              // 폭발 치명 반경(px, 가상 해상도) — 장�
 const DZ = 70;           // 깊이 1.0 = 70px 거리로 환산
 const SINK = 0.45;       // 초당 가라앉는 깊이
 const START_DYN = 6;                 // 하루에 받는 다이너마이트
-const dayTarget = d => 250 + (d - 1) * 130;   // 그날 목표 점수
+const dayTarget0 = d => d <= 10 ? 250 + (d - 1) * 130 : 1420 + (d - 10) * 85;
+// 보스의 날은 물고기가 겁먹고 흩어지므로 목표 60% (시뮬레이션에서 실패의 대부분이 보스의 날이었다)
+const dayTarget = d => d % 5 === 0 ? Math.round(dayTarget0(d) * 0.6 / 10) * 10 : dayTarget0(d);   // 그날 목표 점수 (10일차 이후 완만하게)
 const daySpeed = d => Math.min(1.45, 1 + (d - 1) * 0.07);
 const bigDelay = (a, b2) => rand(a, b2) * Math.max(0.45, 1 - (day - 1) * 0.12);
 const TAU = Math.PI * 2;
@@ -534,7 +536,7 @@ let bossDay = false, bossSpawned = false;   // 5일차마다 보스의 날  // �
 // 장비: 단계가 오를수록 비싸진다. eff(lv) = 그 단계의 효과 설명
 const UPGRADES = [
   { id: 'bag',     name: '🎒 다이너마이트 가방', desc: '매일 받는 다이너마이트', costs: [400, 900, 1800, 3500, 6500, 12000], eff: lv => `+${lv}개` },
-  { id: 'power',   name: '💣 화약 강화',         desc: '모든 폭발 범위',         costs: [500, 1000, 1800, 3000, 5000, 8000, 13000, 20000], eff: lv => `+${lv * 6}%` },
+  { id: 'power',   name: '💣 화약 강화',         desc: '모든 폭발 범위',         costs: [500, 1000, 1800, 3000, 5000, 8000, 13000, 20000], eff: lv => `+${lv * 9}%` },
   { id: 'fuse',    name: '🧵 긴 도화선',         desc: '도화선 길이 (깊이 조절이 쉬워짐)', costs: [300, 800, 2000, 5000], eff: lv => `+${(lv * 0.4).toFixed(1)}초` },
   { id: 'charm',   name: '🧿 재기의 부적',       desc: '목표 미달 때 그날을 다시 (판마다)', costs: [1500, 4000, 10000], eff: lv => `${lv}회` },
   { id: 'cluster', name: '💥 산탄 강화',         desc: '산탄이 갈라지는 갈래 수',  costs: [800, 2500, 7000], eff: lv => `${3 + lv}갈래` },
@@ -576,9 +578,9 @@ if (!meta.jp) meta.jp = { mini: JP.mini.seed, major: JP.major.seed, grand: JP.gr
 // 물고기 → 생선칩 환산
 const CHIP = { crucian: 1, carp: 3, catfish: 8, tuna: 15, armorcarp: 6, sweetfish: 1, puffer: 5, eel: 20, goldcarp: 50, sturgeon: 80, lord: 300, shark: 50, squid: 100, kaiju: 1000, leviathan: 3000 };
 let todayChips = 0, todayKinds = {};
-let eveChips = 0, eveFail = false;   // 저녁에 처분할 생선칩, 목표 미달로 맞은 저녁인지
+let eveChips = 0, eveFail = false, eveRetry = false;   // 저녁에 처분할 생선칩, 목표 미달로 맞은 저녁인지
 let eveBet = 0, eveWon = 0, eveSpins = 0, eveFree = 0, eveBonusChips = 0;  // 이번 저녁 슬롯 결산: 건 칩, 딴 동전, 판 수
-const SELL_RATE = 0.1;
+const SELL_RATE = 0.15;
 const sellValue = c => c > 0 ? Math.max(1, Math.floor(c * SELL_RATE)) : 0;               // 헐값: 칩 1개 = 동전 0.1 (슬롯 평균의 절반 이하)
 let selAmmo = 'basic';
 
@@ -663,12 +665,13 @@ if ((meta.upVer || 1) < 2) {
   for (const k of ['cluster', 'bait', 'remote', 'sniper']) meta.up[k] = meta.up[k] || 0;
   meta.upVer = 2;
 }
-function applyUpgrades() { R = 30 * (1 + 0.06 * meta.up.power); FUSE = 4.0 + 0.4 * meta.up.fuse; }
+function applyUpgrades() { R = 30 * (1 + 0.09 * meta.up.power); FUSE = 4.0 + 0.4 * meta.up.fuse; }
 const dailyDyn = () => START_DYN + meta.up.bag;
 const streakMult = n => 1 + 0.25 * Math.min(n, 4);   // 연속 명중 점수 배율 (최대 x2)
 applyUpgrades();
 let schools = [], fish = [], bombs = [], parts = [], ripples = [], blasts = [], combos = [], texts = [];
 let big = null, nextBig = 15, schoolSpawnT = 0;
+let bannerNext = null;
 let hold = null, shake = 0, flash = 0, ink = 0, endT = 0, outT = 0, banner = null;
 // 타격감: 히트스톱(완전 정지), 슬로모션 + 줌인
 let hitStop = 0, slowT = 0, slowDur = 0, camFocus = null, cam = { z: 1, fx: 0, fy: 0, sx: 0, sy: 0 };
@@ -699,16 +702,17 @@ function startDay() {
   tunaT = rand(10, 18); swimT = firstSwimDelay(); swimmer = null; fatal = null; emptyTube = null;
   chests = []; pendingBlasts = []; chainQ = []; zaps = []; chestQueue = 1 + (Math.random() < 0.6 ? 1 : 0) + (day >= 3 && Math.random() < 0.4 ? 1 : 0); chestT = rand(6, 18);
   fever = null; initRobots();
-  pirs = []; missiles = []; turRT = []; pirT = day >= 2 ? rand(18, 30) : 999;
+  pirs = []; missiles = []; turRT = []; pirT = day >= RAID_DAY ? rand(18, 30) : 999;
   rareT = rand(18, 30); nuke = null; radiation = 0; nukeFlash = 0;
   bossDay = day % 5 === 0; bossSpawned = false;
   if (bossDay) { nextBig = 12; banner = { str: day % 10 === 0 ? `👑 ${day}일차 · 초거대 보스의 날! 목표 ${target}점` : `👹 ${day}일차 · 보스의 날! 목표 ${target}점`, t: 3.6 }; }
   if (day === SWIM_DAY) banner = { str: `${day}일차 · 목표 ${target}점 · 오늘부터 수영객이 나옵니다`, t: 3.4 };
-  if (NEW_FOE[day] && !bossDay) banner = { str: `🆕 새 적! ${NEW_FOE[day]}`, t: 4 };
-  if (NEW_FISH[day] && !bossDay && !NEW_FOE[day]) {
-    banner = { str: `🆕 새 물고기! ${NEW_FISH[day][1]}`, t: 4 };
+  bannerNext = null;
+  if (NEW_FISH[day] && !bossDay) {
+    banner = { str: `🆕 새 물고기! ${NEW_FISH[day][1]}`, t: 3.5 };
     if (!schools.some(sc => sc.kind === NEW_FISH[day][0])) spawnSchool(NEW_FISH[day][0], true);
   }
+  if (NEW_FOE[day] && !bossDay) { const fb = { str: `🆕 새 적! ${NEW_FOE[day]}`, t: 3.5 }; if (NEW_FISH[day]) bannerNext = fb; else banner = fb; }   // 같은 날이면 차례로
 }
 const maxSchools = () => 6 + Math.min(3, day - 1);
 function pickKind() {
@@ -1137,6 +1141,7 @@ function drawRobots() {
 
 // ===== 🦷 피라냐 떼 습격 (부두를 지켜라) =====
 let pirs = [], pirT = 30, pirWave = 0;
+const RAID_DAY = 4;   // 습격 시작일 (시뮬레이션: 2일차는 터렛을 살 돈이 없어 일방적으로 털렸다)
 // 적 종류: pir 피라냐(위에서) · crab 집게게(좌우 옆에서) · croc 악어(위에서, 단단함) · king 피라냐 우두머리(떼를 빠르게)
 const FOE = {
   pir:  { name: '피라냐', pts: 20, chips: 2 },
@@ -1144,17 +1149,20 @@ const FOE = {
   croc: { name: '악어', pts: 150, chips: 20 },
   king: { name: '피라냐 우두머리', pts: 100, chips: 12 },
 };
-const NEW_FOE = { 4: '🦀 집게게: 좌우 옆에서 기어 온다', 6: '🐊 악어: 기관총은 안 먹힌다, 미사일!', 9: '👑 피라냐 우두머리: 살아 있으면 떼가 빨라진다', 12: '🌊 대습격: 위·좌·우에서 동시에' };
+const NEW_FOE = { 4: '🦷 피라냐 습격: 부두를 지켜라 (터렛!)', 6: '🦀 집게게: 좌우 옆에서 기어 온다', 8: '🐊 악어: 기관총은 안 먹힌다, 미사일!', 11: '👑 피라냐 우두머리: 살아 있으면 떼가 빨라진다', 14: '🌊 대습격: 위·좌·우에서 동시에' };
 function addFoe(type, o) { pirs.push(Object.assign({ type, ph: rand(0, TAU), hit: 0 }, o)); }
 function spawnPirWave() {
   pirWave++;
   const parts2 = [];
-  const n = Math.min(30, 5 + day * 2) - (day >= 12 ? 4 : 0), hp = 1 + Math.floor(day / 4);
+  const turN = meta.tur.mounts.filter((t, i) => t && i < meta.tur.open).length;
+  const scale = turN === 0 ? 0.55 : 1;   // 터렛이 없으면 작은 습격 (맨손으로도 다이너마이트로 막아 볼 만하게)
+  const rd = day - RAID_DAY;              // 습격 시작일 기준 경과
+  const n = Math.max(4, Math.round((Math.min(30, 7 + rd * 2) - (day >= 14 ? 4 : 0)) * scale)), hp = 1 + Math.floor(rd / 4);
   for (let i = 0; i < n; i++) addFoe('pir', { x: rand(10, VW - 10), y: rand(-60, -4), hp, maxHp: hp, sp: rand(18, 24) + day * 0.6 });
   parts2.push(`피라냐 ${n}`);
-  if (day >= 4) { // 🦀 옆에서: 12일차부터는 양쪽에서
-    const nc = Math.min(10, 2 + Math.floor((day - 4) / 2)), chp = 2 + Math.floor(day / 5);
-    const sides = day >= 12 ? [-1, 1] : [Math.random() < 0.5 ? -1 : 1];
+  if (day >= 6) { // 🦀 옆에서: 14일차부터는 양쪽에서
+    const nc = Math.max(1, Math.round(Math.min(10, 2 + Math.floor((day - 6) / 2)) * scale)), chp = 2 + Math.floor(day / 6);
+    const sides = day >= 14 ? [-1, 1] : [Math.random() < 0.5 ? -1 : 1];
     for (let i = 0; i < nc; i++) {
       const sd = sides[i % sides.length];
       addFoe('crab', { x: sd < 0 ? rand(-40, -6) : VW + rand(6, 40), y: rand(SHORE - 70, SHORE - 18), hp: chp, maxHp: chp, sp: rand(11, 15) + day * 0.3,
@@ -1162,12 +1170,12 @@ function spawnPirWave() {
     }
     parts2.push(`🦀${nc}${sides.length > 1 ? '(양쪽)' : sides[0] < 0 ? '(왼쪽)' : '(오른쪽)'}`);
   }
-  if (day >= 6) { // 🐊 느리고 단단함
-    const nk = Math.min(3, 1 + Math.floor((day - 6) / 5)), khp = 10 + day;
+  if (day >= 8) { // 🐊 느리고 단단함
+    const nk = Math.min(3, 1 + Math.floor((day - 8) / 5)), khp = 8 + day;
     for (let i = 0; i < nk; i++) addFoe('croc', { x: VW * rand(0.2, 0.8), y: rand(-50, -15) - i * 25, hp: khp, maxHp: khp, sp: rand(10, 12) });
     parts2.push(`🐊${nk}`);
   }
-  if (day >= 9) { // 👑 떼를 이끈다
+  if (day >= 11) { // 👑 떼를 이끈다
     const khp = 6 + Math.floor(day / 3);
     addFoe('king', { x: VW * rand(0.3, 0.7), y: -30, hp: khp, maxHp: khp, sp: 17 + day * 0.4 });
     parts2.push('👑1');
@@ -1190,7 +1198,7 @@ function pirBlast(x, y, ed, rr) { if (ed > 0.45) return; for (const q of pirs) i
 function updatePirs(dt) {
   if (state !== 'play' || fatal || player.dead) return;
   const bossNow = big && (big.type === 'kaiju' || big.type === 'leviathan') && !big.dead;
-  if (day >= 2 && !fever && !bossNow) { pirT -= dt; if (pirT <= 0) { spawnPirWave(); pirT = day >= 12 ? rand(24, 34) : rand(30, 45); } }
+  if (day >= RAID_DAY && !fever && !bossNow) { pirT -= dt; if (pirT <= 0) { spawnPirWave(); pirT = day >= 14 ? rand(24, 34) : rand(30, 45); } }
   const kingAlive = pirs.some(q => q.type === 'king' && q.hp > 0);
   for (const q of pirs) {
     q.hit = Math.max(0, q.hit - dt); q.ph += dt * 6;
@@ -1270,10 +1278,10 @@ function drawCroc(q, x, y) { // 🐊 길쭉한 초록 몸 (아래로 헤엄)
 
 // ===== 🏗 부두 터렛: 기관총 / 미사일 =====
 const TUR = {
-  mg: { name: '🔫 기관총', costs: [2500, 4000, 9000], range: lv => 78 + lv * 6, desc: lv => `연사 ${6 + lv * 2}발, ${(2.6 - lv * 0.4).toFixed(1)}초마다 · 사거리 ${78 + lv * 6} (짧음) · 악어에 약함` },
-  ms: { name: '🚀 미사일', costs: [4500, 7000, 15000], range: lv => 140 + lv * 15, desc: lv => `미사일 ${lv}발, ${7 - lv}초마다 · 사거리 ${140 + lv * 15} (김) · 악어에 강함` },
+  mg: { name: '🔫 기관총', costs: [1200, 2800, 6000], range: lv => 78 + lv * 6, desc: lv => `연사 ${6 + lv * 2}발, ${(2.6 - lv * 0.4).toFixed(1)}초마다 · 사거리 ${78 + lv * 6} (짧음) · 악어에 약함` },
+  ms: { name: '🚀 미사일', costs: [2200, 4500, 9000], range: lv => 140 + lv * 15, desc: lv => `미사일 ${lv}발, ${7 - lv}초마다 · 사거리 ${140 + lv * 15} (김) · 악어에 강함` },
 };
-const MOUNT_COST = [0, 2000, 5000];
+const MOUNT_COST = [0, 1000, 2500];
 const mountPos = i => ({ x: VW * [0.12, 0.3, 0.88][i], y: SHORE + 9 });
 let turRT = [], missiles = [];
 // 표적: 사거리 안에서만. 우선순위 = 우두머리 → (미사일은 악어) → 부두에 가장 가까운 적 → 상어·보스. 평범한 물고기는 쏘지 않는다
@@ -2793,7 +2801,7 @@ function updateFish(dt) {
         f.state = 'got';
         const pts = Math.round(f.sp.pts * (f.ex ? f.ex.mult : 1));
         addScore(pts); stats.fish++; stats.kinds[f.kind]++;
-        todayChips += toCoins((CHIP[f.kind] || 1) * (f.ex ? f.ex.mult / (f.ex.fever ? 2 : 1) : 1) * (f.robotBonus || 1) * newStarBonus()); // 연속 명중 배율은 생선칩에도
+        todayChips += toCoins((CHIP[f.kind] || 1) * (f.ex ? f.ex.mult / (f.ex.fever ? 2 : 1) : 1) * (f.ex && f.ex.fever ? 0.5 : 1) * (f.robotBonus || 1) * newStarBonus()); // 연속 명중 배율은 생선칩에도
         todayKinds[f.kind] = (todayKinds[f.kind] || 0) + 1;
         recordDex(f.kind, f.x, f.y);
         if (f.sp.rare) { texts.push(mkText(f.x, f.y - 10, `✨ ${f.sp.name}!`, '#ffd23f', 1.6, true)); sfx.bonus(); }
@@ -2839,7 +2847,7 @@ function updateAmbient(dt) {
   nukeFlash = Math.max(0, nukeFlash - dt * 0.9);
   radiation = Math.max(0, radiation - dt * 0.08);
   updateNukeButton(dt);
-  if (banner) { banner.t -= dt; if (banner.t <= 0) banner = null; }
+  if (banner) { banner.t -= dt; if (banner.t <= 0) { banner = bannerNext; bannerNext = null; } }
   // 물고기 위 거품 (얕은 떼 힌트)
   if (state === 'play') for (const s of schools) if (s.depth < 0.35 && Math.random() < dt * 0.8) ripples.push({ x: s.x + rand(-6, 6), y: s.y + rand(-4, 4), r: 0, max: 4, life: 0.7 });
 }
@@ -3555,7 +3563,7 @@ function startEvening(success) {
   if (practice) { state = 'clear'; endPractice(); return; }
   state = 'clear';
   if (hiss) hiss.g.gain.setTargetAtTime(0, ac.currentTime, 0.03);
-  eveFail = !success;
+  eveFail = !success; eveRetry = !success && day <= 2;   // 1~2일차 실패는 한 번 더
   eveChips = todayChips; todayChips = 0; eveBet = 0; eveWon = 0; eveSpins = 0;
   resetSlotSession();
   eveBonusChips = eveChips > 0 ? Math.round(eveChips * 0.1 * sPow('sturgeon')) : 0;   // 철갑상어 ★
@@ -3571,9 +3579,10 @@ function startEvening(success) {
       (nextBonus ? `<br><span class="newbest">내일 다이너마이트 +${nextBonus}</span>` : '') +
       `<br><span style="opacity:.8">내일 목표 ${dayTarget(day + 1)}점</span>` +
       `<br><span style="color:#ffd76a">🏆 다음 이정표: ${(Math.floor(day / 5) + 1) * 5}일차 (${mileText(mileReward((Math.floor(day / 5) + 1) * 5))})</span>`
+    : eveRetry ? `<span style="color:#ffd76a">목표 미달 (${dayScore} / ${target}). 1~2일차는 연습! 내일 같은 날을 다시 해요</span>`
     : `<span style="color:#ff9a8a">목표 미달 (${dayScore} / ${target}). 오늘이 마지막 밤입니다</span>`;
   renderEvening(true);
-  document.getElementById('nextBtn').textContent = success ? `🛏 잠자리에 들기 → ${day + 1}일차` : '🛏 잠자리에 들기 (여기서 끝)';
+  document.getElementById('nextBtn').textContent = success ? `🛏 잠자리에 들기 → ${day + 1}일차` : eveRetry ? `🛏 잠자리에 들기 → ${day}일차 다시` : '🛏 잠자리에 들기 (여기서 끝)';
   clearOv.classList.remove('hidden');
   if (success && day % 5 === 0) showMilestone(day);   // 🏆 5일마다 이정표 보상
 }
@@ -3623,6 +3632,7 @@ function nextDay() {
   clearTimeout(bedArm); bt.classList.remove('armed');
   eveChips = 0;
   clearOv.classList.add('hidden');
+  if (eveFail && eveRetry) { startDay(); state = 'play'; banner = { str: `🔁 ${day}일차 다시! 목표 ${target}점`, t: 2.8 }; return; }
   if (eveFail) { endGame('fail'); return; }
   day++; startDay(); state = 'play';
 }
@@ -3730,7 +3740,7 @@ const RULES = [
   ['🔥', '피버 타임', '<b>연속 명중</b>(3마리 이상을 연달아)할 때만 피버 게이지가 찹니다(2연속 +2 … 최대 +5). 게이지는 <b>날이 바뀌어도 남고</b>, 다 차면 <b>10초 피버</b>: 호수가 얕은 물고기로 가득, <b>다이너마이트 무제한</b>, 점수 ×2! 끝나면 게이지는 처음부터.'],
   ['🏆', '이정표 보상', '<b>5일차마다</b> 하루를 넘기면 보상: 5일차 동전 150 · 무료 판 10 · 특수탄, 10일차 핵폭탄 · MAJOR 잭팟 +100, 15일차 GRAND 잭팟 +500… <b>처음 도달하면 동전 2배!</b>'],
   ['👑', '초거대 보스: 그란모르', '<b>10일차마다</b> 머리만으로 호수를 가득 채우는 군주가 나타납니다. 입을 벌려 <b>초강력 레이저</b>를 쏘면 맞을 때 다이너마이트 2개를 잃어요. <b>눈(-3)</b>이나 벌린 입 속 <b>혀(-5)</b>를 얕게 터뜨려 맞히면 <b>움찔하며 레이저가 취소</b>됩니다. 체력 40, 격파 +30000.'],
-  ['🏗', '부두 터렛 & 습격', '<b>2일차부터</b> 적이 부두로 몰려와 닿으면 <b>오늘 칩을 훔쳐 갑니다</b>. 🦷 피라냐(2일차~, 위에서) · 🦀 <b>집게게</b>(4일차~, 좌우 옆에서) · 🐊 <b>악어</b>(6일차~, 단단함. 닿으면 터렛 10초 고장) · 👑 <b>우두머리</b>(9일차~, 살아 있으면 떼가 빨라짐, 닿으면 기절) · 12일차부터 사방에서 대습격. 🤖 동료·터렛 화면에서 부두 <b>3자리</b>(왼쪽·가운데·오른쪽)에 터렛을 지으세요. 🔫 <b>기관총</b>은 사거리가 짧고 빠르지만 악어엔 팅팅, 🚀 <b>미사일</b>은 멀리 쏘고 악어에 강해요. 습격 중엔 사거리가 점선으로 보여요.'],
+  ['🏗', '부두 터렛 & 습격', '<b>4일차부터</b> 적이 부두로 몰려와 닿으면 <b>오늘 칩을 훔쳐 갑니다</b>. 🦷 피라냐(4일차~, 위에서. 터렛이 없으면 작은 무리만) · 🦀 <b>집게게</b>(6일차~, 좌우 옆에서) · 🐊 <b>악어</b>(8일차~, 단단함. 닿으면 터렛 10초 고장) · 👑 <b>우두머리</b>(11일차~, 살아 있으면 떼가 빨라짐, 닿으면 기절) · 14일차부터 사방에서 대습격. 🤖 동료·터렛 화면에서 부두 <b>3자리</b>(왼쪽·가운데·오른쪽)에 터렛을 지으세요. 🔫 <b>기관총</b>은 사거리가 짧고 빠르지만 악어엔 팅팅, 🚀 <b>미사일</b>은 멀리 쏘고 악어에 강해요. 습격 중엔 사거리가 점선으로 보여요.'],
   ['🤖', '로봇 동료', '<b>🤖 동료</b> 화면에서 로봇을 고용해 <b>슬롯</b>에 넣으면 함께 낚시합니다(기본 2칸, 10·20일차 이정표에 +1). 🐕 몰이 드론 · 🧺 수거 로봇 · 🔦 탐사 잠수정 · 🧨 투척 로봇 · 🕹 집게 로봇. <b>로봇은 다이너마이트에 맞아도 멀쩡</b>해요.'],
   ['🎯', '스나이퍼', '가게에서 <b>고용</b>하면 부두에서 자동으로 쏩니다. 느리지만 <b>한 발씩 정확</b>하게: 얕은 곳의 비싼 물고기를 한 마리씩, 그리고 <b>상어·쿠르가에 특효</b>(쿠르가 머리를 쏘면 물대포 저지). 수영객과 고래는 쏘지 않아요.'],
   ['🧰', '보물상자', '하루 1~3개가 <b>호수 바닥</b>에 가라앉아 있습니다. 흐린 네모 그림자와 <b>금빛 반짝임</b>을 찾아 <b>깊게</b> 터뜨리세요. 동전, 생선칩, 특수탄, 다이너마이트, 드물게 <b>핵폭탄</b>… 가끔은 <b>불발탄</b>이 들어 있어 큰 2차 폭발이!'],
@@ -3867,7 +3877,7 @@ const SCAT_PAY = { 3: [8, 2], 4: [12, 10], 5: [20, 50] };   // 스캐터 개수 
 const LINES = [[1,1,1,1,1],[0,0,0,0,0],[2,2,2,2,2],[0,1,2,1,0],[2,1,0,1,2],[0,0,1,2,2],[2,2,1,0,0],[1,0,0,0,1],[1,2,2,2,1],[1,0,1,2,1],
   [1,2,1,0,1],[0,1,0,1,0],[2,1,2,1,2],[0,1,1,1,0],[2,1,1,1,2],[1,1,0,1,1],[1,1,2,1,1],[0,0,1,0,0],[2,2,1,2,2],[0,2,0,2,0]];
 const LINE_COL = ['#ffd44a','#ff5bd1','#5bd8ff','#7fff6a','#ff8a3a','#c08aff','#ff4a4a','#4affd2','#ffe08a','#8ab4ff'];
-const SLOT_K = 0.075;                         // 배당 단위 → 동전 환산 (시뮬레이션으로 맞춤)
+const SLOT_K = 0.13;                           // 배당 단위 → 동전 환산 (시뮬레이션으로 맞춤)
 const ALL_SYMS = Object.keys(BASE_W);
 const BIG_U = 60, MEGA_U = 200;            // BIG / MEGA WIN 기준 (배당 단위, ×1 기준)
 function cellPick(c) {
@@ -4639,7 +4649,7 @@ window.__sim = {
   gamble(cpc) { const g = Math.round(eveChips * cpc + eveFree * SPIN_COST * cpc); meta.coins += g; eveChips = 0; eveFree = 0; return g; },
   sell() { const g = sellValue(eveChips); meta.coins += g; eveChips = 0; return g; },
   cpc(n) { return slotSim(n).coinsPerChip; },
-  sleep() { eveChips = 0; clearOv.classList.add('hidden'); document.getElementById('mileOv').classList.add('hidden'); if (eveFail) { state = 'end'; return false; } day++; startDay(); state = 'play'; return true; },
+  sleep() { eveChips = 0; clearOv.classList.add('hidden'); document.getElementById('mileOv').classList.add('hidden'); if (eveFail && eveRetry) { startDay(); state = 'play'; return true; } if (eveFail) { state = 'end'; return false; } day++; startDay(); state = 'play'; return true; },
   get meta() { return meta; }, UP: UPGRADES, TUR, MOUNT_COST,
 };
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; }, setDyn: n => { dyn = n; },

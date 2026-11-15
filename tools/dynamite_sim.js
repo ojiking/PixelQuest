@@ -34,8 +34,8 @@ const profile = process.argv[2] || 'normal', runs = +(process.argv[3] || 1), max
           let best = null, bv = 0; diag.fishN += w.fish.length; diag.n++; if (w.swimmer) diag.swim++; if (w.big) diag.big[w.big.t] = (diag.big[w.big.t] || 0) + 1;
           for (const c of cand) {
             const cx = c[0] + c[5] * 0.6, cy = c[1] + c[6] * 0.6, cd = c[2];
-            if (w.swimmer && Math.hypot(w.swimmer[0] - cx, w.swimmer[1] - cy) < R + 14) continue;
-            if (w.big && w.big.t === 'whale' && Math.hypot(w.big.x - cx, w.big.y - cy) < R + 20) continue;
+            if (w.swimmer && Math.hypot(w.swimmer[0] - cx, w.swimmer[1] - cy) < R + 14 + sk.sp * 2) continue;
+            if (w.big && w.big.t === 'whale' && Math.hypot(w.big.x - cx, w.big.y - cy) < R + 30 + sk.sp * 2) continue;
             let v = 0;
             for (const f of w.fish) { const fx = f[0] + f[5] * 0.6, fy = f[1] + f[6] * 0.6; if (Math.hypot(fx - cx, fy - cy, (f[2] - cd) * DZ) < R * 0.9) v += f[3] * (f[4] > 1 ? 0.35 : 1); }
             if (v > bv) { bv = v; best = [cx, cy, cd]; }
