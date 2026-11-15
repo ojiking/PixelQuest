@@ -603,28 +603,34 @@ const DEX = [
 const DEX_BY = Object.fromEntries(DEX.map(d => [d.id, d]));
 // ===== 도감 별(★) = 도박 부적: 많이 잡을수록 슬롯이 유리해진다 =====
 const STAR_TH = {
-  crucian: [10, 50, 200], carp: [10, 50, 200], catfish: [5, 25, 100], tuna: [3, 15, 50],
-  armorcarp: [5, 25, 80], sweetfish: [20, 100, 400], puffer: [3, 15, 50], eel: [1, 5, 15],
-  goldcarp: [1, 5, 15], sturgeon: [1, 5, 15], lord: [1, 3, 6],
-  shark: [1, 3, 8], squid: [1, 3, 6], whale: [1, 3, 6], kaiju: [1, 2, 4], leviathan: [1, 2, 3],
+  // ★1~3은 예전 그대로, ★4~6은 훨씬 오래 걸린다
+  crucian: [10, 50, 200, 600, 1500, 4000], carp: [10, 50, 200, 600, 1500, 4000], catfish: [5, 25, 100, 300, 800, 2000], tuna: [3, 15, 50, 150, 400, 1000],
+  armorcarp: [5, 25, 80, 250, 600, 1500], sweetfish: [20, 100, 400, 1200, 3000, 8000], puffer: [3, 15, 50, 150, 400, 1000], eel: [1, 5, 15, 40, 100, 250],
+  goldcarp: [1, 5, 15, 40, 100, 250], sturgeon: [1, 5, 15, 40, 100, 250], lord: [1, 3, 6, 12, 25, 50],
+  shark: [1, 3, 8, 20, 50, 120], squid: [1, 3, 6, 15, 35, 80], whale: [1, 3, 6, 15, 30, 60], kaiju: [1, 2, 4, 8, 15, 25], leviathan: [1, 2, 3, 6, 10, 15],
 };
-const stars = id => (STAR_TH[id] || []).filter(t => (meta.dex[id] || 0) >= t).length;
-const newStarBonus = () => 1 + 0.04 * (stars('armorcarp') + stars('sweetfish') + stars('puffer') + stars('eel'));
+const starsRaw = id => (STAR_TH[id] || []).filter(t => (meta.dex[id] || 0) >= t).length;
+// 효과 세기: ★1~3은 1씩, ★4~6은 0.5씩 (★6 = 4.5) — 슬롯이 너무 쉬워지지 않게
+const starPow = st => Math.min(st, 3) + 0.5 * Math.max(0, st - 3);
+const stars = id => starsRaw(id);
+const sPow = id => starPow(stars(id));
+const newStarBonus = () => 1 + 0.04 * (sPow('armorcarp') + sPow('sweetfish') + sPow('puffer') + sPow('eel'));
 const dexComplete = () => DEX.every(d => (meta.dex[d.id] || 0) > 0);
 // 세 개 맞추기 배당: 기본 + 별당 증가분
 // 도감 ★ → 슬롯 효과 (5릴 비디오 슬롯 기준)
 const PAY_DEX = { '🐟': 'crucian', '🐠': 'carp', '🐡': 'catfish', '🦑': 'squid', '🦈': 'shark', '👹': 'kaiju' };
-function perkText(id, st) {
+function perkText(id, st0) {
+  const st = starPow(st0), r = v => Math.round(v * 10) / 10;
   const sym = Object.keys(PAY_DEX).find(k => PAY_DEX[k] === id);
-  if (sym) return `${sym} 라인 배당 +${st * 15}%`;
+  if (sym) return `${sym} 라인 배당 +${r(st * 15)}%`;
   switch (id) {
-    case 'lord': return `👹 등장 확률 +${st * 25}%`;
-    case 'tuna': return `저녁 무료 판 ${st}회`;
-    case 'leviathan': return `저녁 무료 판 +${st * 5}회`;
-    case 'goldcarp': return `꽝이면 ${st * 8}% 확률로 5번째 릴 다시`;
-    case 'sturgeon': return `저녁 생선칩 +${st * 10}%`;
-    case 'whale': return `프리스핀 +${st * 2}회`;
-    case 'armorcarp': case 'sweetfish': case 'puffer': case 'eel': return `저녁 생선칩 +${st * 4}%`;
+    case 'lord': return `👹 등장 확률 +${r(st * 25)}%`;
+    case 'tuna': return `저녁 무료 판 ${Math.round(st)}회`;
+    case 'leviathan': return `저녁 무료 판 +${Math.round(st * 5)}회`;
+    case 'goldcarp': return `꽝이면 ${r(st * 8)}% 확률로 5번째 릴 다시`;
+    case 'sturgeon': return `저녁 생선칩 +${r(st * 10)}%`;
+    case 'whale': return `프리스핀 +${Math.round(st * 2)}회`;
+    case 'armorcarp': case 'sweetfish': case 'puffer': case 'eel': return `저녁 생선칩 +${r(st * 4)}%`;
   }
   return '';
 }
@@ -3551,9 +3557,9 @@ function startEvening(success) {
   eveFail = !success;
   eveChips = todayChips; todayChips = 0; eveBet = 0; eveWon = 0; eveSpins = 0;
   resetSlotSession();
-  eveBonusChips = eveChips > 0 ? Math.round(eveChips * 0.1 * stars('sturgeon')) : 0;   // 철갑상어 ★
+  eveBonusChips = eveChips > 0 ? Math.round(eveChips * 0.1 * sPow('sturgeon')) : 0;   // 철갑상어 ★
   eveChips += eveBonusChips;
-  eveFree = stars('tuna') + 5 * stars('leviathan');                                                             // 황다랑어 ★
+  eveFree = Math.round(sPow('tuna') + 5 * sPow('leviathan'));                                                             // 황다랑어 ★
   const extra = dayScore - target;
   nextBonus = success ? Math.min(3, Math.floor(extra / 100)) : 0;
   if (success) sfx.bonus(); else tone(330, 0.5, 0.08, 'triangle', 220);
@@ -3865,7 +3871,7 @@ const ALL_SYMS = Object.keys(BASE_W);
 const BIG_U = 60, MEGA_U = 200;            // BIG / MEGA WIN 기준 (배당 단위, ×1 기준)
 function cellPick(c) {
   const w = { ...BASE_W };
-  w['👹'] = 4 * (1 + 0.25 * stars('lord'));    // 호수의 주인 ★: 👹 확률 증가
+  w['👹'] = 4 * (1 + 0.25 * sPow('lord'));    // 호수의 주인 ★: 👹 확률 증가
   if (c === 0 || c === 4) w[WILD] = 0;         // 와일드는 2~4번째 릴에만
   let tot = 0; for (const k in w) tot += w[k];
   let r = Math.random() * tot;
@@ -3875,7 +3881,7 @@ function cellPick(c) {
 let forcedGrid = null;                       // 테스트용: 다음 판 결과 고정
 const spinGrid = () => { if (forcedGrid) { const g = forcedGrid; forcedGrid = null; return g.map(c => c.slice()); }
   return Array.from({ length: REELS }, (_, c) => Array.from({ length: ROWS }, () => cellPick(c))); };
-const symMult = sy => PAY_DEX[sy] ? 1 + 0.15 * stars(PAY_DEX[sy]) : 1;
+const symMult = sy => PAY_DEX[sy] ? 1 + 0.15 * sPow(PAY_DEX[sy]) : 1;
 function evalGrid(g, fsMult) {
   const wins = []; let units = 0;
   LINES.forEach((ln, li) => {
@@ -3892,7 +3898,7 @@ function evalGrid(g, fsMult) {
   const scPos = []; g.forEach((col, c) => col.forEach((sy, r) => { if (sy === SCAT) scPos.push([c, r]); }));
   const sc = Math.min(5, scPos.length);
   let fs = 0, nuke = false;
-  if (sc >= 3) { fs = SCAT_PAY[sc][0] + 2 * stars('whale'); units += SCAT_PAY[sc][1]; nuke = sc >= 5; }
+  if (sc >= 3) { fs = SCAT_PAY[sc][0] + Math.round(2 * sPow('whale')); units += SCAT_PAY[sc][1]; nuke = sc >= 5; }
   const jackpot = wins.some(w => w.sym === '👹' && w.n === 5);
   return { wins, units: units * fsMult, sc, scPos, fs, nuke, jackpot };
 }
@@ -4034,7 +4040,7 @@ function renderPay() {
     `<div class="rule">동전 배당 (지금 배수 ×${slotBet} 기준, 한 라인당). <b>20라인</b> 모두 계산해서 더합니다. 왼쪽 첫 릴부터 같은 그림이 3개 이상 이어져야 당첨.</div>` +
     `<table>${rows}</table>` +
     `<div class="rule">🧨 <b>와일드</b>: 2~4번째 릴에만 나오고 어떤 그림이든 대신합니다${dexComplete() ? ' · <b style="color:#ffd44a">도감 완성: 와일드 낀 당첨 ×2</b>' : ''}.</div>` +
-    `<div class="rule">☢️ <b>스캐터</b>: 어디든 3개 = 프리스핀 8회(+${c(2)}) · 4개 = 12회(+${c(10)}) · 5개 = 20회(+${c(50)}) + <b>핵폭탄</b>${stars('whale') ? ` · 고래 ★${stars('whale')}: +${2 * stars('whale')}회` : ''}. 프리스핀 당첨은 <b>×2</b>, 프리스핀 중에도 다시 터질 수 있어요.</div>` +
+    `<div class="rule">☢️ <b>스캐터</b>: 어디든 3개 = 프리스핀 8회(+${c(2)}) · 4개 = 12회(+${c(10)}) · 5개 = 20회(+${c(50)}) + <b>핵폭탄</b>${stars('whale') ? ` · 고래 ★${stars('whale')}: +${Math.round(2 * sPow('whale'))}회` : ''}. 프리스핀 당첨은 <b>×2</b>, 프리스핀 중에도 다시 터질 수 있어요.</div>` +
     `<div class="rule">👹 다섯 개가 한 라인에 = <b>GRAND 잭팟</b></div>` +
     `<div class="rule">💰 <b>누적 잭팟</b>: 돈 걸고 돌릴 때마다 건 칩의 일부가 MINI·MAJOR·GRAND에 쌓이고(판이 끝나도 유지), 매 판 무작위로 터집니다. 대략 MINI ${Math.round(JP.mini.odds / slotBet)}판 · MAJOR ${Math.round(JP.major.odds / slotBet).toLocaleString()}판 · GRAND ${Math.round(JP.grand.odds / slotBet).toLocaleString()}판에 한 번 (지금 배수 ×${slotBet} 기준, 배수가 높을수록 자주).</div>`;
 }
@@ -4284,7 +4290,7 @@ function spin() {
 function finishSpin(g, inFS, rerolled) {
   const msg = document.getElementById('slotMsg');
   let res = evalGrid(g, inFS ? 2 : 1);
-  if (!res.units && !res.fs && !rerolled && Math.random() < 0.08 * stars('goldcarp')) { // 황금잉어 ★: 꽝이면 5번째 릴 다시
+  if (!res.units && !res.fs && !rerolled && Math.random() < 0.08 * sPow('goldcarp')) { // 황금잉어 ★: 꽝이면 5번째 릴 다시
     msg.className = 'slotmsg tease'; msg.textContent = '✨ 황금잉어의 가호! 5번째 릴 다시!';
     [1318, 1568, 2093].forEach((f, i) => tone(f, 0.08, 0.06, 'square', null, i * 0.06));
     let n = 0;
