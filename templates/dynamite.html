@@ -570,7 +570,8 @@ if (!meta.crew) meta.crew = {};
 // 🏗 터렛: 부두 자리 3곳 (첫 자리는 기본 개방)
 if (!meta.tur) meta.tur = { open: 1, mounts: [null, null, null] };
 if (!Array.isArray(meta.equip)) meta.equip = meta.up && meta.up.sniper > 0 ? ['sniper'] : [];
-let fever = null;                         // 발동 중이면 { t: 남은 초 }
+let fever = null;
+var simMode = false, simStolen = 0;   // 밸런스 시뮬레이션용                         // 발동 중이면 { t: 남은 초 }
 if (!meta.jp) meta.jp = { mini: JP.mini.seed, major: JP.major.seed, grand: JP.grand.seed };
 // 물고기 → 생선칩 환산
 const CHIP = { crucian: 1, carp: 3, catfish: 8, tuna: 15, armorcarp: 6, sweetfish: 1, puffer: 5, eel: 20, goldcarp: 50, sturgeon: 80, lord: 300, shark: 50, squid: 100, kaiju: 1000, leviathan: 3000 };
@@ -1209,14 +1210,14 @@ function updatePirs(dt) {
       if (q.type === 'croc') { // 콰득! 가장 가까운 터렛을 물어 고장
         let bi = -1, bd = 1e9; meta.tur.mounts.forEach((t, i) => { if (!t || i >= meta.tur.open) return; const d = Math.abs(mountPos(i).x - q.x); if (d < bd) { bd = d; bi = i; } });
         if (bi >= 0) { const rt = turRT[bi] || (turRT[bi] = { cd: 1, burst: 0, bt: 0, ang: -Math.PI / 2, flash: 0, tracer: null, acc: 0 }); rt.broken = 10; texts.push(mkText(mountPos(bi).x, SHORE - 14, '🐊 콰득! 터렛 고장 10초', '#ff6b5b', 1.4, true)); }
-        else { const st = Math.min(20, todayChips); todayChips -= st; texts.push(mkText(q.x, SHORE - 10, `🐊 콰득! 칩 -${st}`, '#ff6b5b', 1.3, true)); }
+        else { const st = Math.min(20, todayChips); todayChips -= st; simStolen += st; texts.push(mkText(q.x, SHORE - 10, `🐊 콰득! 칩 -${st}`, '#ff6b5b', 1.3, true)); }
         shake = Math.max(shake, 7); noiseBurst(0.4, 600, 0.5); tone(70, 0.4, 0.4, 'square', 40);
       } else if (q.type === 'king') { // 주인공을 물어 기절
-        const st = Math.min(10, todayChips); todayChips -= st; player.stun = Math.max(player.stun, 2);
+        const st = Math.min(10, todayChips); todayChips -= st; simStolen += st; player.stun = Math.max(player.stun, 2);
         texts.push(mkText(player.x, player.y - 16, `👑 콱! 기절 · 칩 -${st}`, '#ff6b5b', 1.4, true));
         shake = Math.max(shake, 6); tone(140, 0.3, 0.3, 'square', 60);
       } else {
-        const st = Math.min(q.type === 'crab' ? 8 : 5, todayChips); todayChips -= st;
+        const st = Math.min(q.type === 'crab' ? 8 : 5, todayChips); todayChips -= st; simStolen += st;
         texts.push(mkText(q.x, SHORE - 10, st ? `${q.type === 'crab' ? '🦀 싹둑!' : '덥석!'} 칩 -${st}` : '덥석!', '#ff6b5b', 1.1, true));
         shake = Math.max(shake, 3); tone(160, 0.12, 0.15, 'square', 90);
       }
@@ -4592,6 +4593,7 @@ newGame();
 
 let last = performance.now();
 function frame(now) {
+  if (simMode) { requestAnimationFrame(frame); return; }   // 밸런스 시뮬레이션 중엔 실시간 루프 정지
   const rdt = Math.min(0.05, (now - last) / 1000); last = now;
   frameDt = rdt; updateFuseFx(rdt);
   if (hitStop > 0) { hitStop -= rdt; shake = Math.max(shake, 2); render(); requestAnimationFrame(frame); return; } // 히트스톱: 화면 정지
@@ -4609,6 +4611,37 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // 디버그/테스트용 훅
+
+// ===== 🧪 밸런스 시뮬레이션용 API (게임 진행에는 영향 없음) =====
+window.__sim = {
+  begin(m) { simMode = true; practice = null; meta = m; applyUpgrades(); newGame(); state = 'play'; startOv.classList.add('hidden'); simStolen = 0; },
+  step(n, dt) { for (let i = 0; i < n && state === 'play'; i++) update(dt); return state; },
+  get state() { return state; }, get day() { return day; }, get dyn() { return dyn; }, get fever() { return !!fever; },
+  get stun() { return player.stun > 0 || player.dead || !!fatal; }, get dayScore() { return dayScore; }, get target() { return target; },
+  get todayChips() { return todayChips; }, get eveChips() { return eveChips; }, get eveFree() { return eveFree; }, get eveFail() { return eveFail; },
+  get stolen() { return simStolen; }, resetStolen() { simStolen = 0; }, get kills() { return stats.pirKills || 0; }, get R() { return R; }, get DZ() { return DZ; },
+  get busyBomb() { return bombs.length > 0; },
+  world() {
+    return {
+      fish: fish.filter(f => f.state === 'swim').map(f => [f.x, f.y, f.depth, f.sp.pts, f.hp, f.school.vx, f.school.vy]),
+      swimmer: swimmer && !swimmer.dead ? [swimmer.x, swimmer.y] : null,
+      big: big && !big.dead ? { t: big.type, x: big.x, y: big.y, depth: big.depth || 0 } : null,
+    };
+  },
+  throwAt(x, y, depth) {   // 봇 투척: 비행 생략, 착수 지점에서 목표 깊이까지 가라앉으면 터짐
+    if (state !== 'play' || player.stun > 0 || (dyn <= 0 && !fever)) return false;
+    if (!fever) dyn--;
+    x = clamp(x, 3, VW - 3); y = clamp(y, 3, SHORE - 6);
+    bombs.push({ x, y, z: 0, sx: x, sy: y, tx: x, ty: y, t: 0, flight: 0, arc: 0, state: 'water', fuse: clamp(depth, 0.02, 1) / SINK, depth: 0, wt: 0, spin: 0, type: 'basic', ang: 0 });
+    return true;
+  },
+  evening() { return { chips: eveChips, free: eveFree, fail: eveFail, coins: meta.coins }; },
+  gamble(cpc) { const g = Math.round(eveChips * cpc + eveFree * SPIN_COST * cpc); meta.coins += g; eveChips = 0; eveFree = 0; return g; },
+  sell() { const g = sellValue(eveChips); meta.coins += g; eveChips = 0; return g; },
+  cpc(n) { return slotSim(n).coinsPerChip; },
+  sleep() { eveChips = 0; clearOv.classList.add('hidden'); document.getElementById('mileOv').classList.add('hidden'); if (eveFail) { state = 'end'; return false; } day++; startDay(); state = 'play'; return true; },
+  get meta() { return meta; }, UP: UPGRADES, TUR, MOUNT_COST,
+};
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; }, setDyn: n => { dyn = n; },
   get fish() { return fish.length; }, get chips() { return eveChips; }, spawnPirWave: () => spawnPirWave(), get pirs() { return pirs.filter(q => q.hp > 0).length; }, get pirKills() { return stats.pirKills || 0; }, get missiles() { return missiles.length; }, get robots() { return Object.keys(robots); }, robotInfo: () => JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(robots).map(([k, r]) => [k, { x: Math.round(r.x), y: Math.round(r.y), zap: r.zap, tgt: !!r.tgt, aim: !!r.aim }])))), spawnLev: () => { big = null; spawnLeviathan(); }, lev: () => big && big.type === 'leviathan' ? { hp: big.hp, phase: big.phase, open: big.open, geo: levGeo(), dead: big.dead } : null, levPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, get sniper() { return { aim: !!sniper.aim, kills: sniper.kills, cd: sniper.cd }; }, setFever: n => { meta.fever = n; }, get fever() { return fever ? fever.t : null; }, get feverGauge() { return meta.fever; }, startFever: () => startFever(), spawnChestAt: (x, y) => { spawnChest(); const c = chests[chests.length - 1]; c.x = x; c.y = y; c.depth = 0.95; }, chestsInfo: () => chests.map(c => ({ state: c.state, loot: c.loot })), setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotSim: n => slotSim(n), get jp() { return meta.jp; }, forceJP: t => { rollJP.force = t; }, forceGrid: g => { forcedGrid = g; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), dropBomb: (x, y, fuse) => { bombs.push({ x, y, z: 0, sx: x, sy: y, tx: x, ty: y, t: 0, flight: 0, arc: 0, state: "water", fuse, depth: 0, wt: 0, spin: 0, type: "basic", ang: 0 }); }, pickKinds: (n, d) => { const o = day; day = d; const c = {}; for (let i = 0; i < n; i++) { const k = pickKind(); c[k] = (c[k] || 0) + 1; } day = o; return c; }, spawnKind: k => spawnSchool(k, false), get zaps() { return zaps.length; }, foes: () => pirs.filter(q => q.hp > 0).map(q => ({ t: q.type, x: Math.round(q.x), y: Math.round(q.y), hp: q.hp })), get turBroken() { return turRT.map(r => r && r.broken > 0 ? Math.round(r.broken) : 0); }, get chainQ() { return chainQ.length; }, giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
