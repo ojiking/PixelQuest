@@ -353,7 +353,7 @@
     <div class="crewslots" id="crewSlots"></div>
     <div id="crewList"></div>
     <h1 style="margin-top:14px">🏗 부두 터렛</h1>
-    <div class="sub">몰려오는 피라냐 떼와 상어·보스를 쏩니다. 일반 물고기는 쏘지 않아요</div>
+    <div class="sub">자리(왼쪽·가운데·오른쪽)마다 사거리 안의 적만 쏩니다. 🦀은 옆에서, 🐊은 미사일로! 일반 물고기는 쏘지 않아요</div>
     <div id="turList"></div>
     <button class="ghost" id="crewClose">닫기</button>
   </div>
@@ -697,7 +697,8 @@ function startDay() {
   bossDay = day % 5 === 0; bossSpawned = false;
   if (bossDay) { nextBig = 12; banner = { str: day % 10 === 0 ? `👑 ${day}일차 · 초거대 보스의 날! 목표 ${target}점` : `👹 ${day}일차 · 보스의 날! 목표 ${target}점`, t: 3.6 }; }
   if (day === SWIM_DAY) banner = { str: `${day}일차 · 목표 ${target}점 · 오늘부터 수영객이 나옵니다`, t: 3.4 };
-  if (NEW_FISH[day] && !bossDay) {
+  if (NEW_FOE[day] && !bossDay) banner = { str: `🆕 새 적! ${NEW_FOE[day]}`, t: 4 };
+  if (NEW_FISH[day] && !bossDay && !NEW_FOE[day]) {
     banner = { str: `🆕 새 물고기! ${NEW_FISH[day][1]}`, t: 4 };
     if (!schools.some(sc => sc.kind === NEW_FISH[day][0])) spawnSchool(NEW_FISH[day][0], true);
   }
@@ -873,7 +874,7 @@ function sniperTargetPos(tg) {
   return null;   // 고래는 절대 쏘지 않는다
 }
 function sniperPick() {
-  const pr = pirs.filter(q => q.hp > 0).sort((a, b2) => b2.y - a.y)[0];
+  const pr = pirs.filter(q => q.hp > 0 && q.y > 0 && q.x > 0 && q.x < VW).sort((a, b2) => (foeUrgency(a) - (a.type === 'king' ? 500 : 0)) - (foeUrgency(b2) - (b2.type === 'king' ? 500 : 0)))[0];
   if (pr && (!big || big.dead || big.type === 'whale')) return { kind: 'pir', q: pr };
   if (big && !big.dead && big.type !== 'whale') { const tg = { kind: 'big', big }; if (sniperTargetPos(tg)) return tg; } // 큰 놈 우선
   let best = null, bv = 0;
@@ -1129,21 +1130,52 @@ function drawRobots() {
 
 // ===== 🦷 피라냐 떼 습격 (부두를 지켜라) =====
 let pirs = [], pirT = 30, pirWave = 0;
+// 적 종류: pir 피라냐(위에서) · crab 집게게(좌우 옆에서) · croc 악어(위에서, 단단함) · king 피라냐 우두머리(떼를 빠르게)
+const FOE = {
+  pir:  { name: '피라냐', pts: 20, chips: 2 },
+  crab: { name: '집게게', pts: 30, chips: 3 },
+  croc: { name: '악어', pts: 150, chips: 20 },
+  king: { name: '피라냐 우두머리', pts: 100, chips: 12 },
+};
+const NEW_FOE = { 4: '🦀 집게게: 좌우 옆에서 기어 온다', 6: '🐊 악어: 기관총은 안 먹힌다, 미사일!', 9: '👑 피라냐 우두머리: 살아 있으면 떼가 빨라진다', 12: '🌊 대습격: 위·좌·우에서 동시에' };
+function addFoe(type, o) { pirs.push(Object.assign({ type, ph: rand(0, TAU), hit: 0 }, o)); }
 function spawnPirWave() {
-  const n = Math.min(30, 5 + day * 2), hp = 1 + Math.floor(day / 4);
   pirWave++;
-  for (let i = 0; i < n; i++) {
-    pirs.push({ x: rand(10, VW - 10), y: rand(-60, -4), hp, maxHp: hp, sp: rand(18, 24) + day * 0.6, ph: rand(0, TAU), hit: 0 });
+  const parts2 = [];
+  const n = Math.min(30, 5 + day * 2) - (day >= 12 ? 4 : 0), hp = 1 + Math.floor(day / 4);
+  for (let i = 0; i < n; i++) addFoe('pir', { x: rand(10, VW - 10), y: rand(-60, -4), hp, maxHp: hp, sp: rand(18, 24) + day * 0.6 });
+  parts2.push(`피라냐 ${n}`);
+  if (day >= 4) { // 🦀 옆에서: 12일차부터는 양쪽에서
+    const nc = Math.min(10, 2 + Math.floor((day - 4) / 2)), chp = 2 + Math.floor(day / 5);
+    const sides = day >= 12 ? [-1, 1] : [Math.random() < 0.5 ? -1 : 1];
+    for (let i = 0; i < nc; i++) {
+      const sd = sides[i % sides.length];
+      addFoe('crab', { x: sd < 0 ? rand(-40, -6) : VW + rand(6, 40), y: rand(SHORE - 70, SHORE - 18), hp: chp, maxHp: chp, sp: rand(11, 15) + day * 0.3,
+        tx: VW * rand(0.38, 0.62), ty: SHORE - 5, side: sd });
+    }
+    parts2.push(`🦀${nc}${sides.length > 1 ? '(양쪽)' : sides[0] < 0 ? '(왼쪽)' : '(오른쪽)'}`);
   }
-  banner = { str: `⚠ 피라냐 떼 습격! (${n}마리) 부두를 지켜라`, t: 2.8 };
+  if (day >= 6) { // 🐊 느리고 단단함
+    const nk = Math.min(3, 1 + Math.floor((day - 6) / 5)), khp = 10 + day;
+    for (let i = 0; i < nk; i++) addFoe('croc', { x: VW * rand(0.2, 0.8), y: rand(-50, -15) - i * 25, hp: khp, maxHp: khp, sp: rand(10, 12) });
+    parts2.push(`🐊${nk}`);
+  }
+  if (day >= 9) { // 👑 떼를 이끈다
+    const khp = 6 + Math.floor(day / 3);
+    addFoe('king', { x: VW * rand(0.3, 0.7), y: -30, hp: khp, maxHp: khp, sp: 17 + day * 0.4 });
+    parts2.push('👑1');
+  }
+  banner = { str: `⚠ 습격! ${parts2.join(' · ')}`, t: 3 };
   tone(220, 0.3, 0.12, 'sawtooth', 330); tone(330, 0.3, 0.12, 'sawtooth', 220, 0.3);
 }
 function pirDamage(q, dmg) {
   if (q.hp <= 0) return;
   q.hp -= dmg; q.hit = 0.15;
   if (q.hp <= 0) { // 처치: 배를 뒤집고 둥둥
-    addScore(20); todayChips += 2; stats.pirKills = (stats.pirKills || 0) + 1;
-    texts.push(mkText(q.x, q.y - 6, '+20', '#ffb3a8', 0.85));
+    const F = FOE[q.type || 'pir'];
+    addScore(F.pts); todayChips += F.chips; stats.pirKills = (stats.pirKills || 0) + 1;
+    texts.push(mkText(q.x, q.y - 6, q.type === 'pir' ? '+20' : `${F.name} 격퇴! +${F.pts}`, q.type === 'pir' ? '#ffb3a8' : '#ffd56a', q.type === 'pir' ? 0.85 : 1.1, q.type !== 'pir'));
+    if (q.type === 'croc' || q.type === 'king') { shake = Math.max(shake, 4); sfx.bonus(); }
     for (let i = 0; i < 4; i++) parts.push({ x: q.x, y: q.y, z: 0, vx: rand(-10, 10), vy: rand(-6, 6), vz: rand(20, 40), life: 0.4, max: 0.4, type: 'drop' });
   }
 }
@@ -1151,16 +1183,37 @@ function pirBlast(x, y, ed, rr) { if (ed > 0.45) return; for (const q of pirs) i
 function updatePirs(dt) {
   if (state !== 'play' || fatal || player.dead) return;
   const bossNow = big && (big.type === 'kaiju' || big.type === 'leviathan') && !big.dead;
-  if (day >= 2 && !fever && !bossNow) { pirT -= dt; if (pirT <= 0) { spawnPirWave(); pirT = rand(30, 45); } }
+  if (day >= 2 && !fever && !bossNow) { pirT -= dt; if (pirT <= 0) { spawnPirWave(); pirT = day >= 12 ? rand(24, 34) : rand(30, 45); } }
+  const kingAlive = pirs.some(q => q.type === 'king' && q.hp > 0);
   for (const q of pirs) {
     q.hit = Math.max(0, q.hit - dt); q.ph += dt * 6;
     if (q.hp <= 0) { q.dead = (q.dead || 0) + dt; continue; }
-    q.y += q.sp * dt; q.x = clamp(q.x + Math.sin(q.ph * 0.5) * 18 * dt, 6, VW - 6);
-    if (q.y >= SHORE - 5) { // 부두 도착: 덥석! 칩을 훔친다
+    let arrived = false;
+    if (q.type === 'crab') { // 옆걸음으로 부두 가운데를 향해
+      const dx = q.tx - q.x, dy = q.ty - q.y, d = Math.hypot(dx, dy);
+      q.x += dx / d * q.sp * dt + Math.sin(q.ph * 1.5) * 6 * dt; q.y += dy / d * q.sp * dt;
+      arrived = d < 4 || q.y >= SHORE - 5;
+    } else {
+      const sp = q.sp * (q.type === 'pir' && kingAlive ? 1.35 : 1);   // 우두머리가 살아 있으면 떼가 빨라진다
+      q.y += sp * dt; q.x = clamp(q.x + Math.sin(q.ph * (q.type === 'croc' ? 0.15 : 0.5)) * (q.type === 'croc' ? 6 : 18) * dt, 6, VW - 6);
+      arrived = q.y >= SHORE - 5;
+    }
+    if (arrived) { // 부두 도착
       q.hp = 0; q.dead = 1;
-      const st = Math.min(5, todayChips); todayChips -= st;
-      texts.push(mkText(q.x, SHORE - 10, st ? `덥석! 칩 -${st}` : '덥석!', '#ff6b5b', 1.1, true));
-      shake = Math.max(shake, 3); tone(160, 0.12, 0.15, 'square', 90);
+      if (q.type === 'croc') { // 콰득! 가장 가까운 터렛을 물어 고장
+        let bi = -1, bd = 1e9; meta.tur.mounts.forEach((t, i) => { if (!t || i >= meta.tur.open) return; const d = Math.abs(mountPos(i).x - q.x); if (d < bd) { bd = d; bi = i; } });
+        if (bi >= 0) { const rt = turRT[bi] || (turRT[bi] = { cd: 1, burst: 0, bt: 0, ang: -Math.PI / 2, flash: 0, tracer: null, acc: 0 }); rt.broken = 10; texts.push(mkText(mountPos(bi).x, SHORE - 14, '🐊 콰득! 터렛 고장 10초', '#ff6b5b', 1.4, true)); }
+        else { const st = Math.min(20, todayChips); todayChips -= st; texts.push(mkText(q.x, SHORE - 10, `🐊 콰득! 칩 -${st}`, '#ff6b5b', 1.3, true)); }
+        shake = Math.max(shake, 7); noiseBurst(0.4, 600, 0.5); tone(70, 0.4, 0.4, 'square', 40);
+      } else if (q.type === 'king') { // 주인공을 물어 기절
+        const st = Math.min(10, todayChips); todayChips -= st; player.stun = Math.max(player.stun, 2);
+        texts.push(mkText(player.x, player.y - 16, `👑 콱! 기절 · 칩 -${st}`, '#ff6b5b', 1.4, true));
+        shake = Math.max(shake, 6); tone(140, 0.3, 0.3, 'square', 60);
+      } else {
+        const st = Math.min(q.type === 'crab' ? 8 : 5, todayChips); todayChips -= st;
+        texts.push(mkText(q.x, SHORE - 10, st ? `${q.type === 'crab' ? '🦀 싹둑!' : '덥석!'} 칩 -${st}` : '덥석!', '#ff6b5b', 1.1, true));
+        shake = Math.max(shake, 3); tone(160, 0.12, 0.15, 'square', 90);
+      }
     }
   }
   pirs = pirs.filter(q => !(q.hp <= 0 && q.dead > 0.8));
@@ -1170,28 +1223,63 @@ function drawPirs() {
     const x = Math.round(q.x), y = Math.round(q.y);
     if (y < -4) continue;
     if (q.hp <= 0) { b.globalAlpha = Math.max(0, 1 - q.dead / 0.8); b.fillStyle = '#e8d8d0'; b.beginPath(); b.ellipse(x, y, 4, 2, 0, 0, TAU); b.fill(); b.globalAlpha = 1; continue; }
+    if (q.type === 'crab') { drawCrab(q, x, y); continue; }
+    if (q.type === 'croc') { drawCroc(q, x, y); continue; }
+    if (q.type === 'king') { b.save(); b.translate(x, y); b.scale(1.6, 1.6); b.translate(-x, -y); }
     b.fillStyle = 'rgba(230,250,255,0.5)'; b.fillRect(x - 4, y + 2, 8, 1);                       // 물살
     b.fillStyle = q.hit > 0 ? '#ffffff' : '#c8342a'; b.beginPath(); b.ellipse(x, y, 4, 3, Math.PI / 2, 0, TAU); b.fill();
     b.beginPath(); b.moveTo(x, y - 2); b.lineTo(x - 2, y - 7 + Math.sin(q.ph) ); b.lineTo(x + 2, y - 7 + Math.sin(q.ph)); b.fill();   // 꼬리
     b.fillStyle = '#7a1a14'; b.beginPath(); b.moveTo(x - 1, y - 1); b.lineTo(x + 1, y - 5); b.lineTo(x + 2, y); b.fill();      // 지느러미
     b.fillStyle = '#fff'; b.fillRect(x - 2, y + 2, 1, 1); b.fillRect(x, y + 2, 1, 1); b.fillRect(x + 1, y + 2, 1, 1);          // 이빨
     b.fillStyle = '#ffe27a'; b.fillRect(x - 2, y, 1, 1); b.fillRect(x + 1, y, 1, 1);                                            // 눈
-    if (q.maxHp > 1) { b.fillStyle = '#300'; b.fillRect(x - 3, y - 9, 6, 1); b.fillStyle = '#7fff6a'; b.fillRect(x - 3, y - 9, Math.max(1, Math.round(6 * q.hp / q.maxHp)), 1); }
+    if (q.type === 'king') { b.fillStyle = '#ffd23f'; b.fillRect(x - 2, y - 5, 5, 1); b.fillRect(x - 2, y - 6, 1, 1); b.fillRect(x, y - 6, 1, 1); b.fillRect(x + 2, y - 6, 1, 1); b.restore(); }
+    if (q.maxHp > 1) foeBar(q, x, y - (q.type === 'king' ? 13 : 9), q.type === 'king' ? 10 : 6);
   }
+}
+function foeBar(q, x, y, w) { b.fillStyle = '#300'; b.fillRect(x - w / 2, y, w, 1); b.fillStyle = q.type === 'croc' ? '#ffb347' : '#7fff6a'; b.fillRect(x - w / 2, y, Math.max(1, Math.round(w * q.hp / q.maxHp)), 1); }
+function drawCrab(q, x, y) { // 🦀 주황 등딱지 + 집게 + 다리
+  const fl = q.hit > 0, leg = Math.sin(q.ph * 3) > 0 ? 1 : 0;
+  b.fillStyle = 'rgba(0,20,30,0.25)'; b.beginPath(); b.ellipse(x, y + 2, 5, 1.5, 0, 0, TAU); b.fill();
+  b.strokeStyle = '#8a2a10'; b.lineWidth = 1;
+  for (const sd of [-1, 1]) for (let i = 0; i < 3; i++) { b.beginPath(); b.moveTo(x + sd * 2, y - 1 + i); b.lineTo(x + sd * 5, y + i + (i + leg) % 2); b.stroke(); }
+  b.fillStyle = fl ? '#fff' : '#e8602a'; b.beginPath(); b.ellipse(x, y, 4, 3, 0, 0, TAU); b.fill();
+  b.fillStyle = fl ? '#fff' : '#ff8a4a'; b.fillRect(x - 6, y - 4, 3, 2); b.fillRect(x + 3, y - 4, 3, 2);   // 집게
+  b.fillStyle = '#111'; b.fillRect(x - 1, y - 3, 1, 1); b.fillRect(x + 1, y - 3, 1, 1);
+  if (q.maxHp > 1) foeBar(q, x, y - 7, 6);
+}
+function drawCroc(q, x, y) { // 🐊 길쭉한 초록 몸 (아래로 헤엄)
+  const fl = q.hit > 0, w = Math.sin(q.ph * 0.8) * 1.5;
+  b.fillStyle = 'rgba(230,250,255,0.45)'; b.fillRect(x - 5, y + 6, 10, 1);
+  b.fillStyle = fl ? '#fff' : '#3f6a2a';
+  b.beginPath(); b.ellipse(x, y - 2, 3.5, 8, 0, 0, TAU); b.fill();                 // 몸통
+  b.beginPath(); b.moveTo(x - 2, y - 8); b.lineTo(x + w, y - 17); b.lineTo(x + 2, y - 8); b.fill();   // 꼬리
+  b.fillRect(x - 2, y + 4, 4, 5);                                                  // 주둥이
+  b.fillStyle = fl ? '#fff' : '#2a4a1c'; for (let i = -4; i <= 2; i += 2) b.fillRect(x - 1, y + i - 2, 2, 1);   // 등 비늘
+  b.fillRect(x - 5, y - 3, 2, 2); b.fillRect(x + 3, y - 3, 2, 2); b.fillRect(x - 5, y + 2, 2, 2); b.fillRect(x + 3, y + 2, 2, 2); // 다리
+  b.fillStyle = '#ffe27a'; b.fillRect(x - 2, y + 3, 1, 1); b.fillRect(x + 1, y + 3, 1, 1);
+  b.fillStyle = '#fff'; b.fillRect(x - 2, y + 8, 1, 1); b.fillRect(x + 1, y + 8, 1, 1);
+  foeBar(q, x, y - 20, 12);
 }
 
 // ===== 🏗 부두 터렛: 기관총 / 미사일 =====
 const TUR = {
-  mg: { name: '🔫 기관총', costs: [2500, 4000, 9000], desc: lv => `연사 ${6 + lv * 2}발, ${(2.6 - lv * 0.4).toFixed(1)}초마다` },
-  ms: { name: '🚀 미사일', costs: [4500, 7000, 15000], desc: lv => `미사일 ${lv}발, ${7 - lv}초마다` },
+  mg: { name: '🔫 기관총', costs: [2500, 4000, 9000], range: lv => 78 + lv * 6, desc: lv => `연사 ${6 + lv * 2}발, ${(2.6 - lv * 0.4).toFixed(1)}초마다 · 사거리 ${78 + lv * 6} (짧음) · 악어에 약함` },
+  ms: { name: '🚀 미사일', costs: [4500, 7000, 15000], range: lv => 140 + lv * 15, desc: lv => `미사일 ${lv}발, ${7 - lv}초마다 · 사거리 ${140 + lv * 15} (김) · 악어에 강함` },
 };
 const MOUNT_COST = [0, 2000, 5000];
 const mountPos = i => ({ x: VW * [0.12, 0.3, 0.88][i], y: SHORE + 9 });
 let turRT = [], missiles = [];
-function turretTarget() { // 표적: 부두에 가장 가까운 피라냐 → 상어·보스(약점). 평범한 물고기는 쏘지 않는다
-  const q = pirs.filter(p2 => p2.hp > 0 && p2.y > 0).sort((a, b2) => b2.y - a.y)[0];
-  if (q) return { kind: 'pir', q, pos: { x: q.x, y: q.y, depth: 0 } };
-  if (big && !big.dead && big.type !== 'whale') { const tg = { kind: 'big', big }, pos = sniperTargetPos(tg); if (pos) return { kind: 'big', big, pos }; }
+// 표적: 사거리 안에서만. 우선순위 = 우두머리 → (미사일은 악어) → 부두에 가장 가까운 적 → 상어·보스. 평범한 물고기는 쏘지 않는다
+function foesInRange(mp, range) { return pirs.filter(q => q.hp > 0 && q.y > 0 && q.x > 0 && q.x < VW && Math.hypot(q.x - mp.x, q.y - mp.y) < range); }
+function foeUrgency(q) { return q.type === 'crab' ? Math.hypot(q.tx - q.x, q.ty - q.y) : SHORE - q.y; }   // 작을수록 급함
+function turretTarget(mp, range, type) {
+  const qs = foesInRange(mp, range);
+  if (qs.length) {
+    const score = q => foeUrgency(q) - (q.type === 'king' ? 500 : 0) - (type === 'ms' && q.type === 'croc' ? 300 : 0) + (type === 'mg' && q.type === 'croc' ? 400 : 0);
+    const q = qs.sort((a, b2) => score(a) - score(b2))[0];
+    return { kind: 'pir', q, pos: { x: q.x, y: q.y, depth: 0 } };
+  }
+  if (big && !big.dead && big.type !== 'whale') { const tg = { kind: 'big', big }, pos = sniperTargetPos(tg); if (pos && Math.hypot(pos.x - mp.x, pos.y - mp.y) < range * 1.3) return { kind: 'big', big, pos }; }
   return null;
 }
 function updateTurrets(dt) {
@@ -1201,7 +1289,7 @@ function updateTurrets(dt) {
     const k = Math.min(1, m.t / m.dur);
     m.x = lerp(m.sx, m.tx, k); m.y = lerp(m.sy, m.ty, k); m.z = Math.sin(k * Math.PI) * m.arc;
     if (Math.random() < dt * 60) parts.push({ x: m.x, y: m.y, z: m.z, vx: rand(-3, 3), vy: rand(-3, 3), vz: rand(-2, 6), life: 0.6, max: 0.6, type: 'smoke' });
-    if (k >= 1) { m.done = true; explode(m.tx, m.ty, 0.05, 0.75, true, true); }
+    if (k >= 1) { m.done = true; explode(m.tx, m.ty, 0.05, 0.75, true, true); for (const q of pirs) if (q.type === 'croc' && q.hp > 0 && Math.hypot(q.x - m.tx, q.y - m.ty) < R * 0.75 + 6) pirDamage(q, 2); }
   }
   missiles = missiles.filter(m => !m.done);
   if (state !== 'play' || fatal || player.dead) return;
@@ -1210,7 +1298,8 @@ function updateTurrets(dt) {
     if (!t || i >= meta.tur.open) return;
     const rt = turRT[i] || (turRT[i] = { cd: 1 + i, burst: 0, bt: 0, ang: -Math.PI / 2, flash: 0, tracer: null, acc: 0 });
     rt.flash = Math.max(0, rt.flash - dt); if (rt.tracer) { rt.tracer.t -= dt; if (rt.tracer.t <= 0) rt.tracer = null; }
-    const mp = mountPos(i), tg = turretTarget();
+    if (rt.broken > 0) { rt.broken -= dt; rt.burst = 0; if (Math.random() < dt * 8) parts.push({ x: mountPos(i).x + rand(-2, 2), y: mountPos(i).y - 4, z: 2, vx: rand(-2, 2), vy: 0, vz: rand(4, 10), life: 0.9, max: 0.9, type: 'smoke' }); return; }
+    const mp = mountPos(i), range = TUR[t.type].range(t.lv), tg = turretTarget(mp, range, t.type);
     if (tg) rt.ang = angLerp(rt.ang, Math.atan2(tg.pos.y - mp.y, tg.pos.x - mp.x), dt * 10);
     if (t.type === 'mg') {
       if (rt.burst > 0) {
@@ -1221,7 +1310,7 @@ function updateTurrets(dt) {
           rt.tracer = { x: jx, y: jy, t: 0.06 };
           parts.push({ x: jx, y: jy, z: 0, vx: rand(-8, 8), vy: rand(-5, 5), vz: rand(15, 30), life: 0.3, max: 0.3, type: 'drop' });
           if (Math.random() < 0.5) tone(900 + Math.random() * 300, 0.02, 0.04, 'square');
-          if (tg.kind === 'pir') pirDamage(tg.q, 1);
+          if (tg.kind === 'pir') { if (tg.q.type === 'croc') { pirDamage(tg.q, 0.1); if (Math.random() < 0.4) { parts.push({ x: jx, y: jy, z: 2, vx: rand(-20, 20), vy: rand(-12, 0), vz: rand(10, 25), life: 0.2, max: 0.2, type: 'spark' }); tone(2600, 0.02, 0.03, 'square'); } } else pirDamage(tg.q, 1); }   // 악어 가죽엔 팅팅
           else { rt.acc += 0.2; if (rt.acc >= 1) { rt.acc -= 1; const ex = { x: tg.pos.x, y: tg.pos.y, depth: tg.pos.depth, kills: 0, pts: 0, t: 0, mult: 1, rs: 0.3, quiet: true, safe: true }; combos.push(ex); bigHit(ex); } }
         } else if (!tg) rt.burst = 0;
       } else if ((rt.cd -= dt) <= 0 && tg) { rt.burst = 6 + t.lv * 2; rt.cd = 2.6 - t.lv * 0.4; }
@@ -1229,7 +1318,7 @@ function updateTurrets(dt) {
       if ((rt.cd -= dt) <= 0 && tg) {
         rt.cd = 7 - t.lv; rt.flash = 0.2;
         for (let n = 0; n < t.lv; n++) {
-          const tg2 = n === 0 ? tg : (turretTargetN(n) || tg);
+          const tg2 = n === 0 ? tg : (turretTargetN(n, mp, range) || tg);
           missiles.push({ sx: mp.x, sy: mp.y - 4, tx: tg2.pos.x, ty: tg2.pos.y, x: mp.x, y: mp.y, z: 0, t: -n * 0.18, dur: 0.9 + Math.hypot(tg2.pos.x - mp.x, tg2.pos.y - mp.y) / 260, arc: 30 + n * 6, tg: tg2 });
         }
         noiseBurst(0.4, 900, 0.25, 'bandpass'); tone(300, 0.4, 0.08, 'sawtooth', 900);
@@ -1237,7 +1326,7 @@ function updateTurrets(dt) {
     }
   });
 }
-function turretTargetN(n) { const qs = pirs.filter(p2 => p2.hp > 0 && p2.y > 0).sort((a, b2) => b2.y - a.y); const q = qs[n * 3]; return q ? { kind: 'pir', q, pos: { x: q.x, y: q.y, depth: 0 } } : null; }
+function turretTargetN(n, mp, range) { const qs = foesInRange(mp, range).sort((a, b2) => foeUrgency(a) - foeUrgency(b2)); const q = qs[n * 3]; return q ? { kind: 'pir', q, pos: { x: q.x, y: q.y, depth: 0 } } : null; }
 function drawTurrets() {
   meta.tur.mounts.forEach((t, i) => {
     if (!t || i >= meta.tur.open) return;
@@ -1258,6 +1347,12 @@ function drawTurrets() {
       if (rt.flash > 0) { b.fillStyle = `rgba(255,200,120,${rt.flash * 4})`; b.beginPath(); b.arc(x, y - 6, 5, 0, TAU); b.fill(); }
     }
     b.fillStyle = '#ffe27a'; for (let k = 0; k < t.lv; k++) b.fillRect(x - 4 + k * 3, y + 3, 2, 1);  // 단계 표시
+    if (rt.broken > 0) { b.fillStyle = 'rgba(40,40,40,0.55)'; b.beginPath(); b.arc(x, y - 3, 6, 0, TAU); b.fill(); if ((time * 6 | 0) % 2) { b.fillStyle = '#ff5b3a'; b.fillRect(x - 1, y - 12, 2, 4); b.fillRect(x - 1, y - 7, 2, 1); } }
+    if (pirs.some(q => q.hp > 0)) { // 습격 중엔 사거리를 옅게 보여 준다
+      const rg = TUR[t.type].range(t.lv);
+      b.strokeStyle = t.type === 'mg' ? 'rgba(255,226,122,0.22)' : 'rgba(255,120,90,0.2)'; b.lineWidth = 1; b.setLineDash([2, 3]);
+      b.beginPath(); b.arc(mp.x, mp.y, rg, Math.PI, TAU); b.stroke(); b.setLineDash([]);
+    }
   });
   for (const m of missiles) { // 미사일 본체
     if (m.t < 0) continue;
@@ -3347,7 +3442,8 @@ function drawHUD() {
     const left = REFUND_CAP - refundsToday;
     txt(`환급 ${'●'.repeat(left)}${'○'.repeat(REFUND_CAP - left)}`, W - 14, 18 + u * 3.2, u * 1.0, left ? '#ffb347' : '#8a9aa0', 'right');
   }
-  { const left = pirs.filter(q => q.hp > 0).length; if (left && state === 'play') txt(`🦷 남은 피라냐 ${left}`, W / 2, cvs.height * 0.12, u * 1.3, '#ff8a7a', 'center'); }
+  { const al = pirs.filter(q => q.hp > 0); if (al.length && state === 'play') { const c = t2 => al.filter(q => q.type === t2).length;
+      txt(`⚠ 습격 ${[['🦷', c('pir')], ['🦀', c('crab')], ['🐊', c('croc')], ['👑', c('king')]].filter(x => x[1]).map(x => x[0] + x[1]).join(' ')}`, W / 2, cvs.height * 0.145, u * 1.3, '#ff8a7a', 'center'); } }
   if (big && (big.type === 'kaiju' || big.type === 'leviathan') && !big.dead && big.phase !== 'leave') {
     const lev = big.type === 'leviathan';
     const bw = Math.min(W * (lev ? 0.8 : 0.62), lev ? 440 : 340), bx = (W - bw) / 2, by = 58 + u * 1.2, bh = Math.max(9, u * (lev ? 1.3 : 1.0));
@@ -3582,7 +3678,7 @@ function endGame(reason) {
     (stats.catches.length ? `<br>대어: <b>${stats.catches.join(', ')}</b>` : '') +
     (stats.whaleHits ? `<br><span style="color:#ff8a8a">고래 오폭 ${stats.whaleHits}회</span>` : '') +
     (stats.jackpots ? `<br><span style="color:#ffe27a">💰 잭팟 ${stats.jackpots}번</span>` : '') +
-    (stats.pirKills ? `<br><span style="color:#ff8a7a">🦷 피라냐 ${stats.pirKills}마리 격퇴</span>` : '') +
+    (stats.pirKills ? `<br><span style="color:#ff8a7a">⚠ 습격한 적 ${stats.pirKills}마리 격퇴</span>` : '') +
     (stats.chests ? `<br><span style="color:#ffd44a">🧰 보물상자 ${stats.chests}개</span>` : '') +
     (stats.rescues ? `<br><span style="color:#7fffb0">수영객 구조 ${stats.rescues}회</span>` : '') +
     (stats.swimmersLost ? `<br><span style="opacity:.75">상어에게 잃은 수영객 ${stats.swimmersLost}명</span>` : '') +
@@ -3627,7 +3723,7 @@ const RULES = [
   ['🔥', '피버 타임', '<b>연속 명중</b>(3마리 이상을 연달아)할 때만 피버 게이지가 찹니다(2연속 +2 … 최대 +5). 게이지는 <b>날이 바뀌어도 남고</b>, 다 차면 <b>10초 피버</b>: 호수가 얕은 물고기로 가득, <b>다이너마이트 무제한</b>, 점수 ×2! 끝나면 게이지는 처음부터.'],
   ['🏆', '이정표 보상', '<b>5일차마다</b> 하루를 넘기면 보상: 5일차 동전 150 · 무료 판 10 · 특수탄, 10일차 핵폭탄 · MAJOR 잭팟 +100, 15일차 GRAND 잭팟 +500… <b>처음 도달하면 동전 2배!</b>'],
   ['👑', '초거대 보스: 그란모르', '<b>10일차마다</b> 머리만으로 호수를 가득 채우는 군주가 나타납니다. 입을 벌려 <b>초강력 레이저</b>를 쏘면 맞을 때 다이너마이트 2개를 잃어요. <b>눈(-3)</b>이나 벌린 입 속 <b>혀(-5)</b>를 얕게 터뜨려 맞히면 <b>움찔하며 레이저가 취소</b>됩니다. 체력 40, 격파 +30000.'],
-  ['🏗', '부두 터렛 & 피라냐 습격', '<b>2일차부터</b> 피라냐 떼가 부두로 몰려와 닿으면 <b>오늘 칩을 훔쳐 갑니다</b>. 🤖 동료·터렛 화면에서 부두 <b>3자리</b>에 🔫 <b>기관총</b>이나 🚀 <b>미사일</b>을 지어 막으세요(각 3단계). 터렛은 피라냐와 상어·보스를 쏘고, 수영객·고래는 다치게 하지 않아요.'],
+  ['🏗', '부두 터렛 & 습격', '<b>2일차부터</b> 적이 부두로 몰려와 닿으면 <b>오늘 칩을 훔쳐 갑니다</b>. 🦷 피라냐(2일차~, 위에서) · 🦀 <b>집게게</b>(4일차~, 좌우 옆에서) · 🐊 <b>악어</b>(6일차~, 단단함. 닿으면 터렛 10초 고장) · 👑 <b>우두머리</b>(9일차~, 살아 있으면 떼가 빨라짐, 닿으면 기절) · 12일차부터 사방에서 대습격. 🤖 동료·터렛 화면에서 부두 <b>3자리</b>(왼쪽·가운데·오른쪽)에 터렛을 지으세요. 🔫 <b>기관총</b>은 사거리가 짧고 빠르지만 악어엔 팅팅, 🚀 <b>미사일</b>은 멀리 쏘고 악어에 강해요. 습격 중엔 사거리가 점선으로 보여요.'],
   ['🤖', '로봇 동료', '<b>🤖 동료</b> 화면에서 로봇을 고용해 <b>슬롯</b>에 넣으면 함께 낚시합니다(기본 2칸, 10·20일차 이정표에 +1). 🐕 몰이 드론 · 🧺 수거 로봇 · 🔦 탐사 잠수정 · 🧨 투척 로봇 · 🕹 집게 로봇. <b>로봇은 다이너마이트에 맞아도 멀쩡</b>해요.'],
   ['🎯', '스나이퍼', '가게에서 <b>고용</b>하면 부두에서 자동으로 쏩니다. 느리지만 <b>한 발씩 정확</b>하게: 얕은 곳의 비싼 물고기를 한 마리씩, 그리고 <b>상어·쿠르가에 특효</b>(쿠르가 머리를 쏘면 물대포 저지). 수영객과 고래는 쏘지 않아요.'],
   ['🧰', '보물상자', '하루 1~3개가 <b>호수 바닥</b>에 가라앉아 있습니다. 흐린 네모 그림자와 <b>금빛 반짝임</b>을 찾아 <b>깊게</b> 터뜨리세요. 동전, 생선칩, 특수탄, 다이너마이트, 드물게 <b>핵폭탄</b>… 가끔은 <b>불발탄</b>이 들어 있어 큰 2차 폭발이!'],
@@ -4508,7 +4604,7 @@ requestAnimationFrame(frame);
 
 // 디버그/테스트용 훅
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; }, setDyn: n => { dyn = n; },
-  get fish() { return fish.length; }, get chips() { return eveChips; }, spawnPirWave: () => spawnPirWave(), get pirs() { return pirs.filter(q => q.hp > 0).length; }, get pirKills() { return stats.pirKills || 0; }, get missiles() { return missiles.length; }, get robots() { return Object.keys(robots); }, robotInfo: () => JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(robots).map(([k, r]) => [k, { x: Math.round(r.x), y: Math.round(r.y), zap: r.zap, tgt: !!r.tgt, aim: !!r.aim }])))), spawnLev: () => { big = null; spawnLeviathan(); }, lev: () => big && big.type === 'leviathan' ? { hp: big.hp, phase: big.phase, open: big.open, geo: levGeo(), dead: big.dead } : null, levPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, get sniper() { return { aim: !!sniper.aim, kills: sniper.kills, cd: sniper.cd }; }, setFever: n => { meta.fever = n; }, get fever() { return fever ? fever.t : null; }, get feverGauge() { return meta.fever; }, startFever: () => startFever(), spawnChestAt: (x, y) => { spawnChest(); const c = chests[chests.length - 1]; c.x = x; c.y = y; c.depth = 0.95; }, chestsInfo: () => chests.map(c => ({ state: c.state, loot: c.loot })), setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotSim: n => slotSim(n), get jp() { return meta.jp; }, forceJP: t => { rollJP.force = t; }, forceGrid: g => { forcedGrid = g; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), dropBomb: (x, y, fuse) => { bombs.push({ x, y, z: 0, sx: x, sy: y, tx: x, ty: y, t: 0, flight: 0, arc: 0, state: "water", fuse, depth: 0, wt: 0, spin: 0, type: "basic", ang: 0 }); }, pickKinds: (n, d) => { const o = day; day = d; const c = {}; for (let i = 0; i < n; i++) { const k = pickKind(); c[k] = (c[k] || 0) + 1; } day = o; return c; }, spawnKind: k => spawnSchool(k, false), get zaps() { return zaps.length; }, get chainQ() { return chainQ.length; }, giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
+  get fish() { return fish.length; }, get chips() { return eveChips; }, spawnPirWave: () => spawnPirWave(), get pirs() { return pirs.filter(q => q.hp > 0).length; }, get pirKills() { return stats.pirKills || 0; }, get missiles() { return missiles.length; }, get robots() { return Object.keys(robots); }, robotInfo: () => JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(robots).map(([k, r]) => [k, { x: Math.round(r.x), y: Math.round(r.y), zap: r.zap, tgt: !!r.tgt, aim: !!r.aim }])))), spawnLev: () => { big = null; spawnLeviathan(); }, lev: () => big && big.type === 'leviathan' ? { hp: big.hp, phase: big.phase, open: big.open, geo: levGeo(), dead: big.dead } : null, levPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, get sniper() { return { aim: !!sniper.aim, kills: sniper.kills, cd: sniper.cd }; }, setFever: n => { meta.fever = n; }, get fever() { return fever ? fever.t : null; }, get feverGauge() { return meta.fever; }, startFever: () => startFever(), spawnChestAt: (x, y) => { spawnChest(); const c = chests[chests.length - 1]; c.x = x; c.y = y; c.depth = 0.95; }, chestsInfo: () => chests.map(c => ({ state: c.state, loot: c.loot })), setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotSim: n => slotSim(n), get jp() { return meta.jp; }, forceJP: t => { rollJP.force = t; }, forceGrid: g => { forcedGrid = g; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), dropBomb: (x, y, fuse) => { bombs.push({ x, y, z: 0, sx: x, sy: y, tx: x, ty: y, t: 0, flight: 0, arc: 0, state: "water", fuse, depth: 0, wt: 0, spin: 0, type: "basic", ang: 0 }); }, pickKinds: (n, d) => { const o = day; day = d; const c = {}; for (let i = 0; i < n; i++) { const k = pickKind(); c[k] = (c[k] || 0) + 1; } day = o; return c; }, spawnKind: k => spawnSchool(k, false), get zaps() { return zaps.length; }, foes: () => pirs.filter(q => q.hp > 0).map(q => ({ t: q.type, x: Math.round(q.x), y: Math.round(q.y), hp: q.hp })), get turBroken() { return turRT.map(r => r && r.broken > 0 ? Math.round(r.broken) : 0); }, get chainQ() { return chainQ.length; }, giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
 </script>
 </body>
