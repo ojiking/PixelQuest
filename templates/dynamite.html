@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>다이너마이트 낚시</title>
 <style>
-  html, body { margin: 0; height: 100%; color-scheme: dark; background: #0b1d26; overflow: hidden;
+  html, body { margin: 0; height: 100%; color-scheme: dark; background: #062f4d; overflow: hidden;
     user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
     font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
   canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; cursor: crosshair; touch-action: none; }
@@ -520,7 +520,7 @@ const SPECIES = {
   sturgeon: { name: '철갑상어', len: 19, wid: 4.2, depth: [0.85, 1.0], pts: 800, speed: 9, count: [1, 1], rare: true },
   lord:     { name: '호수의 주인', len: 32, wid: 10, depth: [0.8, 0.95], pts: 3000, speed: 6, count: [1, 1], rare: true, hp: 3 },
 };
-const SHADOW = '#05202a';
+const SHADOW = '#05304a';   // 열대 바다 위 물고기 그림자 (짙은 남색)
 
 let state = 'menu';
 let time = 0, score = 0, dyn = START_DYN, best = 0, bestDay = 0;
@@ -3014,11 +3014,15 @@ function drawSurfaceThings() {
 }
 
 function drawPier() {
-  b.fillStyle = 'rgba(255,255,255,0.35)';
+  // 하얀 파도 거품
+  b.fillStyle = 'rgba(255,255,255,0.6)';
   for (let x = 0; x < VW; x += 3) b.fillRect(x, SHORE - 1 + Math.round(Math.sin(time * 2 + x * 0.3)), 2, 1);
-  b.fillStyle = '#6b4a2b'; b.fillRect(0, SHORE + 2, VW, VH - SHORE);
-  for (let y = SHORE + 2; y < VH; y += 6) { b.fillStyle = '#7d5935'; b.fillRect(0, y, VW, 4); b.fillStyle = '#4a311c'; b.fillRect(0, y + 5, VW, 1); }
-  b.fillStyle = '#3b2615'; for (let x = 6; x < VW; x += 34) b.fillRect(x, SHORE + 2, 2, VH - SHORE);
+  b.fillStyle = 'rgba(255,255,255,0.25)';
+  for (let x = 1; x < VW; x += 5) b.fillRect(x, SHORE - 4 + Math.round(Math.sin(time * 1.6 + x * 0.21) * 1.5), 3, 1);
+  // 햇볕에 바랜 밝은 나무 부두
+  b.fillStyle = '#9a7246'; b.fillRect(0, SHORE + 2, VW, VH - SHORE);
+  for (let y = SHORE + 2; y < VH; y += 6) { b.fillStyle = '#c2955e'; b.fillRect(0, y, VW, 4); b.fillStyle = '#7a5532'; b.fillRect(0, y + 5, VW, 1); }
+  b.fillStyle = '#5e3f22'; for (let x = 6; x < VW; x += 34) b.fillRect(x, SHORE + 2, 2, VH - SHORE);
 }
 
 function drawPlayer() {
@@ -3169,8 +3173,9 @@ function drawParts() {
 
 function render() {
   // 물
+  // 🌴 남국의 열대 바다: 먼 바다는 짙은 사파이어, 부두 쪽은 투명한 에메랄드
   const g = b.createLinearGradient(0, 0, 0, SHORE);
-  g.addColorStop(0, '#1c5865'); g.addColorStop(1, '#2d7a77');
+  g.addColorStop(0, '#0b4c8c'); g.addColorStop(0.35, '#0e78b0'); g.addColorStop(0.72, '#13aeb8'); g.addColorStop(1, '#3fd3c4');
   b.fillStyle = g; b.fillRect(0, 0, VW, VH);
 
   drawShadows();
@@ -3183,12 +3188,19 @@ function render() {
   // 수면 반짝임
   if (!causticPat) causticPat = b.createPattern(caustic, 'repeat');
   b.save(); b.fillStyle = causticPat;
-  b.globalAlpha = 0.07; b.translate((time * 6) % 64, (time * 2.5) % 64); b.fillRect(-64, -64, VW + 128, SHORE + 128);
+  b.globalAlpha = 0.12; b.translate((time * 6) % 64, (time * 2.5) % 64); b.fillRect(-64, -64, VW + 128, SHORE + 128);
   b.restore();
   b.save(); b.fillStyle = causticPat;
-  b.globalAlpha = 0.05; b.translate(-(time * 4) % 64, (time * 5) % 64); b.scale(1.5, 1.5); b.fillRect(-64, -64, VW, SHORE);
+  b.globalAlpha = 0.08; b.translate(-(time * 4) % 64, (time * 5) % 64); b.scale(1.5, 1.5); b.fillRect(-64, -64, VW, SHORE);
   b.restore();
-  b.fillStyle = 'rgba(40,110,115,0.12)'; b.fillRect(0, 0, VW, SHORE);
+  { // 부두 앞 얕은 모래 바닥이 비쳐 보인다 + 쨍한 햇살
+    const sg = b.createLinearGradient(0, SHORE - 34, 0, SHORE);
+    sg.addColorStop(0, 'rgba(250,228,170,0)'); sg.addColorStop(1, 'rgba(250,228,170,0.32)');
+    b.fillStyle = sg; b.fillRect(0, SHORE - 34, VW, 34);
+    const sun = b.createRadialGradient(VW * 0.82, -10, 0, VW * 0.82, -10, VW * 0.75);
+    sun.addColorStop(0, 'rgba(255,250,220,0.22)'); sun.addColorStop(1, 'rgba(255,250,220,0)');
+    b.fillStyle = sun; b.fillRect(0, 0, VW, SHORE);
+  }
 
   for (const r of ripples) {
     b.strokeStyle = `rgba(230,250,255,${clamp(r.life, 0, 1) * 0.5})`; b.lineWidth = 1;
