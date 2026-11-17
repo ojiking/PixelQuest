@@ -4498,7 +4498,7 @@ const REEL_FISH = {
   eel:     { v: 12, per: 1, name: '전기뱀장어', rule: '감전: 상하좌우 이웃 ×2. 붕어 떼에 닿으면 떼 전체로 퍼짐' },
   shark:   { v: 30, per: 1, name: '상어', rule: '포식: 이웃한 붕어·잉어를 먹고 그 값의 2배를 흡수' },
 };
-const REEL_W = 5, REEL_H = 4, REEL_BIN = 12, REEL_DYN_P = 0.028, REEL_K = 0.1;   // 칸 숫자는 '점', 판이 끝나면 점 × 0.1 = 동전 (시뮬레이션: 중반 하루 수입이 기존 슬롯과 비슷)
+const REEL_W = 5, REEL_H = 4, REEL_BIN = 12, REEL_DYN_P = 0.028, REEL_K = 0.125;   // 칸 숫자는 '점', 판이 끝나면 8점 = 동전 1 (시뮬레이션: 중반 하루 수입이 기존 슬롯과 비슷)
 let reel = null;   // { bin, spins, fest, festWin, won, sold, busy, auto, grid }
 const rIdx = (c, r) => r * REEL_W + c;
 const rN4 = i => { const c = i % REEL_W, r = (i / REEL_W) | 0, o = []; if (c > 0) o.push(i - 1); if (c < REEL_W - 1) o.push(i + 1); if (r > 0) o.push(i - REEL_W); if (r < REEL_H - 1) o.push(i + REEL_W); return o; };
@@ -4508,10 +4508,15 @@ function reelCrates(kinds) {   // 잡은 마리 수 → 상자 수
   for (const k in REEL_FISH) { const n = kinds[k] || 0; if (!n) continue; const c = Math.max(1, Math.floor(n / REEL_FISH[k].per)); for (let i = 0; i < c; i++) crates.push(k); }
   return crates;
 }
-function reelAutoFill(crates) {   // 자동 채우기: 종류를 골고루 (비싼 종류부터 한 상자씩 돌아가며) → 이웃 콤보가 생기기 쉽다
-  const left = {}; for (const k of crates) left[k] = (left[k] || 0) + 1;
-  const order = Object.keys(left).sort((a, b2) => REEL_FISH[b2].v - REEL_FISH[a].v), bin = [];
-  while (bin.length < REEL_BIN && order.some(k => left[k] > 0)) for (const k of order) if (left[k] > 0 && bin.length < REEL_BIN) { bin.push(k); left[k]--; }
+function reelAutoFill(crates) {   // 자동 채우기: 잡은 비율대로 (상자 수 비율로 통 12칸을 나눈다, 최대 잔여 방식)
+  const cnt = {}; for (const k of crates) cnt[k] = (cnt[k] || 0) + 1;
+  const kinds = Object.keys(cnt), total = crates.length;
+  if (total <= REEL_BIN) return crates.slice();
+  const share = kinds.map(k => ({ k, exact: cnt[k] / total * REEL_BIN })).map(o => ({ ...o, n: Math.floor(o.exact) }));
+  let left = REEL_BIN - share.reduce((a, o) => a + o.n, 0);
+  share.sort((a, b2) => (b2.exact - b2.n) - (a.exact - a.n));
+  for (const o of share) { if (left <= 0) break; o.n++; left--; }
+  const bin = []; for (const o of share) for (let i = 0; i < o.n; i++) bin.push(o.k);
   return bin;
 }
 // 한 판 계산: 결과 칸과 연출 단계를 돌려준다 (연출 없이도 쓰여서 시뮬레이션 가능)
@@ -4735,7 +4740,7 @@ async function reelSpin() {
   if (reel.fest > 0 || (reel.auto && reel.spins > 0)) setTimeout(reelSpin, 350); else reel.auto = false;
 }
 function reelRules() {
-  document.getElementById('reelRules').innerHTML = `<div class="rule">오늘 잡은 물고기가 <b>상자</b>로 통에 들어갑니다(붕어 10마리·잉어 3마리·나머지 1마리 = 1상자, 통은 ${REEL_BIN}칸, 비싼 순으로 자동). 판돈은 없고, 통에 못 든 생선은 헐값에 자동으로 팔려요. 매 판 5×4칸이 <b>통의 비율대로</b> 꽉 채워지고(상자가 많은 물고기가 자주 나와요) <b>이웃끼리 능력</b>이 발동합니다. 칸의 숫자는 점수이고, 판이 끝나면 <b>점수 10점 = 동전 1</b>로 바뀝니다.</div>` +
+  document.getElementById('reelRules').innerHTML = `<div class="rule">오늘 잡은 물고기가 <b>상자</b>로 통에 들어갑니다(붕어 10마리·잉어 3마리·나머지 1마리 = 1상자, 통 ${REEL_BIN}칸을 <b>잡은 비율대로</b> 자동으로 채움). 판돈은 없고, 통에 못 든 생선은 헐값에 자동으로 팔려요. 매 판 5×4칸이 <b>통의 비율대로</b> 꽉 채워지고(상자가 많은 물고기가 자주 나와요) <b>이웃끼리 능력</b>이 발동합니다. 칸의 숫자는 점수이고, 판이 끝나면 <b>점수 8점 = 동전 1</b>로 바뀝니다.</div>` +
     `<table class="reelrules">${Object.keys(REEL_FISH).map(k => `<tr><td><b>${REEL_FISH[k].name}</b> ${REEL_FISH[k].v}</td><td>${REEL_FISH[k].rule}</td></tr>`).join('')}</table>` +
     `<div class="rule">🧨 <b>다이너마이트</b>: 매 판 칸마다 작은 확률로 얹혀요. 1~2개면 주변을 터뜨리고, <b>3개 이상이면 다이너마이트 축제</b>(3개 5판 · 4개 8판 · 5개 이상 12판). 축제 동안 모든 칸 ×2, 매 판 한 칸이 저절로 터지고, 복어가 3번 이상 터지면 +3판.</div>` +
     `<div class="rule">판 수: 하루 5판 + 목표 초과 100점마다 1판(최대 +5) + 황다랑어 도감 ★.</div>`;
@@ -4992,7 +4997,7 @@ window.__sim = {
   sleep() { eveChips = 0; clearOv.classList.add('hidden'); document.getElementById('mileOv').classList.add('hidden'); if (eveFail && eveRetry) { startDay(); state = 'play'; return true; } if (eveFail) { state = 'end'; return false; } day++; startDay(); state = 'play'; return true; },
   get meta() { return meta; }, UP: UPGRADES, TUR, MOUNT_COST,
 };
-window.__reel = { ev: (k, n) => reelEV(k, n), crates: k => reelCrates(k), resolve: (b, f) => reelResolve(b, f), get state() { return reel; }, setKinds: k => { todayKinds = k; }, evening: (k, c, sc) => { todayKinds = k; todayChips = c; dayScore = sc || target + 300; startEvening(true); } };
+window.__reel = { ev: (k, n) => reelEV(k, n), crates: k => reelCrates(k), fill: k => reelAutoFill(reelCrates(k)), resolve: (b, f) => reelResolve(b, f), get state() { return reel; }, setKinds: k => { todayKinds = k; }, evening: (k, c, sc) => { todayKinds = k; todayChips = c; dayScore = sc || target + 300; startEvening(true); } };
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; }, setDyn: n => { dyn = n; },
   get fish() { return fish.length; }, get chips() { return eveChips; }, spawnPirWave: () => spawnPirWave(), get pirs() { return pirs.filter(q => q.hp > 0).length; }, get pirKills() { return stats.pirKills || 0; }, get missiles() { return missiles.length; }, get robots() { return Object.keys(robots); }, robotInfo: () => JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(robots).map(([k, r]) => [k, { x: Math.round(r.x), y: Math.round(r.y), zap: r.zap, tgt: !!r.tgt, aim: !!r.aim }])))), spawnLev: () => { big = null; spawnLeviathan(); }, lev: () => big && big.type === 'leviathan' ? { hp: big.hp, phase: big.phase, open: big.open, geo: levGeo(), dead: big.dead } : null, levPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, get sniper() { return { aim: !!sniper.aim, kills: sniper.kills, cd: sniper.cd }; }, setFever: n => { meta.fever = n; }, get fever() { return fever ? fever.t : null; }, get feverGauge() { return meta.fever; }, startFever: () => startFever(), spawnChestAt: (x, y) => { spawnChest(); const c = chests[chests.length - 1]; c.x = x; c.y = y; c.depth = 0.95; }, chestsInfo: () => chests.map(c => ({ state: c.state, loot: c.loot })), setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotSim: n => slotSim(n), get jp() { return meta.jp; }, forceJP: t => { rollJP.force = t; }, forceGrid: g => { forcedGrid = g; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), dropBomb: (x, y, fuse) => { bombs.push({ x, y, z: 0, sx: x, sy: y, tx: x, ty: y, t: 0, flight: 0, arc: 0, state: "water", fuse, depth: 0, wt: 0, spin: 0, type: "basic", ang: 0 }); }, pickKinds: (n, d) => { const o = day; day = d; const c = {}; for (let i = 0; i < n; i++) { const k = pickKind(); c[k] = (c[k] || 0) + 1; } day = o; return c; }, spawnKind: k => spawnSchool(k, false), get zaps() { return zaps.length; }, foes: () => pirs.filter(q => q.hp > 0).map(q => ({ t: q.type, x: Math.round(q.x), y: Math.round(q.y), hp: q.hp })), get turBroken() { return turRT.map(r => r && r.broken > 0 ? Math.round(r.broken) : 0); }, get chainQ() { return chainQ.length; }, giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
