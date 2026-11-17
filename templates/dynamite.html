@@ -210,7 +210,7 @@
   .wallet .cn { transition: box-shadow .2s; } .wallet .cn.hot { box-shadow: 0 0 0 2px #ffd44a, 0 0 18px rgba(255,212,74,.8); }
   @media (prefers-reduced-motion: reduce) { #machine.shk1, #machine.shk2 { animation: none; } }
   /* 🐟 물고기 릴 (시험판) */
-  .evechoice .reelbtn { grid-column: 1 / -1; background: linear-gradient(180deg, #5bd8ff, #1a8fb8); color: #052a3a; box-shadow: 0 4px 0 #0d4a60; }
+  .evechoice .reelbtn { grid-column: auto; animation: slotglow 1s ease-in-out infinite; background: linear-gradient(180deg, #5bd8ff, #1a8fb8); color: #052a3a; box-shadow: 0 4px 0 #0d4a60; }
   .reelpanel h1 small { font-size: 13px; opacity: .8; }
   .reelpanel.fest { border-color: #ff8a2a; box-shadow: 0 0 0 3px #0b1d26, 0 0 34px rgba(255,140,40,.7); }
   .rgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
@@ -297,8 +297,8 @@
     <div class="coinbox" id="clearCoins"></div>
     <div class="evechoice">
       <button class="sell" id="sellBtn">🐟 헐값에 팔기<small id="sellInfo"></small></button>
-      <button class="slotbtn" data-slot>🎰 슬롯으로 도박<small id="slotInfo"></small></button>
-      <button class="reelbtn" data-reel>🐟 물고기 릴 (시험판)<small id="reelInfo"></small></button>
+      <button class="slotbtn" data-slot hidden>🎰 슬롯으로 도박<small id="slotInfo"></small></button>
+      <button class="reelbtn" data-reel>🐟 물고기 릴<small id="reelInfo"></small></button>
     </div>
     <div class="btns"><button id="nextBtn">🛏 잠자리에 들기</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button><button class="ghost" data-crew>🤖 동료·터렛</button></div>
   </div>
