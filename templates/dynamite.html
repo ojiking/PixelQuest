@@ -4493,11 +4493,11 @@ const REEL_FISH = {
   crucian: { v: 1, per: 10, name: '붕어', rule: '떼: 이어진 붕어 무리 마리 수만큼 각자 값 증가' },
   carp:    { v: 4, per: 3,  name: '잉어', rule: '능력 없음. 대신 기본값이 높다' },
   catfish: { v: 6, per: 1,  name: '메기', rule: '바닥 청소부: 옆 칸이 먹히거나 터져 비면 찌꺼기를 먹고 +6' },
-  puffer:  { v: 4, per: 1,  name: '폭탄복어', rule: '폭발: 주변 8칸 물고기를 한 번 더 동전으로 바꾸고 사라짐. 복어끼리 연쇄' },
+  puffer:  { v: 4, per: 1,  name: '폭탄복어', rule: '폭발: 주변 8칸 물고기 값의 절반을 한 번 더 얻고 사라짐. 복어끼리 연쇄' },
   eel:     { v: 12, per: 1, name: '전기뱀장어', rule: '감전: 상하좌우 이웃 ×2. 붕어 떼에 닿으면 떼 전체로 퍼짐' },
   shark:   { v: 30, per: 1, name: '상어', rule: '포식: 이웃한 붕어·잉어를 먹고 그 값의 2배를 흡수' },
 };
-const REEL_W = 5, REEL_H = 4, REEL_BIN = 12, REEL_DYN_P = 0.028, REEL_K = 0.2;   // 칸 숫자는 '점', 판이 끝나면 점 × 0.2 = 동전 (시뮬레이션: 중반 하루 수입이 기존 슬롯과 비슷)
+const REEL_W = 5, REEL_H = 4, REEL_BIN = 12, REEL_DYN_P = 0.028, REEL_K = 0.1;   // 칸 숫자는 '점', 판이 끝나면 점 × 0.1 = 동전 (시뮬레이션: 중반 하루 수입이 기존 슬롯과 비슷)
 let reel = null;   // { bin, spins, fest, festWin, won, sold, busy, auto, grid }
 const rIdx = (c, r) => r * REEL_W + c;
 const rN4 = i => { const c = i % REEL_W, r = (i / REEL_W) | 0, o = []; if (c > 0) o.push(i - 1); if (c < REEL_W - 1) o.push(i + 1); if (r > 0) o.push(i - REEL_W); if (r < REEL_H - 1) o.push(i + REEL_W); return o; };
@@ -4516,8 +4516,8 @@ function reelAutoFill(crates) {   // 자동 채우기: 종류를 골고루 (비�
 // 한 판 계산: 결과 칸과 연출 단계를 돌려준다 (연출 없이도 쓰여서 시뮬레이션 가능)
 function reelResolve(bin, inFest) {
   const cells = Array.from({ length: REEL_W * REEL_H }, () => null);
-  const pos = [...cells.keys()].sort(() => Math.random() - 0.5);
-  bin.forEach((k, j) => { cells[pos[j]] = { k, v: REEL_FISH[k].v, gone: false }; });
+  // 20칸 모두 통의 비율대로 뽑아 채운다 (상자가 많은 물고기일수록 자주 나온다)
+  if (bin.length) for (let i = 0; i < cells.length; i++) { const k = bin[(Math.random() * bin.length) | 0]; cells[i] = { k, v: REEL_FISH[k].v, gone: false }; }
   const dyn = [];
   if (!inFest) for (let i = 0; i < cells.length; i++) if (Math.random() < REEL_DYN_P) dyn.push(i);   // 다이너마이트: 칸 전체에서 같은 확률
   const steps = [], fish = i => cells[i] && !cells[i].gone;
@@ -4535,12 +4535,14 @@ function reelResolve(bin, inFest) {
     for (let q = 0; q < g.length; q++) for (const j of rN4(g[q])) if (!seen.has(j) && fish(j) && cells[j].k === 'crucian') { seen.add(j); g.push(j); }
     groups.push(g);
     if (g.length >= 2) { for (const j of g) cells[j].v += g.length - 1; steps.push({ t: 'school', at: g[0], cells: g, text: `🐟 붕어 떼 ${g.length}마리! 각자 +${g.length - 1}` }); } });
-  // 3) 감전
+  // 3) 감전 (한 칸은 한 판에 한 번만 감전: 뱀장어가 여럿이어도 ×2)
+  const zapped = new Set();
   cells.forEach((c, i) => { if (!fish(i) || c.k !== 'eel') return;
     const hit = new Set();
     for (const j of rN4(i)) { if (!fish(j)) continue; hit.add(j); if (cells[j].k === 'crucian') { const g = groups.find(gg => gg.includes(j)); if (g) for (const x of g) if (fish(x)) hit.add(x); } }
+    for (const j of [...hit]) if (zapped.has(j)) hit.delete(j);
     if (!hit.size) return;
-    for (const j of hit) cells[j].v *= 2;
+    for (const j of hit) { cells[j].v *= 2; zapped.add(j); }
     steps.push({ t: 'zap', at: i, cells: [...hit], text: `⚡ 감전! ${hit.size}칸 ×2` }); });
   // 4) 축제: 모든 칸 ×2 + 무작위 칸 폭발
   const blasts = [];
@@ -4555,7 +4557,7 @@ function reelResolve(bin, inFest) {
   for (let q = 0; q < blasts.length && chain < 12; q++) {
     const b2 = blasts[q]; if (done.has(b2.at + b2.src)) continue; done.add(b2.at + b2.src);
     if (b2.src === 'puffer' && !fish(b2.at)) continue;
-    const ring = rN8(b2.at).filter(fish), got = ring.reduce((a, j) => a + cells[j].v, 0);
+    const ring = rN8(b2.at).filter(fish), got = Math.round(ring.reduce((a, j) => a + cells[j].v, 0) * (b2.src === 'puffer' ? 0.5 : 1));   // 복어는 주변 값의 절반, 다이너마이트는 전부
     bonus += got; chain++;
     if (b2.src === 'puffer') { bonus += cells[b2.at].v; cells[b2.at].gone = true; pufferBooms++; }
     steps.push({ t: 'boom', at: b2.at, cells: ring, gain: got, src: b2.src, text: b2.src === 'puffer' ? `🐡 펑! 주변 +${got}` : `🧨 쾅! 주변 +${got}` });
@@ -4643,7 +4645,7 @@ async function reelSpin() {
   for (let c = 0; c < REEL_W; c++) document.getElementById('rcol' + c).classList.add('spin');
   const pool = reel.bin.length ? reel.bin : ['crucian'];
   const spinIv = setInterval(() => {
-    for (let c = 0; c < REEL_W; c++) if (!stopped[c]) for (let r = 0; r < REEL_H; r++) reelFill(rIdx(c, r), Math.random() < 0.7 ? { k: pool[(Math.random() * pool.length) | 0] } : null, false);
+    for (let c = 0; c < REEL_W; c++) if (!stopped[c]) for (let r = 0; r < REEL_H; r++) reelFill(rIdx(c, r), { k: pool[(Math.random() * pool.length) | 0] }, false);
     tone(500 + Math.random() * 400, 0.015, 0.02, 'square');
   }, 70);
   let dynSeen = 0;
@@ -4706,7 +4708,7 @@ async function reelSpin() {
   await reelWait(650);
   slotFx.shown = slotFx.target; slotFx.counting = false; setCoinText(meta.coins); document.querySelector(slotFx.box).classList.remove('hot');   // 정산 끝: 숫자를 정확히 맞춘다
   // 큰 판은 축하 화면 (이 통의 기본값 합 대비 몇 배였나)
-  const base = reel.bin.reduce((a, k) => a + REEL_FISH[k].v, 0) || 1, ratio = res.pts / base;
+  const base = (reel.bin.reduce((a, k) => a + REEL_FISH[k].v, 0) / Math.max(1, reel.bin.length)) * REEL_W * REEL_H || 1, ratio = res.pts / base;
   if (ratio >= 2.5 && !res.festTrigger) {
     const mega = ratio >= 5, sp = document.getElementById('reelSplash'); sp.className = 'splash ' + (mega ? 'mega' : 'big'); sp.hidden = false;
     sp.innerHTML = `<div class="t">${mega ? 'MEGA CATCH!!' : 'BIG CATCH!'}</div><div class="n">${COIN}${total.toLocaleString()}</div>`;
@@ -4732,7 +4734,7 @@ async function reelSpin() {
   if (reel.fest > 0 || (reel.auto && reel.spins > 0)) setTimeout(reelSpin, 350); else reel.auto = false;
 }
 function reelRules() {
-  document.getElementById('reelRules').innerHTML = `<div class="rule">오늘 잡은 물고기가 <b>상자</b>로 통에 들어갑니다(붕어 10마리·잉어 3마리·나머지 1마리 = 1상자, 통은 ${REEL_BIN}칸, 비싼 순으로 자동). 판돈은 없고, 통에 못 든 생선은 헐값에 자동으로 팔려요. 매 판 통의 물고기가 5×4칸에 뿌려지고 <b>이웃끼리 능력</b>이 발동합니다. 칸의 숫자는 점수이고, 판이 끝나면 <b>점수 5점 = 동전 1</b>로 바뀝니다.</div>` +
+  document.getElementById('reelRules').innerHTML = `<div class="rule">오늘 잡은 물고기가 <b>상자</b>로 통에 들어갑니다(붕어 10마리·잉어 3마리·나머지 1마리 = 1상자, 통은 ${REEL_BIN}칸, 비싼 순으로 자동). 판돈은 없고, 통에 못 든 생선은 헐값에 자동으로 팔려요. 매 판 5×4칸이 <b>통의 비율대로</b> 꽉 채워지고(상자가 많은 물고기가 자주 나와요) <b>이웃끼리 능력</b>이 발동합니다. 칸의 숫자는 점수이고, 판이 끝나면 <b>점수 10점 = 동전 1</b>로 바뀝니다.</div>` +
     `<table class="reelrules">${Object.keys(REEL_FISH).map(k => `<tr><td><b>${REEL_FISH[k].name}</b> ${REEL_FISH[k].v}</td><td>${REEL_FISH[k].rule}</td></tr>`).join('')}</table>` +
     `<div class="rule">🧨 <b>다이너마이트</b>: 매 판 칸마다 작은 확률로 얹혀요. 1~2개면 주변을 터뜨리고, <b>3개 이상이면 다이너마이트 축제</b>(3개 5판 · 4개 8판 · 5개 이상 12판). 축제 동안 모든 칸 ×2, 매 판 한 칸이 저절로 터지고, 복어가 3번 이상 터지면 +3판.</div>` +
     `<div class="rule">판 수: 하루 5판 + 목표 초과 100점마다 1판(최대 +5) + 황다랑어 도감 ★.</div>`;
