@@ -2392,14 +2392,6 @@ function explode(x, y, depth, rs = 1, quiet = false, safe = false) {
     if (!fever) hitStop = Math.max(hitStop, 0.04 + Math.min(0.12, K * 0.007));          // 히트스톱 (피버 땐 템포 우선)
     if (!fever && K >= 10) { slowDur = slowT = 0.7 + Math.min(0.5, K * 0.02); camFocus = { x, y }; } // 슬로모션 + 줌인
     if (K >= 5) { tone(42, 1.0, 0.55, 'sine', 22); noiseBurst(0.5, 3500, 0.3, 'highpass'); } // 묵직한 저음 + 쩍 갈라지는 소리
-    if (!fever && K >= HAUL_N) { // 🎆 초대박: 피버처럼 물고기가 불꽃놀이로 튄다
-      banner = { str: `🎆 초대박! 한 방에 ${K}마리!`, t: 2.4 };
-      fwBurst(x, y, 6, 40 + Math.min(40, K * 2), 120); fwBurst(x, y, 10, 16, 60, rand(0, 360));
-      for (let i = 0; i < 4; i++) setTimeout(() => fwBurst(rand(20, VW - 20), rand(20, SHORE - 40), rand(8, 16), 26, rand(80, 120)), 200 + i * 160);
-      [523, 659, 784, 1046, 1318].forEach((f2, i) => tone(f2, 0.12, 0.08, 'square', null, 0.25 + i * 0.06));
-      for (let i = 0; i < 3; i++) setTimeout(() => noiseBurst(0.05, 6000, 0.12, 'highpass'), 300 + i * 120);
-      vibrate([80, 40, 120, 40, 160]);
-    }
     for (let i = 0; i < Math.min(30, K * 2); i++) parts.push({ x: x + rand(-6, 6), y: y + rand(-4, 4), z: rand(2, 8), vx: rand(-40, 40), vy: rand(-30, 20), vz: rand(60, 150), life: rand(0.8, 1.4), max: 1.4, type: 'drop' });
   }
   const n = Math.round(14 + surf * 34);
