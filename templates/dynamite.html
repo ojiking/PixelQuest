@@ -209,6 +209,24 @@
   @keyframes cnpulse { 50% { transform: scale(1.12); background: rgba(255,212,74,.35); } }
   .wallet .cn { transition: box-shadow .2s; } .wallet .cn.hot { box-shadow: 0 0 0 2px #ffd44a, 0 0 18px rgba(255,212,74,.8); }
   @media (prefers-reduced-motion: reduce) { #machine.shk1, #machine.shk2 { animation: none; } }
+  /* 🐟 물고기 릴 (시험판) */
+  .evechoice .reelbtn { grid-column: 1 / -1; background: linear-gradient(180deg, #5bd8ff, #1a8fb8); color: #052a3a; box-shadow: 0 4px 0 #0d4a60; }
+  .reelpanel h1 small { font-size: 13px; opacity: .8; }
+  .reelpanel.fest { border-color: #ff8a2a; box-shadow: 0 0 0 3px #0b1d26, 0 0 34px rgba(255,140,40,.7); }
+  .rgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .rc { position: relative; aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, #cfe9f0, #f2fbff 30%, #f2fbff 70%, #cfe9f0); box-shadow: inset 0 3px 6px rgba(0,0,0,.25); transition: background .15s; }
+  .rc canvas { width: 92%; height: auto; transition: opacity .15s; }
+  .rc.gone canvas { opacity: 0; }
+  .rc .val { position: absolute; right: 2px; bottom: 1px; font-weight: 900; font-size: 12.5px; line-height: 1.2; color: #3a1c00; background: #ffd44a; padding: 0 4px; border-radius: 6px; }
+  .rc .val.up { animation: valup .35s ease-out; }
+  @keyframes valup { 0% { transform: scale(1.8); background: #fff; } 100% { transform: none; } }
+  .rc .dy { position: absolute; left: 1px; top: -1px; font-size: 15px; filter: drop-shadow(0 1px 0 #000); }
+  .rc.fx-eat { background: #ffb3a8; } .rc.fx-zap { background: #f4ffb8; box-shadow: 0 0 12px #d8ff6a, inset 0 0 8px #fff; }
+  .rc.fx-school { background: #bfe8ff; } .rc.fx-boom { background: #ffcf8a; } .rc.fx-clean { background: #c8f5c8; } .rc.fx-fest { background: #ff9a5a; }
+  .reelbin { display: flex; flex-wrap: wrap; gap: 4px 8px; justify-content: center; font-size: 13px; margin: 0 0 6px; color: #e8f6ff; }
+  .reelbin span { background: rgba(0,0,0,.35); padding: 2px 8px; }
+  #reelOv .reelrules td { padding: 2px 6px; vertical-align: top; }
   .coinrain { position: fixed; top: -30px; z-index: 9; pointer-events: none; font-size: 26px; animation: rain linear forwards; }
   @keyframes rain { to { transform: translateY(110vh) rotate(540deg); } }
   @media (prefers-reduced-motion: reduce) { .reel.win, .slotmsg.tease, .slotpanel.jackpot, button.slotbtn.ready { animation: none; } }
@@ -280,6 +298,7 @@
     <div class="evechoice">
       <button class="sell" id="sellBtn">🐟 헐값에 팔기<small id="sellInfo"></small></button>
       <button class="slotbtn" data-slot>🎰 슬롯으로 도박<small id="slotInfo"></small></button>
+      <button class="reelbtn" data-reel>🐟 물고기 릴 (시험판)<small id="reelInfo"></small></button>
     </div>
     <div class="btns"><button id="nextBtn">🛏 잠자리에 들기</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button><button class="ghost" data-crew>🤖 동료·터렛</button></div>
   </div>
@@ -332,6 +351,27 @@
     <div class="btns"><button id="spinBtn">SPIN!</button><button class="ghost" id="autoBtn">자동 10</button></div>
     <details class="paytable"><summary>배당표 · 규칙</summary><div id="payTable"></div></details>
     <button class="ghost" id="slotClose">닫기</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="reelOv">
+  <div class="panel slotpanel reelpanel" id="reelPanel">
+    <h1>🐟 물고기 릴 <small>시험판</small></h1>
+    <div class="wallet">
+      <div class="chips"><span class="clbl">남은 판</span><b id="reelSpins">0</b></div>
+      <div class="cn"><span class="clbl">동전</span><b id="reelCoins">0</b></div>
+    </div>
+    <div class="fsbar" id="festBar" hidden>🧨 다이너마이트 축제 <b id="festLeft">0</b>회 남음 · 모든 칸 ×2 · 누적 <b id="festWin">0</b></div>
+    <div class="reelbin" id="reelBin"></div>
+    <div class="machine" id="reelMachine">
+      <div class="rgrid" id="reelGrid"></div>
+      <div class="splash" id="reelSplash" hidden></div>
+    </div>
+    <div class="slotmsg" id="reelMsg">오늘 잡은 물고기가 릴이 됩니다</div>
+    <div class="tally" id="reelTally"></div>
+    <div class="btns"><button id="reelSpin">SPIN!</button><button class="ghost" id="reelAuto">끝까지</button></div>
+    <details class="paytable"><summary>물고기 능력 · 규칙</summary><div id="reelRules"></div></details>
+    <button class="ghost" id="reelClose">닫기</button>
   </div>
 </div>
 
@@ -3577,7 +3617,7 @@ function startEvening(success) {
   if (hiss) hiss.g.gain.setTargetAtTime(0, ac.currentTime, 0.03);
   eveFail = !success; eveRetry = !success && day <= 2;   // 1~2일차 실패는 한 번 더
   eveChips = todayChips; todayChips = 0; eveBet = 0; eveWon = 0; eveSpins = 0;
-  resetSlotSession();
+  resetSlotSession(); reel = null;
   eveBonusChips = eveChips > 0 ? Math.round(eveChips * 0.1 * sPow('sturgeon')) : 0;   // 철갑상어 ★
   eveChips += eveBonusChips;
   eveFree = Math.round(sPow('tuna') + 5 * sPow('leviathan'));                                                             // 황다랑어 ★
@@ -3618,6 +3658,9 @@ function renderEvening(countUp) {
   const sellN = sellValue(eveChips);
   document.getElementById('sellInfo').textContent = eveChips ? `확실하게 동전 +${sellN}` : '팔 생선이 없어요';
   document.getElementById('sellBtn').disabled = eveChips <= 0;
+  { const rb = document.querySelector('[data-reel]'), ri = document.getElementById('reelInfo');
+    if (reel) { ri.textContent = reel.spins + reel.fest > 0 ? `남은 ${reel.spins + reel.fest}판 · 이어서 돌리기` : `오늘 밤 +${reel.won.toLocaleString()} · 다 돌렸어요`; rb.disabled = false; }
+    else { ri.textContent = eveChips > 0 ? '판돈 없이, 잡은 물고기로 릴을 채워 돌려요' : '이미 생선을 처분했어요'; rb.disabled = eveChips <= 0; } }
   document.getElementById('slotInfo').textContent = (eveChips >= SPIN_COST ? `${Math.floor(eveChips / SPIN_COST)}판` : '') + (eveFree ? ` + 무료 ${eveFree}판` : '') + (eveChips >= SPIN_COST || eveFree ? ` · GRAND ${Math.floor(meta.jp.grand).toLocaleString()}` : '칩이 모자라요');
   slotWallet(); updateShopGlow();
 }
@@ -4103,7 +4146,7 @@ function emojiCanvas(sym, size) {
 }
 // 물고기가 산산조각: 그림을 불규칙한 조각으로 잘라 사방으로 날린다
 function shatter(sym, x, y, size, power) {
-  const { c, alpha } = emojiCanvas(sym, Math.round(size));
+  const { c, alpha } = typeof sym === 'string' ? emojiCanvas(sym, Math.round(size)) : sym;   // 이모지 또는 미리 그린 그림
   const W2 = c.width, n = power >= 2 ? 4 : 3, cs = W2 / n;
   for (let gy = 0; gy < n; gy++) for (let gx = 0; gx < n; gx++) {
     const sx = gx * cs, sy = gy * cs;
@@ -4117,7 +4160,7 @@ function shatter(sym, x, y, size, power) {
       rot: 0, vr: (Math.random() - 0.5) * 12, g: 900, life: 1.0 + Math.random() * 0.4, max: 1.4, s: 0 });
   }
 }
-const slotFx = { parts: [], coins: [], running: false, counting: false, shown: 0, target: 0, cv: null, ctx: null };
+const slotFx = { parts: [], coins: [], running: false, counting: false, shown: 0, target: 0, cv: null, ctx: null, el: 'slotCoins', box: '#slotOv .wallet .cn' };
 function fxCanvas() {
   if (!slotFx.cv) {
     const cv = document.createElement('canvas'); cv.id = 'slotFx'; document.body.appendChild(cv);
@@ -4147,7 +4190,7 @@ function fxLoop() {
     }
     slotFx.parts = slotFx.parts.filter(p => p.life > 0);
     // 날아가는 동전
-    const tgt = document.getElementById('slotCoins').getBoundingClientRect();
+    const tgt = document.getElementById(slotFx.el).getBoundingClientRect();
     const tx = tgt.left + tgt.width / 2, ty = tgt.top + tgt.height / 2;
     for (const c of slotFx.coins) {
       c.t += dt;
@@ -4171,16 +4214,16 @@ function fxLoop() {
     if (slotFx.parts.length || slotFx.coins.length) requestAnimationFrame(step);
     else {
       slotFx.running = false; ctx.clearRect(0, 0, innerWidth, innerHeight);
-      if (slotFx.counting) { slotFx.counting = false; setCoinText(meta.coins); document.querySelector('.wallet .cn').classList.remove('hot'); }
+      if (slotFx.counting) { slotFx.counting = false; setCoinText(meta.coins); document.querySelector(slotFx.box).classList.remove('hot'); }
     }
   };
   requestAnimationFrame(step);
 }
-function setCoinText(v) { document.getElementById('slotCoins').textContent = Math.floor(v).toLocaleString(); }
+function setCoinText(v) { document.getElementById(slotFx.el).textContent = Math.floor(v).toLocaleString(); }
 function coinArrive(v) {
   slotFx.shown = Math.min(slotFx.target, slotFx.shown + v);
   setCoinText(slotFx.shown);
-  const cn = document.querySelector('.wallet .cn'); cn.classList.remove('pulse'); void cn.offsetWidth; cn.classList.add('pulse');
+  const cn = document.querySelector(slotFx.box); cn.classList.remove('pulse'); void cn.offsetWidth; cn.classList.add('pulse');
   const now = performance.now();
   if (!coinArrive.t || now - coinArrive.t > 40) { coinArrive.t = now; coinArrive.n = (coinArrive.n || 0) + 1;
     tone(1400 + (coinArrive.n % 8) * 90, 0.05, 0.05, 'square'); }   // 짤랑짤랑 (음이 조금씩 올라감)
@@ -4220,7 +4263,7 @@ function slotWinFx(cells, total, power) {
   // 동전 카운터 애니메이션 준비 (돈은 이미 들어왔고, 표시만 휘리릭 올린다)
   slotFx.counting = true; slotFx.target = meta.coins;
   slotFx.shown = Math.max(0, meta.coins - Math.floor(total));
-  setCoinText(slotFx.shown); document.querySelector('.wallet .cn').classList.add('hot');
+  setCoinText(slotFx.shown); document.querySelector(slotFx.box).classList.add('hot');
   const N = Math.max(cells.length, Math.min(80, Math.round(3 + Math.log2(total + 1) * 5)));   // 동전 개수 (칸마다 나눠서)
   const share = Math.floor(total) / N;
   let given = 0, ci = 0;
@@ -4247,7 +4290,7 @@ function slotWinFx(cells, total, power) {
     }, at);
   });
   const blastEnd = pre + (col - 1) * gap, dur = blastEnd + 500 + Math.min(700, N * 12);
-  setTimeout(() => { if (slotFx.counting && !slotFx.coins.length) { slotFx.counting = false; setCoinText(meta.coins); document.querySelector('.wallet .cn').classList.remove('hot'); } }, dur);
+  setTimeout(() => { if (slotFx.counting && !slotFx.coins.length) { slotFx.counting = false; setCoinText(meta.coins); document.querySelector(slotFx.box).classList.remove('hot'); } }, dur);
   return dur;
 }
 function spin() {
@@ -4426,9 +4469,240 @@ document.getElementById('autoBtn').addEventListener('click', () => {
 });
 document.querySelectorAll('[data-slot]').forEach(btn => btn.addEventListener('click', () => {
   slotBack = btn.closest('.overlay'); slotBack.classList.add('hidden');
+  slotFx.el = 'slotCoins'; slotFx.box = '#slotOv .wallet .cn';
   buildGrid(); renderBets(); slotWallet(); slotOv.classList.remove('hidden');
   if (slotFresh) { slotFresh = false; clearWinFx(); slotIntro(); }
 }));
+
+// ===== 🐟 물고기 릴 (시험판): 오늘 잡은 물고기가 릴의 그림이 된다 =====
+// 기획안 요약: 5×4칸, 통 12상자(자동 채우기), 판돈 없음, 이웃끼리 능력 발동, 다이너마이트 3개 이상이면 축제(프리스핀)
+const REEL_FISH = {
+  crucian: { v: 1, per: 10, name: '붕어', rule: '떼: 이어진 붕어 무리 마리 수만큼 각자 값 증가' },
+  carp:    { v: 4, per: 3,  name: '잉어', rule: '능력 없음. 대신 기본값이 높다' },
+  catfish: { v: 6, per: 1,  name: '메기', rule: '바닥 청소부: 옆 칸이 먹히거나 터져 비면 찌꺼기를 먹고 +6' },
+  puffer:  { v: 4, per: 1,  name: '폭탄복어', rule: '폭발: 주변 8칸 물고기를 한 번 더 동전으로 바꾸고 사라짐. 복어끼리 연쇄' },
+  eel:     { v: 12, per: 1, name: '전기뱀장어', rule: '감전: 상하좌우 이웃 ×2. 붕어 떼에 닿으면 떼 전체로 퍼짐' },
+  shark:   { v: 30, per: 1, name: '상어', rule: '포식: 이웃한 붕어·잉어를 먹고 그 값의 2배를 흡수' },
+};
+const REEL_W = 5, REEL_H = 4, REEL_BIN = 12, REEL_DYN_P = 0.028, REEL_K = 0.2;   // 칸 숫자는 '점', 판이 끝나면 점 × 0.2 = 동전 (시뮬레이션: 중반 하루 수입이 기존 슬롯과 비슷)
+let reel = null;   // { bin, spins, fest, festWin, won, sold, busy, auto, grid }
+const rIdx = (c, r) => r * REEL_W + c;
+const rN4 = i => { const c = i % REEL_W, r = (i / REEL_W) | 0, o = []; if (c > 0) o.push(i - 1); if (c < REEL_W - 1) o.push(i + 1); if (r > 0) o.push(i - REEL_W); if (r < REEL_H - 1) o.push(i + REEL_W); return o; };
+const rN8 = i => { const c = i % REEL_W, r = (i / REEL_W) | 0, o = []; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { if (!dx && !dy) continue; const x = c + dx, y = r + dy; if (x >= 0 && x < REEL_W && y >= 0 && y < REEL_H) o.push(rIdx(x, y)); } return o; };
+function reelCrates(kinds) {   // 잡은 마리 수 → 상자 수
+  const crates = [];
+  for (const k in REEL_FISH) { const n = kinds[k] || 0; if (!n) continue; const c = Math.max(1, Math.floor(n / REEL_FISH[k].per)); for (let i = 0; i < c; i++) crates.push(k); }
+  return crates;
+}
+function reelAutoFill(crates) {   // 자동 채우기: 종류를 골고루 (비싼 종류부터 한 상자씩 돌아가며) → 이웃 콤보가 생기기 쉽다
+  const left = {}; for (const k of crates) left[k] = (left[k] || 0) + 1;
+  const order = Object.keys(left).sort((a, b2) => REEL_FISH[b2].v - REEL_FISH[a].v), bin = [];
+  while (bin.length < REEL_BIN && order.some(k => left[k] > 0)) for (const k of order) if (left[k] > 0 && bin.length < REEL_BIN) { bin.push(k); left[k]--; }
+  return bin;
+}
+// 한 판 계산: 결과 칸과 연출 단계를 돌려준다 (연출 없이도 쓰여서 시뮬레이션 가능)
+function reelResolve(bin, inFest) {
+  const cells = Array.from({ length: REEL_W * REEL_H }, () => null);
+  const pos = [...cells.keys()].sort(() => Math.random() - 0.5);
+  bin.forEach((k, j) => { cells[pos[j]] = { k, v: REEL_FISH[k].v, gone: false }; });
+  const dyn = [];
+  if (!inFest) for (let i = 0; i < cells.length; i++) if (Math.random() < REEL_DYN_P) dyn.push(i);   // 다이너마이트: 칸 전체에서 같은 확률
+  const steps = [], fish = i => cells[i] && !cells[i].gone;
+  let bonus = 0;
+  // 1) 포식
+  cells.forEach((c, i) => { if (!c || c.k !== 'shark') return;
+    const eaten = rN4(i).filter(j => fish(j) && (cells[j].k === 'crucian' || cells[j].k === 'carp'));
+    if (!eaten.length) return;
+    for (const j of eaten) { c.v += cells[j].v * 2; cells[j].gone = true; }
+    steps.push({ t: 'eat', at: i, cells: eaten, text: `🦈 상어가 ${eaten.length}마리 먹었다! (${c.v})` }); });
+  // 2) 떼
+  const seen = new Set(), groups = [];
+  cells.forEach((c, i) => { if (!fish(i) || c.k !== 'crucian' || seen.has(i)) return;
+    const g = [i]; seen.add(i);
+    for (let q = 0; q < g.length; q++) for (const j of rN4(g[q])) if (!seen.has(j) && fish(j) && cells[j].k === 'crucian') { seen.add(j); g.push(j); }
+    groups.push(g);
+    if (g.length >= 2) { for (const j of g) cells[j].v += g.length - 1; steps.push({ t: 'school', at: g[0], cells: g, text: `🐟 붕어 떼 ${g.length}마리! 각자 +${g.length - 1}` }); } });
+  // 3) 감전
+  cells.forEach((c, i) => { if (!fish(i) || c.k !== 'eel') return;
+    const hit = new Set();
+    for (const j of rN4(i)) { if (!fish(j)) continue; hit.add(j); if (cells[j].k === 'crucian') { const g = groups.find(gg => gg.includes(j)); if (g) for (const x of g) if (fish(x)) hit.add(x); } }
+    if (!hit.size) return;
+    for (const j of hit) cells[j].v *= 2;
+    steps.push({ t: 'zap', at: i, cells: [...hit], text: `⚡ 감전! ${hit.size}칸 ×2` }); });
+  // 4) 축제: 모든 칸 ×2 + 무작위 칸 폭발
+  const blasts = [];
+  if (inFest) {
+    cells.forEach((c, i) => { if (fish(i)) c.v *= 2; });
+    steps.push({ t: 'fest', at: 0, cells: cells.map((c, i) => i).filter(fish), text: '🧨 축제! 모든 칸 ×2' });
+    blasts.push({ at: (Math.random() * cells.length) | 0, src: 'dyn' });
+  } else if (dyn.length && dyn.length < 3) for (const i of dyn) blasts.push({ at: i, src: 'dyn' });
+  // 5) 폭발 (복어 + 다이너마이트), 연쇄 최대 5회
+  cells.forEach((c, i) => { if (fish(i) && c.k === 'puffer') blasts.push({ at: i, src: 'puffer' }); });
+  const done = new Set(); let chain = 0, pufferBooms = 0;
+  for (let q = 0; q < blasts.length && chain < 12; q++) {
+    const b2 = blasts[q]; if (done.has(b2.at + b2.src)) continue; done.add(b2.at + b2.src);
+    if (b2.src === 'puffer' && !fish(b2.at)) continue;
+    const ring = rN8(b2.at).filter(fish), got = ring.reduce((a, j) => a + cells[j].v, 0);
+    bonus += got; chain++;
+    if (b2.src === 'puffer') { bonus += cells[b2.at].v; cells[b2.at].gone = true; pufferBooms++; }
+    steps.push({ t: 'boom', at: b2.at, cells: ring, gain: got, src: b2.src, text: b2.src === 'puffer' ? `🐡 펑! 주변 +${got}` : `🧨 쾅! 주변 +${got}` });
+    if (pufferBooms < 5) for (const j of ring) if (cells[j].k === 'puffer' && !done.has(j + 'puffer')) blasts.push({ at: j, src: 'puffer' });
+  }
+  // 6) 바닥 청소부
+  cells.forEach((c, i) => { if (!fish(i) || c.k !== 'catfish') return;
+    const empt = rN4(i).filter(j => cells[j] && cells[j].gone).length;
+    if (!empt) return; c.v += 6 * empt; steps.push({ t: 'clean', at: i, cells: [i], text: `🐟 메기가 찌꺼기를 먹었다 +${6 * empt}` }); });
+  const pts = Math.round(cells.reduce((a, c) => a + (c && !c.gone ? c.v : 0), 0) + bonus), total = Math.round(pts * REEL_K);
+  return { cells, dyn, steps, total, pts, bonus, festTrigger: !inFest && dyn.length >= 3 ? (dyn.length >= 5 ? 12 : dyn.length === 4 ? 8 : 5) : 0, retrig: inFest && pufferBooms >= 3 ? 3 : 0 };
+}
+function reelEV(kinds, n = 2000) { const bin = reelAutoFill(reelCrates(kinds)); let t = 0; for (let i = 0; i < n; i++) t += reelResolve(bin, false).total; return t / n; }
+// 아이콘 (도감 그림을 재사용) + 깨지는 조각용 원본
+const reelIconCache = {};
+function reelIcon(k) {
+  if (reelIconCache[k]) return reelIconCache[k];
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'), sp = SPECIES[k] || { len: 24, wid: 7 }, col = (DEX_BY[k] || {}).col || '#ccc';
+  const L = k === 'crucian' ? 40 : k === 'eel' ? 58 : 50, Wd = Math.max(k === 'eel' ? 9 : 14, Math.min(34, L * sp.wid / sp.len * (k === 'puffer' ? 1.1 : 1.25)));
+  g.save(); g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowOffsetY = 2; g.shadowBlur = 2;
+  fishShape(g, 36 - (k === 'eel' ? 4 : 0), 34, 0, L * 0.8, Wd, 0, col); g.restore();   // 칸에 꽉 차는 큰 물고기
+  if (k === 'shark') { g.fillStyle = col; g.beginPath(); g.moveTo(30, 34 - Wd / 2 + 2); g.lineTo(24, 34 - Wd / 2 - 12); g.lineTo(40, 34 - Wd / 2 + 2); g.fill(); }
+  if (k === 'puffer') { g.fillStyle = '#7a5a10'; for (let i = 0; i < 7; i++) { const a = i / 7 * 6.283; g.fillRect(36 + Math.cos(a) * (Wd / 2 + 2) - 1, 34 + Math.sin(a) * (Wd / 2 + 2) - 1, 2, 2); } }
+  if (k === 'eel') { g.fillStyle = '#d8ff6a'; for (let i = 0; i < 4; i++) g.fillRect(14 + i * 11, 33, 3, 2); }
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(36 + L * 0.8 / 2 - 7 - (k === 'eel' ? 4 : 0), 32, 3, 0, 6.283); g.fill();
+  g.fillStyle = '#111'; g.beginPath(); g.arc(36 + L * 0.8 / 2 - 6 - (k === 'eel' ? 4 : 0), 32, 1.6, 0, 6.283); g.fill();
+  let alpha = null; try { alpha = c.getContext('2d').getImageData(0, 0, 64, 64).data; } catch (e) {}
+  return (reelIconCache[k] = { c, alpha });
+}
+function startReel() {
+  const crates = reelCrates(todayKinds), bin = reelAutoFill(crates);
+  const used = {}; for (const k of bin) used[k] = (used[k] || 0) + 1;
+  let binChips = 0; for (const k in used) binChips += Math.min(todayKinds[k] || 0, used[k] * REEL_FISH[k].per) * (CHIP[k] || 1);
+  const sold = sellValue(Math.max(0, eveChips - binChips));   // 통에 못 든 생선·칩은 헐값에 자동 판매
+  meta.coins += sold; eveChips = 0; saveMeta();
+  const extra = Math.min(5, Math.floor(Math.max(0, dayScore - target) / 100));
+  reel = { bin, spins: bin.length ? 5 + extra + Math.round(sPow('tuna')) : 0, fest: 0, festWin: 0, won: 0, sold, busy: false, auto: false, grid: null };
+}
+function reelRender(res) {
+  const g = document.getElementById('reelGrid'); g.innerHTML = '';
+  for (let i = 0; i < REEL_W * REEL_H; i++) {
+    const d = document.createElement('div'); d.className = 'rc'; d.id = 'rc' + i;
+    const c = res ? res.cells[i] : null;
+    if (c) { const cv = document.createElement('canvas'); cv.width = cv.height = 64; cv.getContext('2d').drawImage(reelIcon(c.k).c, 0, 0); d.appendChild(cv);
+      const v = document.createElement('span'); v.className = 'val'; v.textContent = REEL_FISH[c.k].v; d.appendChild(v); }
+    if (res && res.dyn.includes(i)) { const y = document.createElement('span'); y.className = 'dy'; y.textContent = '🧨'; d.appendChild(y); }
+    g.appendChild(d);
+  }
+}
+function reelWallet() {
+  document.getElementById('reelSpins').textContent = reel.fest > 0 ? `축제 ${reel.fest}` : reel.spins;
+  if (!slotFx.counting) document.getElementById('reelCoins').textContent = meta.coins.toLocaleString();
+  const counts = {}; for (const k of reel.bin) counts[k] = (counts[k] || 0) + 1;
+  document.getElementById('reelBin').innerHTML = `<span>통 ${reel.bin.length}/${REEL_BIN}</span>` + Object.keys(REEL_FISH).filter(k => counts[k]).map(k => `<span>${REEL_FISH[k].name} ×${counts[k]}</span>`).join('');
+  document.getElementById('reelTally').innerHTML = `오늘 밤 물고기 릴: <b>${COIN}+${reel.won.toLocaleString()}</b>` + (reel.sold ? ` · 통에 못 든 생선 헐값 판매 <b>${COIN}+${reel.sold}</b>` : '');
+  const sb = document.getElementById('reelSpin'), left = reel.spins + reel.fest;
+  sb.disabled = reel.busy || left <= 0; sb.textContent = reel.fest > 0 ? `축제 SPIN! (${reel.fest})` : left > 0 ? `SPIN! (${reel.spins})` : '다 돌렸어요';
+  document.getElementById('reelAuto').disabled = reel.busy || left <= 0;
+  document.getElementById('festBar').hidden = reel.fest <= 0;
+  document.getElementById('festLeft').textContent = reel.fest; document.getElementById('festWin').textContent = reel.festWin.toLocaleString();
+  document.getElementById('reelPanel').classList.toggle('fest', reel.fest > 0);
+}
+const reelWait = ms => new Promise(r => setTimeout(r, ms));
+function reelSetVal(i, v) { const el = document.querySelector(`#rc${i} .val`); if (!el) return; el.textContent = Math.round(v); el.classList.remove('up'); void el.offsetWidth; el.classList.add('up'); }
+async function reelSpin() {
+  if (!reel || reel.busy || reel.spins + reel.fest <= 0) return;
+  ensureAudio(); reel.busy = true;
+  const inFest = reel.fest > 0;
+  if (inFest) reel.fest--; else reel.spins--;
+  reelWallet();
+  const msg = document.getElementById('reelMsg');
+  // 뿌리기 연출: 잠깐 섞이다가 멈춘다
+  for (let n = 0; n < 6; n++) { reelRender(reelResolve(reel.bin, true)); tone(700 + Math.random() * 500, 0.03, 0.03, 'square'); await reelWait(60); }
+  const res = reelResolve(reel.bin, inFest);
+  reelRender(res); tone(1046, 0.06, 0.06, 'square');
+  msg.className = 'slotmsg'; msg.textContent = res.dyn.length ? `🧨 다이너마이트 ${res.dyn.length}개!` : inFest ? '🧨 축제 중!' : '…';
+  await reelWait(380);
+  // 능력 발동을 하나씩 보여 준다 (중간 값은 최종값을 단계별로 근사)
+  for (const st of res.steps) {
+    const cls = 'fx-' + st.t;
+    const all = [st.at, ...st.cells];
+    all.forEach(i => { const el = document.getElementById('rc' + i); if (el) el.classList.add(cls); });
+    msg.className = 'slotmsg win'; msg.textContent = st.text;
+    if (st.t === 'eat') { for (const j of st.cells) { const el = document.getElementById('rc' + j); const r = el.getBoundingClientRect(); shatter(reelIcon(res.cells[j].k), r.left + r.width / 2, r.top + r.height / 2, r.width, 1); el.classList.add('gone'); const v = el.querySelector('.val'); if (v) v.remove(); }
+      reelSetVal(st.at, res.cells[st.at].v); noiseBurst(0.25, 700, 0.3); tone(110, 0.2, 0.2, 'sawtooth', 60); }
+    else if (st.t === 'school') { for (const j of st.cells) reelSetVal(j, res.cells[j].v); [784, 988, 1175].forEach((f, k) => tone(f, 0.06, 0.05, 'triangle', null, k * 0.05)); }
+    else if (st.t === 'zap') { for (const j of st.cells) reelSetVal(j, res.cells[j].v); noiseBurst(0.3, 6000, 0.25, 'highpass'); tone(140, 0.25, 0.15, 'sawtooth', 90); }
+    else if (st.t === 'fest') { for (const j of st.cells) reelSetVal(j, res.cells[j].v); tone(660, 0.15, 0.08, 'square', 990); }
+    else if (st.t === 'clean') { reelSetVal(st.at, res.cells[st.at].v); tone(520, 0.08, 0.06, 'triangle'); }
+    else if (st.t === 'boom') {
+      const el = document.getElementById('rc' + st.at), r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      if (st.src === 'puffer') { shatter(reelIcon('puffer'), cx, cy, r.width, 2); el.classList.add('gone'); const v = el.querySelector('.val'); if (v) v.remove(); }
+      for (let k = 0; k < 18; k++) { const a = Math.random() * 6.283, sp = 80 + Math.random() * 200; slotFx.parts.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 100, g: 500, s: 3 + Math.random() * 4, c: Math.random() < 0.5 ? '#ff8a3a' : '#ffd44a', life: 0.6, max: 0.6, fire: true }); }
+      slotFx.parts.push({ x: cx, y: cy, vx: 0, vy: 0, g: 0, ring: true, r: r.width * 1.4, c: '#fff6c0', life: 0.35, max: 0.35 }); fxLoop();
+      const m = document.getElementById('reelMachine'); m.classList.remove('shk1', 'shk2'); void m.offsetWidth; m.classList.add('shk2');
+      noiseBurst(0.6, 800, 0.45); tone(70, 0.4, 0.4, 'sine', 30); vibrate([40]);
+    }
+    await reelWait(st.t === 'boom' ? 420 : 520);
+    all.forEach(i => { const el = document.getElementById('rc' + i); if (el) el.classList.remove(cls); });
+  }
+  // 정산: 남은 물고기가 깨져 동전이 되어 지갑으로
+  const total = res.total;
+  meta.coins += total; reel.won += total; if (inFest) reel.festWin += total; saveMeta();
+  const live = res.cells.map((c, i) => c && !c.gone ? i : -1).filter(i => i >= 0).sort((a, b2) => (a % REEL_W) - (b2 % REEL_W));
+  slotFx.counting = true; slotFx.target = meta.coins; slotFx.shown = meta.coins - total; setCoinText(slotFx.shown); document.querySelector(slotFx.box).classList.add('hot');
+  const N = Math.max(3, Math.min(70, Math.round(3 + Math.log2(total + 1) * 5))), share = total / N;
+  msg.className = 'slotmsg win'; msg.innerHTML = `${res.pts.toLocaleString()}점 → ${COIN}+${total.toLocaleString()}` + (res.bonus ? ` <span style="font-size:13px">(폭발 보너스 ${Math.round(res.bonus)}점 포함)</span>` : '');
+  let given = 0;
+  for (let n = 0; n < live.length; n++) {
+    const i = live[n], el = document.getElementById('rc' + i), r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    shatter(reelIcon(res.cells[i].k), x, y, r.width, 1); el.classList.add('gone'); const v = el.querySelector('.val'); if (v) v.remove();
+    const m = Math.round(N * (n + 1) / Math.max(1, live.length)) - given; given += m;
+    for (let k = 0; k < m; k++) { const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.2, sp = 240 + Math.random() * 220;
+      slotFx.coins.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 6 + Math.random() * 3, t: 0, delay: k * 0.012, hang: 0.3 + Math.random() * 0.15, ph: Math.random() * 6, v: share }); }
+    fxLoop(); tone(300 + n * 40, 0.05, 0.06, 'square');
+    await reelWait(70);
+  }
+  await reelWait(900);
+  if (slotFx.counting && !slotFx.coins.length) { slotFx.counting = false; setCoinText(meta.coins); document.querySelector(slotFx.box).classList.remove('hot'); }
+  // 축제 발동 / 재발동 / 종료
+  if (res.festTrigger || res.retrig) {
+    const n = res.festTrigger || res.retrig, first = reel.fest === 0 && !inFest;
+    if (first) reel.festWin = 0;
+    reel.fest += n;
+    const sp = document.getElementById('reelSplash'); sp.className = 'splash fs'; sp.hidden = false;
+    sp.innerHTML = `<div class="t">🧨 ${first ? `다이너마이트 축제 ×${n}!` : `+${n} 축제!`}</div>`;
+    [523, 659, 784, 1046, 1318].forEach((f, k) => tone(f, 0.12, 0.09, 'square', null, k * 0.07)); coinRain(20);
+    await reelWait(1700); sp.hidden = true;
+  } else if (inFest && reel.fest === 0) {
+    const sp = document.getElementById('reelSplash'); sp.className = 'splash mega'; sp.hidden = false;
+    sp.innerHTML = `<div class="t">축제 종료</div><div class="n">${COIN}${reel.festWin.toLocaleString()}</div>`;
+    await reelWait(1900); sp.hidden = true;
+  }
+  reel.busy = false; reelWallet(); updateShopGlow();
+  if (reel.fest > 0 || (reel.auto && reel.spins > 0)) setTimeout(reelSpin, 350); else reel.auto = false;
+}
+function reelRules() {
+  document.getElementById('reelRules').innerHTML = `<div class="rule">오늘 잡은 물고기가 <b>상자</b>로 통에 들어갑니다(붕어 10마리·잉어 3마리·나머지 1마리 = 1상자, 통은 ${REEL_BIN}칸, 비싼 순으로 자동). 판돈은 없고, 통에 못 든 생선은 헐값에 자동으로 팔려요. 매 판 통의 물고기가 5×4칸에 뿌려지고 <b>이웃끼리 능력</b>이 발동합니다. 칸의 숫자는 점수이고, 판이 끝나면 <b>점수 5점 = 동전 1</b>로 바뀝니다.</div>` +
+    `<table class="reelrules">${Object.keys(REEL_FISH).map(k => `<tr><td><b>${REEL_FISH[k].name}</b> ${REEL_FISH[k].v}</td><td>${REEL_FISH[k].rule}</td></tr>`).join('')}</table>` +
+    `<div class="rule">🧨 <b>다이너마이트</b>: 매 판 칸마다 작은 확률로 얹혀요. 1~2개면 주변을 터뜨리고, <b>3개 이상이면 다이너마이트 축제</b>(3개 5판 · 4개 8판 · 5개 이상 12판). 축제 동안 모든 칸 ×2, 매 판 한 칸이 저절로 터지고, 복어가 3번 이상 터지면 +3판.</div>` +
+    `<div class="rule">판 수: 하루 5판 + 목표 초과 100점마다 1판(최대 +5) + 황다랑어 도감 ★.</div>`;
+}
+document.querySelectorAll('[data-reel]').forEach(btn => btn.addEventListener('click', () => {
+  if (!reel) { if (eveChips <= 0) return; startReel(); }
+  ensureAudio();
+  slotFx.el = 'reelCoins'; slotFx.box = '#reelOv .wallet .cn';
+  clearOv.classList.add('hidden'); document.getElementById('reelOv').classList.remove('hidden');
+  reelRules(); reelRender(null); reelWallet();
+  const msg = document.getElementById('reelMsg'); msg.className = 'slotmsg';
+  msg.textContent = reel.bin.length ? `통에 ${reel.bin.length}상자! SPIN을 눌러 보세요` : '통에 넣을 물고기가 없어요 (붕어·잉어·메기·복어·뱀장어·상어만 들어가요)';
+}));
+document.getElementById('reelSpin').addEventListener('click', () => reelSpin());
+document.getElementById('reelAuto').addEventListener('click', () => { if (!reel || reel.busy) return; reel.auto = true; reelSpin(); });
+document.getElementById('reelClose').addEventListener('click', () => {
+  if (reel && (reel.busy || reel.fest > 0)) return;
+  if (reel) reel.auto = false;
+  document.getElementById('reelOv').classList.add('hidden'); clearOv.classList.remove('hidden'); renderEvening(false); renderShop();
+});
+
 document.getElementById('slotClose').addEventListener('click', () => {
   if (slotBusy || fsLeft > 0) return;   // 돌아가는 중이거나 프리스핀이 남았으면 못 닫음
   autoLeft = 0; saveMeta();
@@ -4664,6 +4938,7 @@ window.__sim = {
   sleep() { eveChips = 0; clearOv.classList.add('hidden'); document.getElementById('mileOv').classList.add('hidden'); if (eveFail && eveRetry) { startDay(); state = 'play'; return true; } if (eveFail) { state = 'end'; return false; } day++; startDay(); state = 'play'; return true; },
   get meta() { return meta; }, UP: UPGRADES, TUR, MOUNT_COST,
 };
+window.__reel = { ev: (k, n) => reelEV(k, n), crates: k => reelCrates(k), resolve: (b, f) => reelResolve(b, f), get state() { return reel; }, setKinds: k => { todayKinds = k; }, evening: (k, c, sc) => { todayKinds = k; todayChips = c; dayScore = sc || target + 300; startEvening(true); } };
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; }, setDyn: n => { dyn = n; },
   get fish() { return fish.length; }, get chips() { return eveChips; }, spawnPirWave: () => spawnPirWave(), get pirs() { return pirs.filter(q => q.hp > 0).length; }, get pirKills() { return stats.pirKills || 0; }, get missiles() { return missiles.length; }, get robots() { return Object.keys(robots); }, robotInfo: () => JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(robots).map(([k, r]) => [k, { x: Math.round(r.x), y: Math.round(r.y), zap: r.zap, tgt: !!r.tgt, aim: !!r.aim }])))), spawnLev: () => { big = null; spawnLeviathan(); }, lev: () => big && big.type === 'leviathan' ? { hp: big.hp, phase: big.phase, open: big.open, geo: levGeo(), dead: big.dead } : null, levPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, get sniper() { return { aim: !!sniper.aim, kills: sniper.kills, cd: sniper.cd }; }, setFever: n => { meta.fever = n; }, get fever() { return fever ? fever.t : null; }, get feverGauge() { return meta.fever; }, startFever: () => startFever(), spawnChestAt: (x, y) => { spawnChest(); const c = chests[chests.length - 1]; c.x = x; c.y = y; c.depth = 0.95; }, chestsInfo: () => chests.map(c => ({ state: c.state, loot: c.loot })), setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotSim: n => slotSim(n), get jp() { return meta.jp; }, forceJP: t => { rollJP.force = t; }, forceGrid: g => { forcedGrid = g; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), dropBomb: (x, y, fuse) => { bombs.push({ x, y, z: 0, sx: x, sy: y, tx: x, ty: y, t: 0, flight: 0, arc: 0, state: "water", fuse, depth: 0, wt: 0, spin: 0, type: "basic", ang: 0 }); }, pickKinds: (n, d) => { const o = day; day = d; const c = {}; for (let i = 0; i < n; i++) { const k = pickKind(); c[k] = (c[k] || 0) + 1; } day = o; return c; }, spawnKind: k => spawnSchool(k, false), get zaps() { return zaps.length; }, foes: () => pirs.filter(q => q.hp > 0).map(q => ({ t: q.type, x: Math.round(q.x), y: Math.round(q.y), hp: q.hp })), get turBroken() { return turRT.map(r => r && r.broken > 0 ? Math.round(r.broken) : 0); }, get chainQ() { return chainQ.length; }, giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
