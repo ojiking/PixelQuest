@@ -214,6 +214,19 @@
   .reelpanel h1 small { font-size: 13px; opacity: .8; }
   .reelpanel.fest { border-color: #ff8a2a; box-shadow: 0 0 0 3px #0b1d26, 0 0 34px rgba(255,140,40,.7); }
   .rgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .rcol { display: grid; grid-template-rows: repeat(4, 1fr); gap: 4px; overflow: hidden; position: relative; }
+  .rcol.spin .rc canvas { filter: blur(2.2px) brightness(1.15); animation: rspin .09s linear infinite; }
+  .rcol.spin .rc .val, .rcol.spin .rc .dy { display: none; }
+  @keyframes rspin { from { transform: translateY(-38%); } to { transform: translateY(38%); } }
+  .rcol.stop { animation: rstop .28s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes rstop { 0% { transform: translateY(-14px); } 60% { transform: translateY(5px); } 100% { transform: none; } }
+  .rcol.antic { box-shadow: 0 0 0 2px #ff8a2a, 0 0 18px #ff8a2a; animation: antic .22s ease-in-out infinite alternate; }
+  .reelpanel .machine { background: linear-gradient(180deg, #123a4a, #071c26); }
+  .reellights { display: flex; justify-content: space-between; padding: 0 6px 4px; }
+  .reellights i { width: 8px; height: 8px; border-radius: 50%; background: #5a3a10; }
+  .reellights.on i { animation: blink .5s steps(2) infinite; } .reellights.on i:nth-child(2n) { animation-delay: .25s; }
+  @keyframes blink { 50% { background: #ffd44a; box-shadow: 0 0 8px #ffd44a; } }
+  #reelSpin { font-size: 24px; padding: 12px 48px; letter-spacing: 2px; }
   .rc { position: relative; aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center;
     background: linear-gradient(180deg, #cfe9f0, #f2fbff 30%, #f2fbff 70%, #cfe9f0); box-shadow: inset 0 3px 6px rgba(0,0,0,.25); transition: background .15s; }
   .rc canvas { width: 92%; height: auto; transition: opacity .15s; }
@@ -364,6 +377,7 @@
     <div class="fsbar" id="festBar" hidden>🧨 다이너마이트 축제 <b id="festLeft">0</b>회 남음 · 모든 칸 ×2 · 누적 <b id="festWin">0</b></div>
     <div class="reelbin" id="reelBin"></div>
     <div class="machine" id="reelMachine">
+      <div class="reellights" id="reelLights"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
       <div class="rgrid" id="reelGrid"></div>
       <div class="splash" id="reelSplash" hidden></div>
     </div>
@@ -4584,14 +4598,18 @@ function startReel() {
 }
 function reelRender(res) {
   const g = document.getElementById('reelGrid'); g.innerHTML = '';
-  for (let i = 0; i < REEL_W * REEL_H; i++) {
-    const d = document.createElement('div'); d.className = 'rc'; d.id = 'rc' + i;
-    const c = res ? res.cells[i] : null;
-    if (c) { const cv = document.createElement('canvas'); cv.width = cv.height = 64; cv.getContext('2d').drawImage(reelIcon(c.k).c, 0, 0); d.appendChild(cv);
-      const v = document.createElement('span'); v.className = 'val'; v.textContent = REEL_FISH[c.k].v; d.appendChild(v); }
-    if (res && res.dyn.includes(i)) { const y = document.createElement('span'); y.className = 'dy'; y.textContent = '🧨'; d.appendChild(y); }
-    g.appendChild(d);
+  for (let c = 0; c < REEL_W; c++) {
+    const col = document.createElement('div'); col.className = 'rcol'; col.id = 'rcol' + c;
+    for (let r = 0; r < REEL_H; r++) { const i = rIdx(c, r), d = document.createElement('div'); d.className = 'rc'; d.id = 'rc' + i; col.appendChild(d); reelFill(i, res ? res.cells[i] : null, res && res.dyn.includes(i)); }
+    g.appendChild(col);
   }
+}
+function reelFill(i, cell, dyn) {   // 칸 하나를 다시 그린다 (돌아가는 동안엔 무작위 물고기)
+  const d = document.getElementById('rc' + i); if (!d) return;
+  d.innerHTML = ''; d.className = 'rc';
+  if (cell) { const cv = document.createElement('canvas'); cv.width = cv.height = 64; cv.getContext('2d').drawImage(reelIcon(cell.k).c, 0, 0); d.appendChild(cv);
+    const v = document.createElement('span'); v.className = 'val'; v.textContent = REEL_FISH[cell.k].v; d.appendChild(v); }
+  if (dyn) { const y = document.createElement('span'); y.className = 'dy'; y.textContent = '🧨'; d.appendChild(y); }
 }
 function reelWallet() {
   document.getElementById('reelSpins').textContent = reel.fest > 0 ? `축제 ${reel.fest}` : reel.spins;
@@ -4615,12 +4633,36 @@ async function reelSpin() {
   if (inFest) reel.fest--; else reel.spins--;
   reelWallet();
   const msg = document.getElementById('reelMsg');
-  // 뿌리기 연출: 잠깐 섞이다가 멈춘다
-  for (let n = 0; n < 6; n++) { reelRender(reelResolve(reel.bin, true)); tone(700 + Math.random() * 500, 0.03, 0.03, 'square'); await reelWait(60); }
+  // 🎰 릴 회전: 다섯 기둥이 함께 돌다가 왼쪽부터 하나씩 '탁' 멈춘다
   const res = reelResolve(reel.bin, inFest);
-  reelRender(res); tone(1046, 0.06, 0.06, 'square');
-  msg.className = 'slotmsg'; msg.textContent = res.dyn.length ? `🧨 다이너마이트 ${res.dyn.length}개!` : inFest ? '🧨 축제 중!' : '…';
-  await reelWait(380);
+  if (!document.getElementById('rcol0')) reelRender(null);
+  const lights = document.getElementById('reelLights'); lights.classList.add('on');
+  msg.className = 'slotmsg'; msg.textContent = inFest ? '🧨 축제 SPIN!' : '두구두구…';
+  [196, 262, 330].forEach((f, k) => tone(f, 0.08, 0.08, 'square', null, k * 0.05));   // 레버 당기는 소리
+  const stopped = new Array(REEL_W).fill(false);
+  for (let c = 0; c < REEL_W; c++) document.getElementById('rcol' + c).classList.add('spin');
+  const pool = reel.bin.length ? reel.bin : ['crucian'];
+  const spinIv = setInterval(() => {
+    for (let c = 0; c < REEL_W; c++) if (!stopped[c]) for (let r = 0; r < REEL_H; r++) reelFill(rIdx(c, r), Math.random() < 0.7 ? { k: pool[(Math.random() * pool.length) | 0] } : null, false);
+    tone(500 + Math.random() * 400, 0.015, 0.02, 'square');
+  }, 70);
+  let dynSeen = 0;
+  for (let c = 0; c < REEL_W; c++) {
+    const antic = !inFest && dynSeen >= 2 && c < REEL_W;          // 다이너마이트 2개가 보였다 → 남은 릴은 느리게, 반짝
+    if (antic) { for (let k = c; k < REEL_W; k++) document.getElementById('rcol' + k).classList.add('antic'); msg.className = 'slotmsg tease'; msg.textContent = `🧨 ${dynSeen}개! 하나만 더…!`; }
+    await reelWait(c === 0 ? 520 : antic ? 820 : 230);
+    stopped[c] = true;
+    const col = document.getElementById('rcol' + c);
+    col.classList.remove('spin', 'antic'); void col.offsetWidth; col.classList.add('stop');
+    for (let r = 0; r < REEL_H; r++) { const i = rIdx(c, r); reelFill(i, res.cells[i], res.dyn.includes(i)); if (res.dyn.includes(i)) dynSeen++; }
+    tone(180 - c * 8, 0.06, 0.16, 'square', 90); noiseBurst(0.05, 2500, 0.12, 'bandpass');   // 탁!
+    if (res.dyn.some(i => i % REEL_W === c)) { tone(1318, 0.08, 0.08, 'square'); tone(1760, 0.1, 0.08, 'square', null, 0.06); }
+  }
+  clearInterval(spinIv); lights.classList.remove('on');
+  for (let c = 0; c < REEL_W; c++) document.getElementById('rcol' + c).classList.remove('antic');
+  msg.className = res.dyn.length >= 3 ? 'slotmsg win' : 'slotmsg';
+  msg.textContent = res.dyn.length >= 3 ? `🧨 다이너마이트 ${res.dyn.length}개!! 축제다!` : res.dyn.length ? `🧨 다이너마이트 ${res.dyn.length}개!` : inFest ? '🧨 축제 중!' : res.steps.length ? '능력 발동!' : '…';
+  await reelWait(260);
   // 능력 발동을 하나씩 보여 준다 (중간 값은 최종값을 단계별로 근사)
   for (const st of res.steps) {
     const cls = 'fx-' + st.t;
@@ -4641,7 +4683,7 @@ async function reelSpin() {
       const m = document.getElementById('reelMachine'); m.classList.remove('shk1', 'shk2'); void m.offsetWidth; m.classList.add('shk2');
       noiseBurst(0.6, 800, 0.45); tone(70, 0.4, 0.4, 'sine', 30); vibrate([40]);
     }
-    await reelWait(st.t === 'boom' ? 420 : 520);
+    await reelWait(st.t === 'boom' ? 300 : 340);
     all.forEach(i => { const el = document.getElementById('rc' + i); if (el) el.classList.remove(cls); });
   }
   // 정산: 남은 물고기가 깨져 동전이 되어 지갑으로
@@ -4659,10 +4701,19 @@ async function reelSpin() {
     for (let k = 0; k < m; k++) { const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.2, sp = 240 + Math.random() * 220;
       slotFx.coins.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 6 + Math.random() * 3, t: 0, delay: k * 0.012, hang: 0.3 + Math.random() * 0.15, ph: Math.random() * 6, v: share }); }
     fxLoop(); tone(300 + n * 40, 0.05, 0.06, 'square');
-    await reelWait(70);
+    await reelWait(45);
   }
-  await reelWait(900);
-  if (slotFx.counting && !slotFx.coins.length) { slotFx.counting = false; setCoinText(meta.coins); document.querySelector(slotFx.box).classList.remove('hot'); }
+  await reelWait(650);
+  slotFx.shown = slotFx.target; slotFx.counting = false; setCoinText(meta.coins); document.querySelector(slotFx.box).classList.remove('hot');   // 정산 끝: 숫자를 정확히 맞춘다
+  // 큰 판은 축하 화면 (이 통의 기본값 합 대비 몇 배였나)
+  const base = reel.bin.reduce((a, k) => a + REEL_FISH[k].v, 0) || 1, ratio = res.pts / base;
+  if (ratio >= 2.5 && !res.festTrigger) {
+    const mega = ratio >= 5, sp = document.getElementById('reelSplash'); sp.className = 'splash ' + (mega ? 'mega' : 'big'); sp.hidden = false;
+    sp.innerHTML = `<div class="t">${mega ? 'MEGA CATCH!!' : 'BIG CATCH!'}</div><div class="n">${COIN}${total.toLocaleString()}</div>`;
+    coinRain(mega ? 40 : 18); vibrate(mega ? [120, 60, 160] : [80, 40, 80]);
+    (mega ? [659, 784, 988, 1318, 1568] : [659, 784, 988, 1318]).forEach((f, k) => tone(f, 0.12, 0.08, 'square', null, k * 0.08));
+    await reelWait(mega ? 2000 : 1500); sp.hidden = true;
+  }
   // 축제 발동 / 재발동 / 종료
   if (res.festTrigger || res.retrig) {
     const n = res.festTrigger || res.retrig, first = reel.fest === 0 && !inFest;
