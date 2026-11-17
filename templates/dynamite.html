@@ -210,7 +210,7 @@
   .wallet .cn { transition: box-shadow .2s; } .wallet .cn.hot { box-shadow: 0 0 0 2px #ffd44a, 0 0 18px rgba(255,212,74,.8); }
   @media (prefers-reduced-motion: reduce) { #machine.shk1, #machine.shk2 { animation: none; } }
   /* 🐟 물고기 릴 (시험판) */
-  .evechoice .reelbtn { grid-column: auto; animation: slotglow 1s ease-in-out infinite; background: linear-gradient(180deg, #5bd8ff, #1a8fb8); color: #052a3a; box-shadow: 0 4px 0 #0d4a60; }
+  .evechoice .reelbtn { grid-column: 1 / -1; font-size: 19px; padding: 14px 8px; animation: slotglow 1s ease-in-out infinite; background: linear-gradient(180deg, #5bd8ff, #1a8fb8); color: #052a3a; box-shadow: 0 4px 0 #0d4a60; }
   .reelpanel h1 small { font-size: 13px; opacity: .8; }
   .reelpanel.fest { border-color: #ff8a2a; box-shadow: 0 0 0 3px #0b1d26, 0 0 34px rgba(255,140,40,.7); }
   .rgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
@@ -308,9 +308,9 @@
     <div class="stats" id="clearStats"></div>
     <div class="coinbox" id="clearCoins"></div>
     <div class="evechoice">
-      <button class="sell" id="sellBtn">🐟 헐값에 팔기<small id="sellInfo"></small></button>
+      <button class="sell" id="sellBtn" hidden>🐟 헐값에 팔기<small id="sellInfo"></small></button>
       <button class="slotbtn" data-slot hidden>🎰 슬롯으로 도박<small id="slotInfo"></small></button>
-      <button class="reelbtn" data-reel>🐟 물고기 릴<small id="reelInfo"></small></button>
+      <button class="reelbtn" data-reel>🐟 물고기 정산<small id="reelInfo"></small></button>
     </div>
     <div class="btns"><button id="nextBtn">🛏 잠자리에 들기</button><button class="ghost" data-shop><span class="coin"></span>가게</button><button class="ghost" data-dex>📘 도감</button><button class="ghost" data-crew>🤖 동료·터렛</button></div>
   </div>
@@ -368,7 +368,7 @@
 
 <div class="overlay hidden" id="reelOv">
   <div class="panel slotpanel reelpanel" id="reelPanel">
-    <h1>🐟 물고기 릴 <small>시험판</small></h1>
+    <h1>🐟 물고기 정산</h1>
     <div class="wallet">
       <div class="chips"><span class="clbl">남은 판</span><b id="reelSpins">0</b></div>
       <div class="cn"><span class="clbl">동전</span><b id="reelCoins">0</b></div>
@@ -380,7 +380,7 @@
       <div class="rgrid" id="reelGrid"></div>
       <div class="splash" id="reelSplash" hidden></div>
     </div>
-    <div class="slotmsg" id="reelMsg">오늘 잡은 물고기가 릴이 됩니다</div>
+    <div class="slotmsg" id="reelMsg">오늘 잡은 물고기로 정산합니다</div>
     <div class="tally" id="reelTally"></div>
     <div class="btns"><button id="reelSpin">SPIN!</button><button class="ghost" id="reelAuto">끝까지</button></div>
     <details class="paytable"><summary>물고기 능력 · 규칙</summary><div id="reelRules"></div></details>
@@ -3674,7 +3674,7 @@ function renderEvening(countUp) {
   document.getElementById('sellBtn').disabled = eveChips <= 0;
   { const rb = document.querySelector('[data-reel]'), ri = document.getElementById('reelInfo');
     if (reel) { ri.textContent = reel.spins + reel.fest > 0 ? `남은 ${reel.spins + reel.fest}판 · 이어서 돌리기` : `오늘 밤 +${reel.won.toLocaleString()} · 다 돌렸어요`; rb.disabled = false; }
-    else { ri.textContent = eveChips > 0 ? '판돈 없이, 잡은 물고기로 릴을 채워 돌려요' : '이미 생선을 처분했어요'; rb.disabled = eveChips <= 0; } }
+    else { ri.textContent = eveChips > 0 ? '오늘 잡은 물고기가 릴이 되어 동전으로!' : '정산할 생선이 없어요'; rb.disabled = eveChips <= 0; } }
   document.getElementById('slotInfo').textContent = (eveChips >= SPIN_COST ? `${Math.floor(eveChips / SPIN_COST)}판` : '') + (eveFree ? ` + 무료 ${eveFree}판` : '') + (eveChips >= SPIN_COST || eveFree ? ` · GRAND ${Math.floor(meta.jp.grand).toLocaleString()}` : '칩이 모자라요');
   slotWallet(); updateShopGlow();
 }
@@ -4498,7 +4498,7 @@ const REEL_FISH = {
   eel:     { v: 12, per: 1, name: '전기뱀장어', rule: '감전: 상하좌우 이웃 ×2. 붕어 떼에 닿으면 떼 전체로 퍼짐' },
   shark:   { v: 30, per: 1, name: '상어', rule: '포식: 이웃한 붕어·잉어를 먹고 그 값의 2배를 흡수' },
 };
-const REEL_W = 5, REEL_H = 4, REEL_BIN = 12, REEL_DYN_P = 0.028, REEL_K = 0.125;   // 칸 숫자는 '점', 판이 끝나면 8점 = 동전 1 (시뮬레이션: 중반 하루 수입이 기존 슬롯과 비슷)
+const REEL_W = 5, REEL_H = 4, REEL_BIN = 12, REEL_K = 0.125; let REEL_DYN_P = 0.028;   // 칸 숫자는 '점', 판이 끝나면 8점 = 동전 1 (시뮬레이션: 중반 하루 수입이 기존 슬롯과 비슷)
 let reel = null;   // { bin, spins, fest, festWin, won, sold, busy, auto, grid }
 const rIdx = (c, r) => r * REEL_W + c;
 const rN4 = i => { const c = i % REEL_W, r = (i / REEL_W) | 0, o = []; if (c > 0) o.push(i - 1); if (c < REEL_W - 1) o.push(i + 1); if (r > 0) o.push(i - REEL_W); if (r < REEL_H - 1) o.push(i + REEL_W); return o; };
@@ -4624,7 +4624,7 @@ function reelWallet() {
   if (!slotFx.counting) document.getElementById('reelCoins').textContent = meta.coins.toLocaleString();
   const counts = {}; for (const k of reel.bin) counts[k] = (counts[k] || 0) + 1;
   document.getElementById('reelBin').innerHTML = `<span>통 ${reel.bin.length}/${REEL_BIN}</span>` + Object.keys(REEL_FISH).filter(k => counts[k]).map(k => `<span>${REEL_FISH[k].name} ×${counts[k]}</span>`).join('');
-  document.getElementById('reelTally').innerHTML = `오늘 밤 물고기 릴: <b>${COIN}+${reel.won.toLocaleString()}</b>` + (reel.sold ? ` · 통에 못 든 생선 헐값 판매 <b>${COIN}+${reel.sold}</b>` : '');
+  document.getElementById('reelTally').innerHTML = `오늘 밤 정산: <b>${COIN}+${reel.won.toLocaleString()}</b>` + (reel.sold ? ` · 통에 못 든 생선 <b>${COIN}+${reel.sold}</b>` : '');
   const sb = document.getElementById('reelSpin'), left = reel.spins + reel.fest;
   sb.disabled = reel.busy || left <= 0; sb.textContent = reel.fest > 0 ? `축제 SPIN! (${reel.fest})` : left > 0 ? `SPIN! (${reel.spins})` : '다 돌렸어요';
   document.getElementById('reelAuto').disabled = reel.busy || left <= 0;
@@ -4639,6 +4639,8 @@ async function reelSpin() {
   ensureAudio(); reel.busy = true;
   const inFest = reel.fest > 0;
   if (inFest) reel.fest--; else reel.spins--;
+  const fast = inFest || reel.auto ? 0.45 : 1;   // 축제·자동 돌리기는 빠르게 (기다리느라 멈춘 것처럼 느끼지 않게)
+  const W8 = ms => reelWait(ms * fast);
   reelWallet();
   const msg = document.getElementById('reelMsg');
   // 🎰 릴 회전: 다섯 기둥이 함께 돌다가 왼쪽부터 하나씩 '탁' 멈춘다
@@ -4658,7 +4660,7 @@ async function reelSpin() {
   for (let c = 0; c < REEL_W; c++) {
     const antic = !inFest && dynSeen >= 2 && c < REEL_W;          // 다이너마이트 2개가 보였다 → 남은 릴은 느리게, 반짝
     if (antic) { for (let k = c; k < REEL_W; k++) document.getElementById('rcol' + k).classList.add('antic'); msg.className = 'slotmsg tease'; msg.textContent = `🧨 ${dynSeen}개! 하나만 더…!`; }
-    await reelWait(c === 0 ? 520 : antic ? 820 : 230);
+    await W8(c === 0 ? 520 : antic ? 820 : 230);
     stopped[c] = true;
     const col = document.getElementById('rcol' + c);
     col.classList.remove('spin', 'antic'); void col.offsetWidth; col.classList.add('stop');
@@ -4670,7 +4672,7 @@ async function reelSpin() {
   for (let c = 0; c < REEL_W; c++) document.getElementById('rcol' + c).classList.remove('antic');
   msg.className = res.dyn.length >= 3 ? 'slotmsg win' : 'slotmsg';
   msg.textContent = res.dyn.length >= 3 ? `🧨 다이너마이트 ${res.dyn.length}개!! 축제다!` : res.dyn.length ? `🧨 다이너마이트 ${res.dyn.length}개!` : inFest ? '🧨 축제 중!' : res.steps.length ? '능력 발동!' : '…';
-  await reelWait(260);
+  await W8(260);
   // 능력 발동을 하나씩 보여 준다 (중간 값은 최종값을 단계별로 근사)
   for (const st of res.steps) {
     const cls = 'fx-' + st.t;
@@ -4691,7 +4693,7 @@ async function reelSpin() {
       const m = document.getElementById('reelMachine'); m.classList.remove('shk1', 'shk2'); void m.offsetWidth; m.classList.add('shk2');
       noiseBurst(0.6, 800, 0.45); tone(70, 0.4, 0.4, 'sine', 30); vibrate([40]);
     }
-    await reelWait(st.t === 'boom' ? 300 : 340);
+    await W8(st.t === 'boom' ? 300 : 340);
     all.forEach(i => { const el = document.getElementById('rc' + i); if (el) el.classList.remove(cls); });
   }
   // 정산: 남은 물고기가 깨져 동전이 되어 지갑으로
@@ -4709,13 +4711,13 @@ async function reelSpin() {
     for (let k = 0; k < m; k++) { const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.2, sp = 240 + Math.random() * 220;
       slotFx.coins.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 6 + Math.random() * 3, t: 0, delay: k * 0.012, hang: 0.3 + Math.random() * 0.15, ph: Math.random() * 6, v: share }); }
     fxLoop(); tone(300 + n * 40, 0.05, 0.06, 'square');
-    await reelWait(45);
+    await W8(45);
   }
-  await reelWait(650);
+  await W8(650);
   slotFx.shown = slotFx.target; slotFx.counting = false; setCoinText(meta.coins); document.querySelector(slotFx.box).classList.remove('hot');   // 정산 끝: 숫자를 정확히 맞춘다
   // 큰 판은 축하 화면 (이 통의 기본값 합 대비 몇 배였나)
   const base = (reel.bin.reduce((a, k) => a + REEL_FISH[k].v, 0) / Math.max(1, reel.bin.length)) * REEL_W * REEL_H || 1, ratio = res.pts / base;
-  if (ratio >= 2.5 && !res.festTrigger) {
+  if (ratio >= 2.5 && !res.festTrigger && !inFest) {   // 축제 중엔 매 판 크니 생략
     const mega = ratio >= 5, sp = document.getElementById('reelSplash'); sp.className = 'splash ' + (mega ? 'mega' : 'big'); sp.hidden = false;
     sp.innerHTML = `<div class="t">${mega ? 'MEGA CATCH!!' : 'BIG CATCH!'}</div><div class="n">${COIN}${total.toLocaleString()}</div>`;
     coinRain(mega ? 40 : 18); vibrate(mega ? [120, 60, 160] : [80, 40, 80]);
@@ -4723,9 +4725,10 @@ async function reelSpin() {
     await reelWait(mega ? 2000 : 1500); sp.hidden = true;
   }
   // 축제 발동 / 재발동 / 종료
-  if (res.festTrigger || res.retrig) {
-    const n = res.festTrigger || res.retrig, first = reel.fest === 0 && !inFest;
-    if (first) reel.festWin = 0;
+  const retrig = res.retrig && (reel.retrigs || 0) < 2 ? res.retrig : 0;   // 재발동은 축제 한 번에 최대 2회 (끝없이 이어지지 않게)
+  if (res.festTrigger || retrig) {
+    const n = res.festTrigger || retrig, first = reel.fest === 0 && !inFest;
+    if (first) { reel.festWin = 0; reel.retrigs = 0; } else reel.retrigs = (reel.retrigs || 0) + 1;
     reel.fest += n;
     const sp = document.getElementById('reelSplash'); sp.className = 'splash fs'; sp.hidden = false;
     sp.innerHTML = `<div class="t">🧨 ${first ? `다이너마이트 축제 ×${n}!` : `+${n} 축제!`}</div>`;
@@ -4742,7 +4745,7 @@ async function reelSpin() {
 function reelRules() {
   document.getElementById('reelRules').innerHTML = `<div class="rule">오늘 잡은 물고기가 <b>상자</b>로 통에 들어갑니다(붕어 10마리·잉어 3마리·나머지 1마리 = 1상자, 통 ${REEL_BIN}칸을 <b>잡은 비율대로</b> 자동으로 채움). 판돈은 없고, 통에 못 든 생선은 헐값에 자동으로 팔려요. 매 판 5×4칸이 <b>통의 비율대로</b> 꽉 채워지고(상자가 많은 물고기가 자주 나와요) <b>이웃끼리 능력</b>이 발동합니다. 칸의 숫자는 점수이고, 판이 끝나면 <b>점수 8점 = 동전 1</b>로 바뀝니다.</div>` +
     `<table class="reelrules">${Object.keys(REEL_FISH).map(k => `<tr><td><b>${REEL_FISH[k].name}</b> ${REEL_FISH[k].v}</td><td>${REEL_FISH[k].rule}</td></tr>`).join('')}</table>` +
-    `<div class="rule">🧨 <b>다이너마이트</b>: 매 판 칸마다 작은 확률로 얹혀요. 1~2개면 주변을 터뜨리고, <b>3개 이상이면 다이너마이트 축제</b>(3개 5판 · 4개 8판 · 5개 이상 12판). 축제 동안 모든 칸 ×2, 매 판 한 칸이 저절로 터지고, 복어가 3번 이상 터지면 +3판.</div>` +
+    `<div class="rule">🧨 <b>다이너마이트</b>: 매 판 칸마다 작은 확률로 얹혀요. 1~2개면 주변을 터뜨리고, <b>3개 이상이면 다이너마이트 축제</b>(3개 5판 · 4개 8판 · 5개 이상 12판). 축제 동안 모든 칸 ×2, 매 판 한 칸이 저절로 터지고, 복어가 3번 이상 터지면 +3판(축제 한 번에 최대 2번).</div>` +
     `<div class="rule">판 수: 하루 5판 + 목표 초과 100점마다 1판(최대 +5) + 황다랑어 도감 ★.</div>`;
 }
 document.querySelectorAll('[data-reel]').forEach(btn => btn.addEventListener('click', () => {
@@ -4997,7 +5000,7 @@ window.__sim = {
   sleep() { eveChips = 0; clearOv.classList.add('hidden'); document.getElementById('mileOv').classList.add('hidden'); if (eveFail && eveRetry) { startDay(); state = 'play'; return true; } if (eveFail) { state = 'end'; return false; } day++; startDay(); state = 'play'; return true; },
   get meta() { return meta; }, UP: UPGRADES, TUR, MOUNT_COST,
 };
-window.__reel = { ev: (k, n) => reelEV(k, n), crates: k => reelCrates(k), fill: k => reelAutoFill(reelCrates(k)), resolve: (b, f) => reelResolve(b, f), get state() { return reel; }, setKinds: k => { todayKinds = k; }, evening: (k, c, sc) => { todayKinds = k; todayChips = c; dayScore = sc || target + 300; startEvening(true); } };
+window.__reel = { setDynP: p => { REEL_DYN_P = p; }, ev: (k, n) => reelEV(k, n), crates: k => reelCrates(k), fill: k => reelAutoFill(reelCrates(k)), resolve: (b, f) => reelResolve(b, f), get state() { return reel; }, setKinds: k => { todayKinds = k; }, evening: (k, c, sc) => { todayKinds = k; todayChips = c; dayScore = sc || target + 300; startEvening(true); } };
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; }, setDyn: n => { dyn = n; },
   get fish() { return fish.length; }, get chips() { return eveChips; }, spawnPirWave: () => spawnPirWave(), get pirs() { return pirs.filter(q => q.hp > 0).length; }, get pirKills() { return stats.pirKills || 0; }, get missiles() { return missiles.length; }, get robots() { return Object.keys(robots); }, robotInfo: () => JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(robots).map(([k, r]) => [k, { x: Math.round(r.x), y: Math.round(r.y), zap: r.zap, tgt: !!r.tgt, aim: !!r.aim }])))), spawnLev: () => { big = null; spawnLeviathan(); }, lev: () => big && big.type === 'leviathan' ? { hp: big.hp, phase: big.phase, open: big.open, geo: levGeo(), dead: big.dead } : null, levPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, get sniper() { return { aim: !!sniper.aim, kills: sniper.kills, cd: sniper.cd }; }, setFever: n => { meta.fever = n; }, get fever() { return fever ? fever.t : null; }, get feverGauge() { return meta.fever; }, startFever: () => startFever(), spawnChestAt: (x, y) => { spawnChest(); const c = chests[chests.length - 1]; c.x = x; c.y = y; c.depth = 0.95; }, chestsInfo: () => chests.map(c => ({ state: c.state, loot: c.loot })), setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotSim: n => slotSim(n), get jp() { return meta.jp; }, forceJP: t => { rollJP.force = t; }, forceGrid: g => { forcedGrid = g; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), dropBomb: (x, y, fuse) => { bombs.push({ x, y, z: 0, sx: x, sy: y, tx: x, ty: y, t: 0, flight: 0, arc: 0, state: "water", fuse, depth: 0, wt: 0, spin: 0, type: "basic", ang: 0 }); }, pickKinds: (n, d) => { const o = day; day = d; const c = {}; for (let i = 0; i < n; i++) { const k = pickKind(); c[k] = (c[k] || 0) + 1; } day = o; return c; }, spawnKind: k => spawnSchool(k, false), get zaps() { return zaps.length; }, foes: () => pirs.filter(q => q.hp > 0).map(q => ({ t: q.type, x: Math.round(q.x), y: Math.round(q.y), hp: q.hp })), get turBroken() { return turRT.map(r => r && r.broken > 0 ? Math.round(r.broken) : 0); }, get chainQ() { return chainQ.length; }, giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
