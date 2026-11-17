@@ -14,6 +14,12 @@ def home():
 def dynamite():
     return render_template('dynamite.html')
 
+
+@app.route('/dynamite-classic')
+def dynamite_classic():
+    # 물고기 릴 슬롯 도입 전 버전 (돌아가기용으로 보관)
+    return render_template('dynamite_classic.html')
+
 # 색상 조정 함수
 def apply_color_filter(image, filter_type):
     if filter_type == "grayscale":
