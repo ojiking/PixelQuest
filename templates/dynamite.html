@@ -410,7 +410,7 @@
     <div class="crewslots" id="crewSlots"></div>
     <div id="crewList"></div>
     <h1 style="margin-top:14px">🏗 부두 터렛</h1>
-    <div class="sub">자리(왼쪽·가운데·오른쪽)마다 사거리 안의 적만 쏩니다. 🦀은 옆에서, 🐊은 미사일로! 일반 물고기는 쏘지 않아요</div>
+    <div class="sub">🔫 기관총: 피라냐를 막고, 한가할 땐 근해 물고기를 쏴서 잡아요 · 🚀 미사일: 상어·오징어·괴수 같은 보스급을 노리고 주변 물고기까지 덤으로 · 🦀은 옆에서, 🐊은 미사일로!</div>
     <div id="turList"></div>
     <button class="ghost" id="crewClose">닫기</button>
   </div>
@@ -1336,8 +1336,8 @@ function drawCroc(q, x, y) { // 🐊 길쭉한 초록 몸 (아래로 헤엄)
 
 // ===== 🏗 부두 터렛: 기관총 / 미사일 =====
 const TUR = {
-  mg: { name: '🔫 기관총', costs: [1200, 2800, 6000], range: lv => 78 + lv * 6, desc: lv => `연사 ${6 + lv * 2}발, ${(2.6 - lv * 0.4).toFixed(1)}초마다 · 사거리 ${78 + lv * 6} (짧음) · 악어에 약함` },
-  ms: { name: '🚀 미사일', costs: [2200, 4500, 9000], range: lv => 140 + lv * 15, desc: lv => `미사일 ${lv}발, ${7 - lv}초마다 · 사거리 ${140 + lv * 15} (김) · 악어에 강함` },
+  mg: { name: '🔫 기관총', costs: [1200, 2800, 6000], range: lv => 78 + lv * 6, desc: lv => `연사 ${6 + lv * 2}발, ${(2.6 - lv * 0.4).toFixed(1)}초마다 · 사거리 ${78 + lv * 6} · 피라냐 방어, 적이 없으면 근해 물고기를 쏴서 잡음` },
+  ms: { name: '🚀 미사일', costs: [2200, 4500, 9000], range: lv => 140 + lv * 15, desc: lv => `미사일 ${lv}발, ${7 - lv}초마다 · 보스급(상어·오징어·괴수)을 어디든 노리고 주변 물고기를 덤으로 획득 · 악어에 강함` },
 };
 const MOUNT_COST = [0, 1000, 2500];
 const mountPos = i => ({ x: VW * [0.12, 0.3, 0.88][i], y: SHORE + 9 });
@@ -1345,24 +1345,44 @@ let turRT = [], missiles = [];
 // 표적: 사거리 안에서만. 우선순위 = 우두머리 → (미사일은 악어) → 부두에 가장 가까운 적 → 상어·보스. 평범한 물고기는 쏘지 않는다
 function foesInRange(mp, range) { return pirs.filter(q => q.hp > 0 && q.y > 0 && q.x > 0 && q.x < VW && Math.hypot(q.x - mp.x, q.y - mp.y) < range); }
 function foeUrgency(q) { return q.type === 'crab' ? Math.hypot(q.tx - q.x, q.ty - q.y) : SHORE - q.y; }   // 작을수록 급함
+const TUR_FISH_EX = { mult: 1, fever: false, quiet: true };   // 기관총으로 잡은 물고기 (연속 명중·피버엔 안 들어감)
+function bigTargetPos() { if (!big || big.dead || big.type === 'whale') return null; const tg = { kind: 'big', big }, pos = sniperTargetPos(tg); return pos ? { kind: 'big', big, pos } : null; }
 function turretTarget(mp, range, type) {
+  if (type === 'ms') { // 🚀 미사일: 보스급(상어·오징어·쿠르가·그란모르)이 1순위, 사거리 제한 없음
+    const bt = bigTargetPos(); if (bt) return bt;
+    const tough = foesInRange(mp, range).filter(q => q.type === 'croc' || q.type === 'king').sort((a, b2) => foeUrgency(a) - foeUrgency(b2))[0];
+    if (tough) return { kind: 'pir', q: tough, pos: { x: tough.x, y: tough.y, depth: 0 } };
+  }
   const qs = foesInRange(mp, range);
   if (qs.length) {
     const score = q => foeUrgency(q) - (q.type === 'king' ? 500 : 0) - (type === 'ms' && q.type === 'croc' ? 300 : 0) + (type === 'mg' && q.type === 'croc' ? 400 : 0);
     const q = qs.sort((a, b2) => score(a) - score(b2))[0];
     return { kind: 'pir', q, pos: { x: q.x, y: q.y, depth: 0 } };
   }
-  if (big && !big.dead && big.type !== 'whale') { const tg = { kind: 'big', big }, pos = sniperTargetPos(tg); if (pos && Math.hypot(pos.x - mp.x, pos.y - mp.y) < range * 1.3) return { kind: 'big', big, pos }; }
+  if (type === 'mg') { const bt = bigTargetPos(); if (bt && Math.hypot(bt.pos.x - mp.x, bt.pos.y - mp.y) < range * 1.3) return bt; }
   return null;
+}
+// 🔫 근해 물고기: 기관총 사거리 안, 얕은 곳(그림자가 보이는)의 물고기 하나
+function turretFish(mp, range) {
+  const c = fish.filter(f => f.state === 'swim' && f.depth <= 0.45 && f.y > 0 && Math.hypot(f.x - mp.x, f.y - mp.y) < range);
+  return c.length ? c[(Math.random() * c.length) | 0] : null;
 }
 function updateTurrets(dt) {
   for (const m of missiles) {
     m.t += dt;
     if (m.tg && m.tg.kind === 'pir' && m.tg.q.hp > 0) { m.tx = m.tg.q.x; m.ty = m.tg.q.y; }
+    if (m.tg && m.tg.kind === 'big') { const p2 = sniperTargetPos(m.tg); if (p2) { m.tx = p2.x; m.ty = p2.y; } }   // 움직이는 보스를 따라간다
     const k = Math.min(1, m.t / m.dur);
     m.x = lerp(m.sx, m.tx, k); m.y = lerp(m.sy, m.ty, k); m.z = Math.sin(k * Math.PI) * m.arc;
     if (Math.random() < dt * 60) parts.push({ x: m.x, y: m.y, z: m.z, vx: rand(-3, 3), vy: rand(-3, 3), vz: rand(-2, 6), life: 0.6, max: 0.6, type: 'smoke' });
-    if (k >= 1) { m.done = true; explode(m.tx, m.ty, 0.05, 0.75, true, true); for (const q of pirs) if (q.type === 'croc' && q.hp > 0 && Math.hypot(q.x - m.tx, q.y - m.ty) < R * 0.75 + 6) pirDamage(q, 2); }
+    if (k >= 1) { m.done = true; explode(m.tx, m.ty, 0.05, 0.75, true, true); for (const q of pirs) if (q.type === 'croc' && q.hp > 0 && Math.hypot(q.x - m.tx, q.y - m.ty) < R * 0.75 + 6) pirDamage(q, 2);
+      if (m.tg && m.tg.kind === 'big' && big === m.tg.big && !big.dead) { // 🚀 보스급 직격 + 주변 물고기 덤
+        const pos = sniperTargetPos(m.tg) || { x: m.tx, y: m.ty, depth: 0.2 };
+        const hx = { x: pos.x, y: pos.y, depth: pos.depth, kills: 0, pts: 0, t: 0, mult: 1, rs: 0.6, quiet: true, safe: true, head: pos.head }; combos.push(hx); bigHit(hx);
+        const bx = { x: m.tx, y: m.ty, depth: 0, kills: 0, pts: 0, t: 0, mult: 1, rs: 1, quiet: true, safe: true }; combos.push(bx);
+        let n = 0; for (const f of fish) { if (n >= 14) break; if (f.state === 'swim' && Math.hypot(f.x - m.tx, f.y - m.ty) < R * 1.5) { if (f.hp > 1) { f.hp--; f.cracked = true; } else { catchInto(f, bx, m.tx, m.ty); n++; } } }   // 깊이 상관없이
+        texts.push(mkText(m.tx, m.ty - 14, n ? `🚀 직격! 주변 물고기 +${n}` : '🚀 직격!', '#ffb36a', 1.2, true));
+      } }
   }
   missiles = missiles.filter(m => !m.done);
   if (state !== 'play' || fatal || player.dead) return;
@@ -1372,7 +1392,11 @@ function updateTurrets(dt) {
     const rt = turRT[i] || (turRT[i] = { cd: 1 + i, burst: 0, bt: 0, ang: -Math.PI / 2, flash: 0, tracer: null, acc: 0 });
     rt.flash = Math.max(0, rt.flash - dt); if (rt.tracer) { rt.tracer.t -= dt; if (rt.tracer.t <= 0) rt.tracer = null; }
     if (rt.broken > 0) { rt.broken -= dt; rt.burst = 0; if (Math.random() < dt * 8) parts.push({ x: mountPos(i).x + rand(-2, 2), y: mountPos(i).y - 4, z: 2, vx: rand(-2, 2), vy: 0, vz: rand(4, 10), life: 0.9, max: 0.9, type: 'smoke' }); return; }
-    const mp = mountPos(i), range = TUR[t.type].range(t.lv), tg = turretTarget(mp, range, t.type);
+    const mp = mountPos(i), range = TUR[t.type].range(t.lv);
+    let tg = turretTarget(mp, range, t.type);
+    const fr = range * 1.8;   // 근해 사냥 사거리 (물고기 떼는 부두에서 조금 떨어져 논다)
+    if (!tg && t.type === 'mg') { const f = (rt.fishTg && rt.fishTg.state === 'swim' && Math.hypot(rt.fishTg.x - mp.x, rt.fishTg.y - mp.y) < fr) ? rt.fishTg : turretFish(mp, fr);
+      rt.fishTg = f; if (f) tg = { kind: 'fish', f, pos: { x: f.x, y: f.y, depth: f.depth } }; }
     if (tg) rt.ang = angLerp(rt.ang, Math.atan2(tg.pos.y - mp.y, tg.pos.x - mp.x), dt * 10);
     if (t.type === 'mg') {
       if (rt.burst > 0) {
@@ -1384,9 +1408,16 @@ function updateTurrets(dt) {
           parts.push({ x: jx, y: jy, z: 0, vx: rand(-8, 8), vy: rand(-5, 5), vz: rand(15, 30), life: 0.3, max: 0.3, type: 'drop' });
           if (Math.random() < 0.5) tone(900 + Math.random() * 300, 0.02, 0.04, 'square');
           if (tg.kind === 'pir') { if (tg.q.type === 'croc') { pirDamage(tg.q, 0.1); if (Math.random() < 0.4) { parts.push({ x: jx, y: jy, z: 2, vx: rand(-20, 20), vy: rand(-12, 0), vz: rand(10, 25), life: 0.2, max: 0.2, type: 'spark' }); tone(2600, 0.02, 0.03, 'square'); } } else pirDamage(tg.q, 1); }   // 악어 가죽엔 팅팅
+          else if (tg.kind === 'fish') { // 근해 물고기 사냥: 60% 명중, 갑옷은 한 겹씩
+            const f = tg.f;
+            if (f.state === 'swim' && Math.random() < 0.6) {
+              if (f.hp > 1) { f.hp--; f.cracked = true; f.panic = 1; }
+              else { f.state = 'rise'; f.ex = TUR_FISH_EX; f.delay = 0; f.bx = mp.x; f.by = mp.y; stats.turFish = (stats.turFish || 0) + 1; rt.fishTg = null; }
+            } else if (f.state === 'swim') { f.panic = 0.8; f.school.scared = Math.max(f.school.scared, 1.2); }
+          }
           else { rt.acc += 0.2; if (rt.acc >= 1) { rt.acc -= 1; const ex = { x: tg.pos.x, y: tg.pos.y, depth: tg.pos.depth, kills: 0, pts: 0, t: 0, mult: 1, rs: 0.3, quiet: true, safe: true }; combos.push(ex); bigHit(ex); } }
         } else if (!tg) rt.burst = 0;
-      } else if ((rt.cd -= dt) <= 0 && tg) { rt.burst = 6 + t.lv * 2; rt.cd = 2.6 - t.lv * 0.4; }
+      } else if ((rt.cd -= dt) <= 0 && tg) { rt.burst = 6 + t.lv * 2; rt.cd = (2.6 - t.lv * 0.4) * (tg.kind === 'fish' ? 1.6 : 1); }   // 물고기 사냥은 조금 느긋하게
     } else if (t.type === 'ms') {
       if ((rt.cd -= dt) <= 0 && tg) {
         rt.cd = 7 - t.lv; rt.flash = 0.2;
@@ -5042,7 +5073,7 @@ window.__sim = {
   get state() { return state; }, get day() { return day; }, get dyn() { return dyn; }, get fever() { return !!fever; },
   get stun() { return player.stun > 0 || player.dead || !!fatal; }, get dayScore() { return dayScore; }, get target() { return target; },
   get todayChips() { return todayChips; }, get eveChips() { return eveChips; }, get eveFree() { return eveFree; }, get eveFail() { return eveFail; },
-  get stolen() { return simStolen; }, resetStolen() { simStolen = 0; }, get kills() { return stats.pirKills || 0; }, get R() { return R; }, get DZ() { return DZ; },
+  get stolen() { return simStolen; }, resetStolen() { simStolen = 0; }, get kills() { return stats.pirKills || 0; }, get turFish() { return stats.turFish || 0; }, get R() { return R; }, get DZ() { return DZ; },
   get busyBomb() { return bombs.length > 0; },
   world() {
     return {
