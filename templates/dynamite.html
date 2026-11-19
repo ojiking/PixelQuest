@@ -377,7 +377,7 @@
       <div class="chips"><span class="clbl">남은 판</span><b id="reelSpins">0</b></div>
       <div class="cn"><span class="clbl">동전</span><b id="reelCoins">0</b></div>
     </div>
-    <div class="jpbar"><div class="mini"><span>MINI</span><b id="rjpMini">0</b></div><div class="major"><span>MAJOR</span><b id="rjpMajor">0</b></div><div class="grand"><span>GRAND</span><b id="rjpGrand">0</b></div></div>
+    <div class="jpbar"><div class="mini"><span>👑×3 MINI</span><b id="rjpMini">0</b></div><div class="major"><span>👑×4 MAJOR</span><b id="rjpMajor">0</b></div><div class="grand"><span>👑×5 GRAND</span><b id="rjpGrand">0</b></div></div>
     <div class="fsbar" id="festBar" hidden>🧨 다이너마이트 축제 <b id="festLeft">0</b>회 남음 · 모든 칸 ×2 · 누적 <b id="festWin">0</b></div>
     <div class="reelbin" id="reelBin"></div>
     <div class="machine" id="reelMachine">
@@ -387,7 +387,7 @@
     </div>
     <div class="slotmsg" id="reelMsg">오늘 잡은 물고기로 정산합니다</div>
     <div class="tally" id="reelTally"></div>
-    <div class="btns"><button id="reelSpin">SPIN!</button><button class="ghost" id="reelAuto">끝까지</button></div>
+    <div class="btns"><button id="reelSpin">SPIN!</button><button class="ghost" id="reelAuto">⚡ 빠른 정산</button></div>
     <details class="paytable"><summary>물고기 능력 · 규칙</summary><div id="reelRules"></div></details>
     <button class="ghost" id="reelClose">닫기</button>
   </div>
@@ -4540,12 +4540,13 @@ const REEL_FISH = {
   sturgeon: { v: 25, per: 1, name: '철갑상어', rule: '캐비어: 기본값이 아주 높다' },
   // 🎰 운 요소: 통과 상관없이 아주 가끔 뜨는 희귀 그림
   gold:    { v: 10, per: 0, rare: true, name: '황금잉어', rule: '와일드: 줄 맞추기에서 어떤 물고기든 대신함' },
-  lord:    { v: 40, per: 0, rare: true, name: '호수의 주인', rule: '3마리 이상 = MAJOR 잭팟 · 한 줄에 5마리 = GRAND 잭팟' },
+  lord:    { v: 0, per: 0, rare: true, name: '호수의 주인', rule: '한 판에 3마리 = MINI · 4마리 = MAJOR · 5마리 이상 = GRAND 잭팟' },
 };
 // 당첨 줄 12개 (5×4): 가로 4 + V자 4 + 지그재그 4. 왼쪽부터 같은 물고기 3마리 이상이면 당첨
 const REEL_LINES = [[0,0,0,0,0],[1,1,1,1,1],[2,2,2,2,2],[3,3,3,3,3],[0,1,2,1,0],[1,2,3,2,1],[3,2,1,2,3],[2,1,0,1,2],[0,1,0,1,0],[1,0,1,0,1],[2,3,2,3,2],[3,2,3,2,3]];
 const REEL_LINE_X = { 3: 3, 4: 8, 5: 30 };   // 줄 보너스: 그 줄 물고기 값 합 × 배수
-const REEL_GOLD_P = 0.014, REEL_LORD_P = 0.0045, REEL_JP_BET = 6;   // 칸마다 등장 확률, 잭팟 추첨 가중치
+const REEL_GOLD_P = 0.014, REEL_LORD_P = 0.028, REEL_JP_BET = 6;   // 👑 칸당 2.8%: 3마리 약 52판, 4마리 약 380판, 5마리 약 3,300판에 한 번
+const REEL_JP_X = { mini: 2, major: 10, grand: 50 };   // 잭팟 = 그날 밤 예상 수입 × 배수   // 칸마다 등장 확률, 잭팟 추첨 가중치
 const REEL_W = 5, REEL_H = 4, REEL_BIN = 12, REEL_K = 0.05; let REEL_DYN_P = 0.028;   // 칸 숫자는 '점', 판이 끝나면 8점 = 동전 1 (시뮬레이션: 중반 하루 수입이 기존 슬롯과 비슷)
 let reel = null;   // { bin, spins, fest, festWin, won, sold, busy, auto, grid }
 const rIdx = (c, r) => r * REEL_W + c;
@@ -4597,8 +4598,8 @@ function reelResolve(bin, inFest, opt = {}) {
   cells.forEach((c, i) => { if (!c || c.k !== 'shark') return;
     const eaten = rN4(i).filter(j => fish(j) && !guarded.has(j) && (cells[j].k === 'crucian' || cells[j].k === 'carp' || cells[j].k === 'sweetfish'));
     if (!eaten.length) return;
-    for (const j of eaten) { c.v += cells[j].v * 2; cells[j].gone = true; }
-    steps.push({ t: 'eat', at: i, cells: eaten, text: `🦈 상어가 ${eaten.length}마리 먹었다! (${c.v})` }); });
+    let dp = 0; for (const j of eaten) { c.v += cells[j].v * 2; dp += cells[j].v; cells[j].gone = true; }
+    steps.push({ t: 'eat', at: i, cells: eaten, dpts: dp, text: `🦈 상어가 ${eaten.length}마리 먹었다!` }); });
   // 2) 떼
   const seen = new Set(), groups = [];
   const schoolK = k => k === 'crucian' || k === 'sweetfish';
@@ -4607,7 +4608,7 @@ function reelResolve(bin, inFest, opt = {}) {
     for (let q = 0; q < g.length; q++) for (const j of rN4(g[q])) if (!seen.has(j) && fish(j) && schoolK(cells[j].k)) { seen.add(j); g.push(j); }
     groups.push(g);
     const sb = Math.min(4, g.length - 1);   // 떼 보너스는 최대 +4 (붕어만 가득한 날 폭주 방지)
-    if (g.length >= 2) { for (const j of g) cells[j].v += sb; steps.push({ t: 'school', at: g[0], cells: g, text: `🐟 물고기 떼 ${g.length}마리! 각자 +${sb}` }); } });
+    if (g.length >= 2) { for (const j of g) cells[j].v += sb; steps.push({ t: 'school', at: g[0], cells: g, dpts: sb * g.length, text: `🐟 물고기 떼 ${g.length}마리!` }); } });
   // 3) 감전 (한 칸은 한 판에 한 번만 감전: 뱀장어가 여럿이어도 ×2)
   const zapped = new Set();
   cells.forEach((c, i) => { if (!fish(i) || c.k !== 'eel') return;
@@ -4615,13 +4616,13 @@ function reelResolve(bin, inFest, opt = {}) {
     for (const j of rN4(i)) { if (!fish(j)) continue; hit.add(j); if (schoolK(cells[j].k)) { const g = groups.find(gg => gg.includes(j)); if (g) for (const x of g) if (fish(x)) hit.add(x); } }
     for (const j of [...hit]) if (zapped.has(j)) hit.delete(j);
     if (!hit.size) return;
-    for (const j of hit) { cells[j].v *= 2; zapped.add(j); }
-    steps.push({ t: 'zap', at: i, cells: [...hit], text: `⚡ 감전! ${hit.size}칸 ×2` }); });
+    let dz = 0; for (const j of hit) { dz += cells[j].v; cells[j].v *= 2; zapped.add(j); }
+    steps.push({ t: 'zap', at: i, cells: [...hit], dpts: dz, text: `⚡ 감전! ${hit.size}칸 ×2` }); });
   // 4) 축제: 모든 칸 ×2 + 무작위 칸 폭발
   const blasts = [];
   if (inFest) {
     cells.forEach((c, i) => { if (fish(i)) c.v *= 2; });
-    steps.push({ t: 'fest', at: 0, cells: cells.map((c, i) => i).filter(fish), text: '🧨 축제! 모든 칸 ×2' });
+    steps.push({ t: 'fest', at: 0, cells: cells.map((c, i) => i).filter(fish), dpts: cells.reduce((a, c, i) => a + (fish(i) ? c.v / 2 : 0), 0), text: '🧨 축제! 모든 칸 ×2' });
     blasts.push({ at: (Math.random() * cells.length) | 0, src: 'dyn' });
   } else if (dyn.length && dyn.length < 3) for (const i of dyn) blasts.push({ at: i, src: 'dyn' });
   // 5) 폭발 (복어 + 다이너마이트), 연쇄 최대 5회
@@ -4633,24 +4634,24 @@ function reelResolve(bin, inFest, opt = {}) {
     const ring = rN8(b2.at).filter(fish), got = Math.round(ring.reduce((a, j) => a + cells[j].v, 0) * (b2.src === 'puffer' ? 0.5 : 1));   // 복어는 주변 값의 절반, 다이너마이트는 전부
     bonus += got; chain++;
     if (b2.src === 'puffer') { bonus += cells[b2.at].v; cells[b2.at].gone = true; pufferBooms++; }
-    steps.push({ t: 'boom', at: b2.at, cells: ring, gain: got, src: b2.src, text: b2.src === 'puffer' ? `🐡 펑! 주변 +${got}` : `🧨 쾅! 주변 +${got}` });
+    steps.push({ t: 'boom', at: b2.at, cells: ring, gain: got, src: b2.src, dpts: got + (b2.src === 'puffer' ? cells[b2.at].v : 0), text: b2.src === 'puffer' ? '🐡 펑!' : '🧨 쾅!' });
     if (pufferBooms < 5) for (const j of ring) if (cells[j].k === 'puffer' && !done.has(j + 'puffer')) blasts.push({ at: j, src: 'puffer' });
   }
   // 6) 바닥 청소부
   cells.forEach((c, i) => { if (!fish(i) || c.k !== 'catfish') return;
     const empt = rN4(i).filter(j => cells[j] && cells[j].gone).length;
-    if (!empt) return; c.v += 6 * empt; steps.push({ t: 'clean', at: i, cells: [i], text: `🐟 메기가 찌꺼기를 먹었다 +${6 * empt}` }); });
+    if (!empt) return; c.v += 6 * empt; steps.push({ t: 'clean', at: i, cells: [i], dpts: 6 * empt, text: '🐟 메기가 찌꺼기를 먹었다' }); });
   // 6-b) 🐟 황다랑어 질주: 그 가로 줄을 한 번 더 정산
   cells.forEach((c, i) => { if (!fish(i) || c.k !== 'tuna') return;
     const r = (i / REEL_W) | 0, row = Array.from({ length: REEL_W }, (_, cc) => rIdx(cc, r)).filter(fish), gain = row.reduce((a, j) => a + cells[j].v, 0);
-    bonus += gain; steps.push({ t: 'dash', at: i, cells: row, gain, text: `🐟 황다랑어 질주! 한 줄 +${gain}` }); });
+    bonus += gain; steps.push({ t: 'dash', at: i, cells: row, gain, dpts: gain, text: '🐟 황다랑어 질주!' }); });
   // 7) 🎰 줄 맞추기: 왼쪽부터 같은 물고기(황금잉어는 와일드) 3마리 이상
   const lines = [];
   REEL_LINES.forEach((ln, li) => {
     const idx = ln.map((r, c) => rIdx(c, r));
-    if (!fish(idx[0])) return;
+    if (!fish(idx[0]) || cells[idx[0]].k === 'lord') return;
     let base = null, n = 0;
-    for (const i of idx) { if (!fish(i)) break; const k = cells[i].k; if (k === 'gold') { n++; continue; } if (base === null) base = k; if (k !== base) break; n++; }
+    for (const i of idx) { if (!fish(i)) break; const k = cells[i].k; if (k === 'lord') break; if (k === 'gold') { n++; continue; } if (base === null) base = k; if (k !== base) break; n++; }
     if (n < 3) return;
     // 흔한 물고기 줄은 싸게, 드문 물고기 줄은 비싸게: 통 속 비율 q가 1/3일 때를 기준으로 (1/3 ÷ q)^(n-1) 배
     const q = base ? bin.filter(k => k === base).length / bin.length : REEL_GOLD_P;
@@ -4660,12 +4661,12 @@ function reelResolve(bin, inFest, opt = {}) {
     lines.push({ li, n, kind: base || 'gold', cells: idx.slice(0, n), gain });
   });
   lines.sort((a, b2) => b2.gain - a.gain);
-  for (const L of lines) steps.push({ t: 'line', at: L.cells[0], cells: L.cells, li: L.li, n: L.n, gain: L.gain, text: `🎰 ${REEL_FISH[L.kind].name} ${L.n}마리 줄! +${L.gain}` });
+  for (const L of lines) steps.push({ t: 'line', at: L.cells[0], cells: L.cells, li: L.li, n: L.n, gain: L.gain, dpts: L.gain, text: `🎰 ${REEL_FISH[L.kind].name} ${L.n}마리 줄!` });
   // 8) 💰 잭팟: 호수의 주인 3마리↑ = MAJOR, 한 줄 5마리 = GRAND, 그 밖엔 매 판 작은 확률로 무작위
   const lords = cells.filter(c => c && c.k === 'lord').length;
-  let jp = lines.some(L => L.kind === 'lord' && L.n === 5) ? 'grand' : lords >= 3 ? 'major' : null;
-  if (!jp) jp = rollJP(REEL_JP_BET);
+  const jp = lords >= 5 ? 'grand' : lords === 4 ? 'major' : lords === 3 ? 'mini' : null;   // 눈에 보이는 👑 개수로만
   const pts = Math.round((cells.reduce((a, c) => a + (c && !c.gone ? c.v : 0), 0) + bonus) * (opt.boss ? 2 : 1)), total = Math.round(pts * REEL_K);
+  for (const st of steps) st.coin = Math.round((st.dpts || 0) * REEL_K * (opt.boss ? 2 : 1));   // 화면엔 동전으로만
   return { cells, dyn, steps, total, pts, bonus, lines, jp, lords, festTrigger: !inFest && dyn.length >= 3 ? (dyn.length >= 5 ? 12 : dyn.length === 4 ? 8 : 5) : 0, retrig: inFest && pufferBooms >= 3 ? 3 : 0 };
 }
 function reelEV(kinds, n = 2000) { const bin = reelAutoFill(reelCrates(kinds)); let t = 0; for (let i = 0; i < n; i++) t += reelResolve(bin, false).total; return t / n; }
@@ -4699,9 +4700,12 @@ function startReel() {
   meta.coins += sold; eveChips = 0; saveMeta();
   const extra = Math.min(5, Math.floor(Math.max(0, dayScore - target) / 100));
   const tk = todayKinds, boss = (tk.leviathan || 0) > 0 ? 'leviathan' : (tk.kaiju || 0) > 0 ? 'kaiju' : null;
-  const opt = { goldP: Math.min(0.06, REEL_GOLD_P + 0.008 * (tk.goldcarp || 0)), lordP: Math.min(0.02, REEL_LORD_P + 0.003 * (tk.lord || 0)),
+  const opt = { goldP: Math.min(0.06, REEL_GOLD_P + 0.008 * (tk.goldcarp || 0)), lordP: Math.min(0.045, REEL_LORD_P + 0.004 * (tk.lord || 0)),
     whaleP: (todayWhale ? 0.12 : 0) + 0.03 * sPow('whale'), boss };
   reel = { bin, opt, spins: bin.length ? 5 + extra + Math.round(sPow('tuna')) + Math.round(2 * sPow('leviathan')) : 0, fest: 0, festWin: 0, won: 0, sold, busy: false, auto: false, grid: null };
+  let ev = 0; if (bin.length) { for (let i = 0; i < 300; i++) ev += reelResolve(bin, false, { ...opt, lordP: 0 }).total; ev /= 300; }
+  const night = Math.max(40, Math.round(ev * reel.spins));
+  reel.jpAmt = Object.fromEntries(Object.entries(REEL_JP_X).map(([k, x]) => [k, Math.round(night * x)]));
 }
 function reelRender(res) {
   const g = document.getElementById('reelGrid'); g.innerHTML = '';
@@ -4715,12 +4719,12 @@ function reelFill(i, cell, dyn) {   // 칸 하나를 다시 그린다 (돌아가
   const d = document.getElementById('rc' + i); if (!d) return;
   d.innerHTML = ''; d.className = 'rc';
   if (cell) { const cv = document.createElement('canvas'); cv.width = cv.height = 64; cv.getContext('2d').drawImage(reelIcon(cell.k).c, 0, 0); d.appendChild(cv);
-    const v = document.createElement('span'); v.className = 'val'; v.textContent = REEL_FISH[cell.k].v; d.appendChild(v); }
+  }
   if (dyn) { const y = document.createElement('span'); y.className = 'dy'; y.textContent = '🧨'; d.appendChild(y); }
 }
 function reelJP() {
-  const f = v => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  document.getElementById('rjpMini').textContent = f(meta.jp.mini); document.getElementById('rjpMajor').textContent = f(meta.jp.major); document.getElementById('rjpGrand').textContent = f(meta.jp.grand);
+  if (!reel || !reel.jpAmt) return;
+  document.getElementById('rjpMini').textContent = reel.jpAmt.mini.toLocaleString(); document.getElementById('rjpMajor').textContent = reel.jpAmt.major.toLocaleString(); document.getElementById('rjpGrand').textContent = reel.jpAmt.grand.toLocaleString();
 }
 function reelWallet() {
   reelJP();
@@ -4749,7 +4753,6 @@ async function reelSpin() {
   reelWallet();
   const msg = document.getElementById('reelMsg');
   // 🎰 릴 회전: 다섯 기둥이 함께 돌다가 왼쪽부터 하나씩 '탁' 멈춘다
-  for (const k in JP) meta.jp[k] += REEL_JP_BET * SPIN_COST * JP[k].rate;   // 누적 잭팟이 매 판 조금씩 쌓인다
   reelJP();
   document.getElementById('reelLines').innerHTML = '';
   const res = reelResolve(reel.bin, inFest, reel.opt);
@@ -4767,7 +4770,7 @@ async function reelSpin() {
   let dynSeen = 0, lordSeen = 0;
   for (let c = 0; c < REEL_W; c++) {
     const antic = (!inFest && dynSeen >= 2) || lordSeen >= 2;      // 다이너마이트·호수의 주인 2개가 보였다 → 남은 릴은 느리게, 반짝
-    if (antic) { for (let k = c; k < REEL_W; k++) document.getElementById('rcol' + k).classList.add('antic'); msg.className = 'slotmsg tease'; msg.textContent = lordSeen >= 2 ? `👑 호수의 주인 ${lordSeen}마리! 잭팟이…!` : `🧨 ${dynSeen}개! 하나만 더…!`; }
+    if (antic) { for (let k = c; k < REEL_W; k++) document.getElementById('rcol' + k).classList.add('antic'); msg.className = 'slotmsg tease'; msg.textContent = lordSeen >= 2 ? `👑 ${lordSeen}마리! ${lordSeen >= 4 ? 'GRAND까지 하나…!' : lordSeen === 3 ? 'MINI 확정! 하나 더…!' : '하나만 더…!'}` : `🧨 ${dynSeen}개! 하나만 더…!`; }
     await W8(c === 0 ? 520 : antic ? 820 : 230);
     stopped[c] = true;
     const col = document.getElementById('rcol' + c);
@@ -4786,7 +4789,7 @@ async function reelSpin() {
     const cls = 'fx-' + st.t;
     const all = [st.at, ...st.cells];
     all.forEach(i => { const el = document.getElementById('rc' + i); if (el) el.classList.add(cls); });
-    msg.className = 'slotmsg win'; msg.textContent = st.text;
+    msg.className = 'slotmsg win'; msg.innerHTML = st.text + (st.coin >= 1 ? ` <b style="color:#ffd44a">${COIN}+${st.coin}</b>` : '');
     if (st.t === 'eat') { for (const j of st.cells) { const el = document.getElementById('rc' + j); const r = el.getBoundingClientRect(); shatter(reelIcon(res.cells[j].k), r.left + r.width / 2, r.top + r.height / 2, r.width, 1); el.classList.add('gone'); const v = el.querySelector('.val'); if (v) v.remove(); }
       reelSetVal(st.at, res.cells[st.at].v); noiseBurst(0.25, 700, 0.3); tone(110, 0.2, 0.2, 'sawtooth', 60); }
     else if (st.t === 'school') { for (const j of st.cells) reelSetVal(j, res.cells[j].v); [784, 988, 1175].forEach((f, k) => tone(f, 0.06, 0.05, 'triangle', null, k * 0.05)); }
@@ -4821,7 +4824,7 @@ async function reelSpin() {
   const live = res.cells.map((c, i) => c && !c.gone ? i : -1).filter(i => i >= 0).sort((a, b2) => (a % REEL_W) - (b2 % REEL_W));
   slotFx.counting = true; slotFx.target = meta.coins; slotFx.shown = meta.coins - total; setCoinText(slotFx.shown); document.querySelector(slotFx.box).classList.add('hot');
   const N = Math.max(3, Math.min(70, Math.round(3 + Math.log2(total + 1) * 5))), share = total / N;
-  msg.className = 'slotmsg win'; msg.innerHTML = `${res.pts.toLocaleString()}점 → ${COIN}+${total.toLocaleString()}` + (res.bonus ? ` <span style="font-size:13px">(줄·폭발 보너스 ${Math.round(res.bonus)}점 포함)</span>` : '');
+  msg.className = 'slotmsg win'; msg.innerHTML = `${COIN}+${total.toLocaleString()}`;
   let given = 0;
   for (let n = 0; n < live.length; n++) {
     const i = live[n], el = document.getElementById('rc' + i), r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
@@ -4836,7 +4839,7 @@ async function reelSpin() {
   slotFx.shown = slotFx.target; slotFx.counting = false; setCoinText(meta.coins); document.querySelector(slotFx.box).classList.remove('hot');   // 정산 끝: 숫자를 정확히 맞춘다
   // 💰 잭팟
   if (res.jp) {
-    const amt = Math.floor(meta.jp[res.jp]); meta.jp[res.jp] = JP[res.jp].seed; meta.coins += amt; reel.won += amt; if (inFest) reel.festWin += amt; saveMeta(); reelJP();
+    const amt = reel.jpAmt[res.jp]; meta.coins += amt; reel.won += amt; if (inFest) reel.festWin += amt; saveMeta(); reelJP();
     stats.jackpots = (stats.jackpots || 0) + 1;
     const sp = document.getElementById('reelSplash'); sp.className = 'splash ' + (res.jp === 'grand' ? 'jack' : res.jp === 'major' ? 'mega' : 'big'); sp.hidden = false;
     sp.innerHTML = `<div class="t">💰 ${JP[res.jp].name} JACKPOT!</div><div class="n">${COIN}${amt.toLocaleString()}</div>`;
@@ -4874,10 +4877,10 @@ async function reelSpin() {
   if (reel.fest > 0 || (reel.auto && reel.spins > 0)) setTimeout(reelSpin, 350); else reel.auto = false;
 }
 function reelRules() {
-  document.getElementById('reelRules').innerHTML = `<div class="rule">오늘 잡은 물고기가 <b>상자</b>로 통에 들어갑니다(붕어 10마리·잉어 3마리·나머지 1마리 = 1상자, 통 ${REEL_BIN}칸을 <b>잡은 비율대로</b> 자동으로 채움). 판돈은 없고, 통에 못 든 생선은 헐값에 자동으로 팔려요. 매 판 5×4칸이 <b>통의 비율대로</b> 꽉 채워지고(상자가 많은 물고기가 자주 나와요) <b>이웃끼리 능력</b>이 발동합니다. 칸의 숫자는 점수이고, 판이 끝나면 <b>점수 20점 = 동전 1</b>로 바뀝니다.</div>` +
-    `<table class="reelrules">${Object.keys(REEL_FISH).map(k => `<tr><td><b>${REEL_FISH[k].name}</b> ${REEL_FISH[k].v}</td><td>${REEL_FISH[k].rule}</td></tr>`).join('')}</table>` +
+  document.getElementById('reelRules').innerHTML = `<div class="rule">오늘 잡은 물고기가 <b>상자</b>로 통에 들어갑니다(붕어 10마리·잉어 3마리·나머지 1마리 = 1상자, 통 ${REEL_BIN}칸을 <b>잡은 비율대로</b> 자동으로 채움). 판돈은 없고, 통에 못 든 생선은 헐값에 자동으로 팔려요. 매 판 5×4칸이 <b>통의 비율대로</b> 꽉 채워지고(상자가 많은 물고기가 자주 나와요) <b>이웃끼리 능력</b>이 발동합니다. 판이 끝나면 남은 물고기와 터진 능력·줄만큼 <b>동전</b>을 받아요.</div>` +
+    `<table class="reelrules">${Object.keys(REEL_FISH).map(k => `<tr><td><b>${REEL_FISH[k].name}</b></td><td>${REEL_FISH[k].rule}</td></tr>`).join('')}</table>` +
     `<div class="rule">🎰 <b>줄 맞추기</b>: 당첨 줄 12개(가로 4·V자 4·지그재그 4)에서 왼쪽부터 같은 물고기 3마리 이상이 이어지면 그 물고기 값 합 × <b>3마리 3배 · 4마리 8배 · 5마리 30배</b>를 더 줍니다. 진짜 슬롯처럼 <b>통에 흔한 물고기 줄은 배당이 낮고, 드문 물고기 줄은 높아요.</b></div>` +
-    `<div class="rule">✨ <b>황금잉어</b>(와일드)와 👑 <b>호수의 주인</b>은 통과 상관없이 아주 가끔 떠요. 호수의 주인 3마리 이상이면 <b>MAJOR</b>, 한 줄에 5마리면 <b>GRAND</b> 잭팟. 그 밖에도 매 판 작은 확률로 누적 잭팟이 터집니다.</div>` +
+    `<div class="rule">✨ <b>황금잉어</b>(와일드)와 👑 <b>호수의 주인</b>은 통과 상관없이 아주 가끔 떠요. 👑이 한 판에 <b>3마리면 MINI, 4마리면 MAJOR, 5마리 이상이면 GRAND</b>. 잭팟 금액은 그날 밤 예상 수입의 2배·10배·50배예요.</div>` +
     `<div class="rule">🌙 <b>그날 낚시가 밤에 이어져요</b>: 황금잉어를 잡으면 ✨ 와일드, 호수의 주인을 잡으면 👑 잭팟 그림이 더 자주 떠요. 고래를 봤으면 가끔 🐋 <b>고래가 지나가며</b> 물고기를 한 종류로 몰아 줘요. 쿠르가·그란모르를 잡은 날은 <b>보스의 밤</b>: 모든 판 점수 ×2.</div>` +
     `<div class="rule">🧨 <b>다이너마이트</b>: 매 판 칸마다 작은 확률로 얹혀요. 1~2개면 주변을 터뜨리고, <b>3개 이상이면 다이너마이트 축제</b>(3개 5판 · 4개 8판 · 5개 이상 12판). 축제 동안 모든 칸 ×2, 매 판 한 칸이 저절로 터지고, 복어가 3번 이상 터지면 +3판(축제 한 번에 최대 2번).</div>` +
     `<div class="rule">판 수: 하루 5판 + 목표 초과 100점마다 1판(최대 +5) + 황다랑어 도감 ★.</div>`;
@@ -4894,7 +4897,36 @@ document.querySelectorAll('[data-reel]').forEach(btn => btn.addEventListener('cl
   msg.textContent = reel.bin.length ? `통에 ${reel.bin.length}상자! SPIN을 눌러 보세요` : '통에 넣을 물고기가 없어요';
 }));
 document.getElementById('reelSpin').addEventListener('click', () => reelSpin());
-document.getElementById('reelAuto').addEventListener('click', () => { if (!reel || reel.busy) return; reel.auto = true; reelSpin(); });
+document.getElementById('reelAuto').addEventListener('click', () => reelFastAll());
+// ⚡ 빠른 정산: 남은 판(축제 포함)을 연출 없이 한 번에 계산해 지급하고 요약만 보여 준다
+function reelFastAll() {
+  if (!reel || reel.busy || reel.spins + reel.fest <= 0) return;
+  ensureAudio();
+  const sum = { spins: 0, lines: 0, best: 0, fests: 0, jp: [], coins: 0 };
+  while (reel.spins + reel.fest > 0) {
+    const inFest = reel.fest > 0; if (inFest) reel.fest--; else reel.spins--;
+    const res = reelResolve(reel.bin, inFest, reel.opt);
+    let won = res.total;
+    if (res.jp) { won += reel.jpAmt[res.jp]; sum.jp.push(JP[res.jp].name); stats.jackpots = (stats.jackpots || 0) + 1; }
+    sum.spins++; sum.lines += res.lines.length; sum.best = Math.max(sum.best, won); sum.coins += won;
+    const retrig = res.retrig && (reel.retrigs || 0) < 2 ? res.retrig : 0;
+    if (res.festTrigger) { reel.fest += res.festTrigger; reel.retrigs = 0; sum.fests++; } else if (retrig) { reel.fest += retrig; reel.retrigs = (reel.retrigs || 0) + 1; }
+  }
+  const before = meta.coins; meta.coins += sum.coins; reel.won += sum.coins; saveMeta();
+  slotFx.counting = true; slotFx.target = meta.coins; slotFx.shown = before; setCoinText(before);
+  const r = document.getElementById('reelGrid').getBoundingClientRect(), N = Math.max(5, Math.min(70, Math.round(5 + Math.log2(sum.coins + 1) * 6)));
+  for (let k = 0; k < N; k++) { const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4, sp = 220 + Math.random() * 260; slotFx.coins.push({ x: r.left + Math.random() * r.width, y: r.top + Math.random() * r.height, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 6 + Math.random() * 3, t: 0, delay: k * 0.015, hang: 0.3, ph: Math.random() * 6, v: sum.coins / N }); }
+  fxLoop(); setTimeout(() => { slotFx.shown = slotFx.target; slotFx.counting = false; setCoinText(meta.coins); }, 2200);
+  const sp = document.getElementById('reelSplash'); sp.className = 'splash ' + (sum.jp.length ? 'jack' : 'big'); sp.hidden = false;
+  sp.innerHTML = `<div class="t">⚡ 빠른 정산</div><div class="n">${COIN}+${sum.coins.toLocaleString()}</div>` +
+    `<div style="font-size:14px;line-height:1.6;color:#fff;margin-top:6px">${sum.spins}판 · 줄 당첨 ${sum.lines}번 · 최고 한 판 ${COIN}${sum.best.toLocaleString()}` +
+    (sum.fests ? `<br>🧨 다이너마이트 축제 ${sum.fests}번` : '') + (sum.jp.length ? `<br>💰 ${sum.jp.join(', ')} 잭팟!` : '') + `</div>`;
+  if (sum.jp.length) { coinRain(50); [523, 659, 784, 1046, 1318, 1568].forEach((f, k) => tone(f, 0.16, 0.1, 'square', null, k * 0.08)); }
+  else [659, 784, 988, 1318].forEach((f, k) => tone(f, 0.1, 0.07, 'square', null, k * 0.07));
+  setTimeout(() => { sp.hidden = true; }, 3200);
+  document.getElementById('reelMsg').className = 'slotmsg win'; document.getElementById('reelMsg').innerHTML = `오늘 밤 ${COIN}+${reel.won.toLocaleString()}`;
+  reelWallet(); updateShopGlow();
+}
 document.getElementById('reelClose').addEventListener('click', () => {
   if (reel && (reel.busy || reel.fest > 0)) return;
   if (reel) reel.auto = false;
