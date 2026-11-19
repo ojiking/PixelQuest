@@ -215,6 +215,12 @@
   .reelpanel.fest { border-color: #ff8a2a; box-shadow: 0 0 0 3px #0b1d26, 0 0 34px rgba(255,140,40,.7); }
   .rgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
   .rgridwrap { position: relative; }
+  .slotmsg.hugestep { font-size: 30px; color: #fff36a; text-shadow: 0 0 14px #ff8a2a; animation: msgpop .35s ease-out; }
+  #reelMachine.flashw::after { content: ''; position: absolute; inset: 0; background: #fff; pointer-events: none; animation: flashw .35s ease-out forwards; }
+  @keyframes flashw { from { opacity: .85; } to { opacity: 0; } }
+  .splash .x { font-size: 16px; font-weight: 900; color: #fff; margin-top: 4px; }
+  .splash.huge .t { font-size: 44px; animation: hugepop .5s cubic-bezier(.3,1.8,.5,1); } .splash.huge .n { font-size: 40px; }
+  @keyframes hugepop { 0% { transform: scale(.2) rotate(-8deg); } 100% { transform: none; } }
   #reelLines { inset: 0; width: 100%; height: 100%; }
   .rc.fx-whale { background: #bcd6f2; } .rc.fx-ink { background: #6a5a7a; } .rc.fx-dash { background: #cfe6ff; box-shadow: inset 0 0 0 2px #5bd8ff; }
   .rc.fx-line { background: #fff1a8; box-shadow: inset 0 0 0 2px #ffd44a; }
@@ -4706,6 +4712,7 @@ function startReel() {
   let ev = 0; if (bin.length) { for (let i = 0; i < 300; i++) ev += reelResolve(bin, false, { ...opt, lordP: 0 }).total; ev /= 300; }
   const night = Math.max(40, Math.round(ev * reel.spins));
   reel.jpAmt = Object.fromEntries(Object.entries(REEL_JP_X).map(([k, x]) => [k, Math.round(night * x)]));
+  reel.spinEV = Math.max(3, ev);   // 한 판 평균 (대박 판정 기준)
 }
 function reelRender(res) {
   const g = document.getElementById('reelGrid'); g.innerHTML = '';
@@ -4742,6 +4749,30 @@ function reelWallet() {
   document.getElementById('reelPanel').classList.toggle('fest', reel.fest > 0);
 }
 const reelWait = ms => new Promise(r => setTimeout(r, ms));
+async function reelCelebrate(tier, amount, fast) {
+  const title = ['', 'BIG CATCH!', 'MEGA CATCH!!', 'SUPER CATCH!!!'][tier], cls = ['', 'big', 'mega', 'jack'][tier];
+  const dur = [0, 1500, 2600, 4200][tier] * (fast < 1 ? 0.7 : 1);
+  const m = document.getElementById('reelMachine'), pn = document.getElementById('reelPanel'), sp = document.getElementById('reelSplash');
+  // 한 박자 멈췄다가 (히트스톱)
+  m.classList.remove('shk1', 'shk2', 'flashw'); void m.offsetWidth; m.classList.add('flashw'); tone(40, 0.5, 0.5, 'sine', 25);
+  await reelWait(tier >= 2 ? 420 : 200);
+  sp.className = 'splash ' + cls + (tier >= 2 ? ' huge' : ''); sp.hidden = false;
+  sp.innerHTML = `<div class="t">${title}</div><div class="n">${COIN}<span class="amt">0</span></div><div class="x">평소의 ${Math.round(amount / (reel.spinEV || 10))}배!</div>`;
+  const num = sp.querySelector('.amt'), t0 = performance.now(), roll = dur * 0.6;
+  const step = now => { const k = Math.min(1, (now - t0) / roll); num.textContent = Math.round(amount * (1 - Math.pow(1 - k, 3))).toLocaleString(); if (k < 1 && !sp.hidden) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+  const iv = setInterval(() => tone(900 + Math.random() * 900, 0.03, 0.05, 'square'), tier >= 2 ? 45 : 70);   // 숫자 굴러가는 소리
+  setTimeout(() => clearInterval(iv), roll);
+  m.classList.remove('shk1', 'shk2'); void m.offsetWidth; m.classList.add(tier >= 2 ? 'shk2' : 'shk1');
+  coinRain([0, 20, 50, 90][tier]); vibrate(tier >= 3 ? [200, 80, 200, 80, 400] : tier === 2 ? [120, 60, 160] : [80, 40, 80]);
+  (tier >= 2 ? [523, 659, 784, 1046, 1318, 1568, 2093] : [659, 784, 988, 1318]).forEach((f, k) => tone(f, 0.16, 0.09, 'square', null, k * 0.08));
+  if (tier >= 2) { pn.classList.remove('jackpot'); void pn.offsetWidth; pn.classList.add('jackpot'); noiseBurst(1.2, 4000, 0.3, 'highpass'); }
+  if (tier >= 3) { const r = m.getBoundingClientRect(); for (let n = 0; n < 5; n++) setTimeout(() => { const x = r.left + Math.random() * r.width, y = r.top + Math.random() * r.height;
+      for (let i = 0; i < 30; i++) { const a = Math.random() * 6.283, v = 120 + Math.random() * 220; slotFx.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 60, g: 300, s: 3 + Math.random() * 3, c: `hsl(${Math.random() * 360},100%,65%)`, life: 1.1, max: 1.1, fire: true }); }
+      fxLoop(); noiseBurst(0.3, 5000, 0.2, 'highpass'); }, 300 + n * 500); }
+  await reelWait(dur);
+  sp.hidden = true; sp.classList.remove('huge');
+}
 function reelSetVal(i, v) { const el = document.querySelector(`#rc${i} .val`); if (!el) return; el.textContent = Math.round(v); el.classList.remove('up'); void el.offsetWidth; el.classList.add('up'); }
 async function reelSpin() {
   if (!reel || reel.busy || reel.spins + reel.fest <= 0) return;
@@ -4789,7 +4820,10 @@ async function reelSpin() {
     const cls = 'fx-' + st.t;
     const all = [st.at, ...st.cells];
     all.forEach(i => { const el = document.getElementById('rc' + i); if (el) el.classList.add(cls); });
-    msg.className = 'slotmsg win'; msg.innerHTML = st.text + (st.coin >= 1 ? ` <b style="color:#ffd44a">${COIN}+${st.coin}</b>` : '');
+    const huge = st.coin >= (reel.spinEV || 10) * 3;   // 이 한 단계만으로 평소 3판치 이상
+    msg.className = 'slotmsg win' + (huge ? ' hugestep' : ''); msg.innerHTML = st.text + (st.coin >= 1 ? ` <b style="color:#ffd44a">${COIN}+${st.coin.toLocaleString()}</b>` : '');
+    if (huge) { const m = document.getElementById('reelMachine'); m.classList.remove('shk1', 'shk2', 'flashw'); void m.offsetWidth; m.classList.add('shk2', 'flashw');
+      noiseBurst(0.6, 3000, 0.35, 'highpass'); tone(55, 0.8, 0.5, 'sine', 30); [784, 1046, 1318].forEach((f, k) => tone(f, 0.14, 0.09, 'square', null, 0.1 + k * 0.07)); vibrate([60, 30, 90]); }
     if (st.t === 'eat') { for (const j of st.cells) { const el = document.getElementById('rc' + j); const r = el.getBoundingClientRect(); shatter(reelIcon(res.cells[j].k), r.left + r.width / 2, r.top + r.height / 2, r.width, 1); el.classList.add('gone'); const v = el.querySelector('.val'); if (v) v.remove(); }
       reelSetVal(st.at, res.cells[st.at].v); noiseBurst(0.25, 700, 0.3); tone(110, 0.2, 0.2, 'sawtooth', 60); }
     else if (st.t === 'school') { for (const j of st.cells) reelSetVal(j, res.cells[j].v); [784, 988, 1175].forEach((f, k) => tone(f, 0.06, 0.05, 'triangle', null, k * 0.05)); }
@@ -4815,9 +4849,13 @@ async function reelSpin() {
       const m = document.getElementById('reelMachine'); m.classList.remove('shk1', 'shk2'); void m.offsetWidth; m.classList.add('shk2');
       noiseBurst(0.6, 800, 0.45); tone(70, 0.4, 0.4, 'sine', 30); vibrate([40]);
     }
-    await W8(st.t === 'boom' ? 300 : 340);
+    await W8((st.t === 'boom' ? 300 : 340) * (huge ? 2.6 : 1));
     all.forEach(i => { const el = document.getElementById('rc' + i); if (el) el.classList.remove(cls); });
   }
+  // 🎉 대박 판: 동전이 날아가기 전에, 크기만큼 크게 축하한다 (축제 중엔 MEGA 이상만)
+  { const ratio = res.total / (reel.spinEV || 10);
+    const tier = ratio >= 25 ? 3 : ratio >= 10 ? 2 : ratio >= 4 && !inFest ? 1 : 0;
+    if (tier) await reelCelebrate(tier, res.total, fast); }
   // 정산: 남은 물고기가 깨져 동전이 되어 지갑으로
   const total = res.total;
   meta.coins += total; reel.won += total; if (inFest) reel.festWin += total; saveMeta();
@@ -4848,15 +4886,6 @@ async function reelSpin() {
     [523, 659, 784, 1046, 1318, 1568, 2093].forEach((f, k) => tone(f, 0.18, 0.1, 'square', null, k * 0.09)); noiseBurst(1.2, 4000, 0.3, 'highpass');
     setCoinText(meta.coins);
     await reelWait(res.jp === 'mini' ? 2200 : 3400); sp.hidden = true;
-  }
-  // 큰 판은 축하 화면 (이 통의 기본값 합 대비 몇 배였나)
-  const base = (reel.bin.reduce((a, k) => a + REEL_FISH[k].v, 0) / Math.max(1, reel.bin.length)) * REEL_W * REEL_H || 1, ratio = res.pts / base;
-  if (ratio >= 2.5 && !res.festTrigger && !inFest) {   // 축제 중엔 매 판 크니 생략
-    const mega = ratio >= 5, sp = document.getElementById('reelSplash'); sp.className = 'splash ' + (mega ? 'mega' : 'big'); sp.hidden = false;
-    sp.innerHTML = `<div class="t">${mega ? 'MEGA CATCH!!' : 'BIG CATCH!'}</div><div class="n">${COIN}${total.toLocaleString()}</div>`;
-    coinRain(mega ? 40 : 18); vibrate(mega ? [120, 60, 160] : [80, 40, 80]);
-    (mega ? [659, 784, 988, 1318, 1568] : [659, 784, 988, 1318]).forEach((f, k) => tone(f, 0.12, 0.08, 'square', null, k * 0.08));
-    await reelWait(mega ? 2000 : 1500); sp.hidden = true;
   }
   // 축제 발동 / 재발동 / 종료
   const retrig = res.retrig && (reel.retrigs || 0) < 2 ? res.retrig : 0;   // 재발동은 축제 한 번에 최대 2회 (끝없이 이어지지 않게)
@@ -5168,7 +5197,7 @@ window.__sim = {
   sleep() { eveChips = 0; clearOv.classList.add('hidden'); document.getElementById('mileOv').classList.add('hidden'); if (eveFail && eveRetry) { startDay(); state = 'play'; return true; } if (eveFail) { state = 'end'; return false; } day++; startDay(); state = 'play'; return true; },
   get meta() { return meta; }, UP: UPGRADES, TUR, MOUNT_COST,
 };
-window.__reel = { setDynP: p => { REEL_DYN_P = p; }, ev: (k, n) => reelEV(k, n), crates: k => reelCrates(k), fill: k => reelAutoFill(reelCrates(k)), resolve: (b, f, o) => reelResolve(b, f, o), setWhale: v => { todayWhale = v; }, get state() { return reel; }, setKinds: k => { todayKinds = k; }, evening: (k, c, sc) => { todayKinds = k; todayChips = c; dayScore = sc || target + 300; startEvening(true); } };
+window.__reel = { celebrate: (t, a) => reelCelebrate(t, a, 1), setDynP: p => { REEL_DYN_P = p; }, ev: (k, n) => reelEV(k, n), crates: k => reelCrates(k), fill: k => reelAutoFill(reelCrates(k)), resolve: (b, f, o) => reelResolve(b, f, o), setWhale: v => { todayWhale = v; }, get state() { return reel; }, setKinds: k => { todayKinds = k; }, evening: (k, c, sc) => { todayKinds = k; todayChips = c; dayScore = sc || target + 300; startEvening(true); } };
 window.__dyn = { get state() { return state; }, get score() { return score; }, get dyn() { return dyn; }, setDyn: n => { dyn = n; },
   get fish() { return fish.length; }, get chips() { return eveChips; }, spawnPirWave: () => spawnPirWave(), get pirs() { return pirs.filter(q => q.hp > 0).length; }, get pirKills() { return stats.pirKills || 0; }, get missiles() { return missiles.length; }, get robots() { return Object.keys(robots); }, robotInfo: () => JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(robots).map(([k, r]) => [k, { x: Math.round(r.x), y: Math.round(r.y), zap: r.zap, tgt: !!r.tgt, aim: !!r.aim }])))), spawnLev: () => { big = null; spawnLeviathan(); }, lev: () => big && big.type === 'leviathan' ? { hp: big.hp, phase: big.phase, open: big.open, geo: levGeo(), dead: big.dead } : null, levPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, get sniper() { return { aim: !!sniper.aim, kills: sniper.kills, cd: sniper.cd }; }, setFever: n => { meta.fever = n; }, get fever() { return fever ? fever.t : null; }, get feverGauge() { return meta.fever; }, startFever: () => startFever(), spawnChestAt: (x, y) => { spawnChest(); const c = chests[chests.length - 1]; c.x = x; c.y = y; c.depth = 0.95; }, chestsInfo: () => chests.map(c => ({ state: c.state, loot: c.loot })), setDex: o => { Object.assign(meta.dex, o); saveMeta(); }, get eveFree() { return eveFree; }, stars: id => stars(id), get todayChips() { return todayChips; }, setChips: n => { eveChips = n; slotWallet(); }, slotSim: n => slotSim(n), get jp() { return meta.jp; }, forceJP: t => { rollJP.force = t; }, forceGrid: g => { forcedGrid = g; }, spawnKaiju: () => { big = null; spawnKaiju(); }, kaiju: () => big && big.type === 'kaiju' ? { hp: big.hp, phase: big.phase, dead: big.dead, head: kHead(big), headUp: big.headUp, x: big.x, y: big.y } : null, kaijuPhase: (ph, pt) => { big.phase = ph; big.pt = pt; }, kaijuDmg: n => kaijuDamage(n, null, '-' + n), explodeAt: (x, y, d) => explode(x, y, d), selAmmo: id => { selAmmo = id; updateAmmoBar(true); }, bombsInfo: () => bombs.map(b2 => ({ type: b2.type, state: b2.state, d: b2.depth })), dropBomb: (x, y, fuse) => { bombs.push({ x, y, z: 0, sx: x, sy: y, tx: x, ty: y, t: 0, flight: 0, arc: 0, state: "water", fuse, depth: 0, wt: 0, spin: 0, type: "basic", ang: 0 }); }, pickKinds: (n, d) => { const o = day; day = d; const c = {}; for (let i = 0; i < n; i++) { const k = pickKind(); c[k] = (c[k] || 0) + 1; } day = o; return c; }, spawnKind: k => spawnSchool(k, false), get zaps() { return zaps.length; }, foes: () => pirs.filter(q => q.hp > 0).map(q => ({ t: q.type, x: Math.round(q.x), y: Math.round(q.y), hp: q.hp })), get turBroken() { return turRT.map(r => r && r.broken > 0 ? Math.round(r.broken) : 0); }, get chainQ() { return chainQ.length; }, giveNukes: n => { meta.nukes = n; saveMeta(); }, get nuke() { return nuke && { t: nuke.t, done: !!nuke.done }; }, get meta() { return meta; }, kinds: () => fish.map(f => f.kind), spawnTuna: () => spawnTuna(), spawnSwimmer: () => spawnSwimmer(), placeSwimmer: (x, y) => { spawnSwimmer(); swimmer.x = x; swimmer.y = y; swimmer.sp = 0; }, get swimmer() { return swimmer && { x: swimmer.x, y: swimmer.y, dead: !!swimmer.dead }; }, tunaFish: () => fish.filter(f => f.kind === 'tuna').map(f => ({ x: f.x, y: f.y, d: f.depth })), get day() { return day; }, get swimT() { return swimT; }, get swimPanic() { return swimmer ? swimmer.panic : null; }, get emptyTube() { return !!emptyTube; }, get sharkHunting() { return !!(big && big.hunting); }, placeShark: (x, y) => { spawnBig(); while (big.type !== 'shark') { big = null; spawnBig(); } big.x = x; big.y = y; }, setDay: n => { day = n; startDay(); }, get banner() { return banner && banner.str; }, addScore: n => addScore(n), get S() { return S; }, get player() { return player; }, schools: () => schools.map(x => ({ x: x.x, y: x.y, d: x.depth, k: x.kind })), get big() { return big && big.type; }, spawnBig: (t) => { spawnBig(); if (t) { while (big.type !== t) { big = null; spawnBig(); } } } };
 })();
