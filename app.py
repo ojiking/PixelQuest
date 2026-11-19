@@ -15,6 +15,12 @@ def dynamite():
     return render_template('dynamite.html')
 
 
+@app.route('/dynamite-c')
+def dynamite_c():
+    # 기획서 '물고기 연쇄 정산' C안을 충실히 구현한 비교용 버전
+    return render_template('dynamite_c.html')
+
+
 @app.route('/dynamite-classic')
 def dynamite_classic():
     # 물고기 릴 슬롯 도입 전 버전 (돌아가기용으로 보관)
