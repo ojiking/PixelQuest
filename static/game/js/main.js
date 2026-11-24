@@ -60,8 +60,8 @@ function showTitle() {
   hud.classList.add('hidden');
   setScreen(`
     <div class="panel title">
-      <div class="logo">PIXEL<span>QUEST</span></div>
-      <div class="sub">블록 청소반 — 벨트스크롤 로그라이트 프로토타입 v0.1</div>
+      <div class="logo"><small>메탈펀치</small><span>뱀돌이</span></div>
+      <div class="sub">METAL PUNCH: BAEMDORI — 벨트스크롤 로그라이트 프로토타입</div>
       ${IS_MOBILE ? `<div class="controls">
         <div><b>왼쪽 아래 드래그</b> 이동 (위아래 = 라인 이동)</div>
         <div><b>공격</b> 연타 콤보 · 전기톱은 누르고 있기 · 날아차기·내려찍기는 정비소에서 해금</div>
@@ -176,7 +176,7 @@ function finishRun(win) {
   const t = Math.floor(r.time);
   setScreen(`
     <div class="panel">
-      <h1 class="${win ? 'win' : 'lose'}">${win ? '작전 성공!' : '청소반원 쓰러짐…'}</h1>
+      <h1 class="${win ? 'win' : 'lose'}">${win ? '작전 성공!' : '뱀돌이 쓰러짐…'}</h1>
       <div class="stats">
         <div>도달 스테이지 <b>${r.stage + 1} / ${STAGE_COUNT}</b></div>
         <div>처치 <b>${r.kills}</b> · 부위 파괴 <b>${r.severs}</b> · 최대 콤보 <b>${r.maxCombo}</b></div>
@@ -184,7 +184,7 @@ function finishRun(win) {
         <div>획득 부품 <b>⚙ ${Math.floor(r.scrap)}</b>${bonus ? ` + 클리어 보너스 ${bonus}` : ''}</div>
         <div class="dim">특성: ${[...r.perks].map(id => PERKS.find(p => p.id === id).name).join(', ') || '없음'}</div>
       </div>
-      <p class="dim">죽어도 부품은 남습니다. 정비소에서 볼트와 청소반원을 강화하세요.</p>
+      <p class="dim">죽어도 부품은 남습니다. 정비소에서 뱀돌이와 볼트를 강화하세요.</p>
       <button class="btn primary" data-act="hub">정비소로 (Enter)</button>
     </div>`);
 }

@@ -173,3 +173,9 @@ h3 small { color: var(--bot); }
 .mobile #helpbar { left: 61%; width: 30cqw; bottom: 3cqh; font-size: 10px; padding: 4px 6px; }
 .mobile #helpbar .dim { font-size: 9px; }
 .mobile #stage-info { bottom: auto; top: 13cqh; left: 50%; }
+
+/* 타이틀 로고: 메탈펀치(작게) / 뱀돌이(크게) 두 줄 */
+.logo { white-space: nowrap; line-height: 1.05; }
+.logo small { display: block; font-size: .5em; letter-spacing: 6px; color: #fff; text-shadow: 3px 3px 0 #2f6fd6, 6px 6px 0 #000; }
+.logo span { display: block; font-size: 1.25em; }
+@media (max-height: 520px) { .logo small { font-size: .45em; } .logo span { font-size: 1.1em; } }

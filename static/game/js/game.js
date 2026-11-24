@@ -389,7 +389,7 @@ export class Game {
     for (let i = 0; i < 4; i++) this.bleed(cx, cy + Math.random() * 0.6, cz, i % 2 ? 1 : -1, 90);
     this.debris.puff(cx, cy, cz, [0xc81e24, 0x9e1219, 0xe0382c, 0x6a0a10], 80, 6, .22, 1.6, 1);
     p.hidden = true;
-    this.texts.add(cx, cy + 1.5, cz, '청소반원 사망', 'hurt big');
+    this.texts.add(cx, cy + 1.5, cz, '뱀돌이 사망', 'hurt big');
     this.hitstop(0.3); this.shake(0.8);
     this.sfx?.('death');
   }
