@@ -97,7 +97,7 @@ function showHub(msg = '') {
         const lv = level(meta, u.id), cost = upgradeCost(meta, u);
         const can = cost != null && meta.scrap >= cost;
         return `<div class="ucard ${cost == null ? 'max' : ''}">
-          <div class="uname">${u.name} <span class="pips">${'■'.repeat(lv)}${'□'.repeat(u.max - lv)}</span></div>
+          <div class="uname">${u.name} <span class="pips">${u.max > 5 ? `Lv ${lv}/${u.max}` : '■'.repeat(lv) + '□'.repeat(u.max - lv)}</span></div>
           <div class="udesc">${u.desc}</div>
           <button class="btn small" data-buy="${u.id}" ${can ? '' : 'disabled'}>${cost == null ? 'MAX' : `⚙ ${cost}`}</button>
         </div>`;

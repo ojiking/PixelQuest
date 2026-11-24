@@ -191,18 +191,18 @@ export const PERKS = [
 
 // ---------------- 영구 업그레이드 (정비소) ----------------
 export const UPGRADES = [
-  { id: 'p_hp',    group: '청소반원', name: '체력 단련',       desc: '최대 체력 +15',              max: 5, cost: [15, 30, 50, 75, 105] },
-  { id: 'p_pow',   group: '청소반원', name: '근력 단련',       desc: '공격력 +8%',                 max: 5, cost: [20, 35, 55, 80, 110] },
-  { id: 'b_ai',    group: '볼트', name: '전술 칩',          desc: 'Lv1: 호위 전술 / Lv2: 협공 전술 해금', max: 2, cost: [25, 60] },
-  { id: 'b_rescue',group: '볼트', name: '구조 프로토콜',    desc: '런마다 1회, 쓰러진 플레이어를 체력 40%로 부활', max: 1, cost: [80] },
+  { id: 'p_hp',    group: '청소반원 (주인공)', name: '체력 단련',       desc: '주인공 최대 체력 +15',       max: 15, cost: [15, 30, 50, 75, 105, 140, 180, 225, 275, 330, 390, 455, 525, 600, 680] },
+  { id: 'p_pow',   group: '청소반원 (주인공)', name: '근력 단련',       desc: '주인공 공격력 +8%',          max: 15, cost: [20, 35, 55, 80, 110, 145, 185, 230, 280, 335, 395, 460, 530, 605, 685] },
+  { id: 'b_ai',    group: '볼트', name: '전술 칩',          desc: '볼트 전술 해금 — Lv1: 호위 / Lv2: 협공', max: 2, cost: [25, 60] },
+  { id: 'b_rescue',group: '볼트', name: '구조 프로토콜',    desc: '런마다 1회, 볼트가 쓰러진 주인공을 체력 40%로 부활', max: 1, cost: [80] },
   // 방패형 전용
-  { id: 't_hp',    group: '볼트', cls: 'tank',   name: '강화 장갑',       desc: '최대 체력 +30',                       max: 5, cost: [12, 25, 40, 60, 85] },
-  { id: 't_taunt', group: '볼트', cls: 'tank',   name: '도발 모듈',       desc: '주변 적이 플레이어 대신 볼트를 노림',  max: 1, cost: [35] },
-  { id: 't_bash',  group: '볼트', cls: 'tank',   name: '방패 돌진',       desc: '돌진해서 적을 날려버림 (날아간 적이 다른 적과 충돌)', max: 1, cost: [50] },
-  { id: 't_guard', group: '볼트', cls: 'tank',   name: '방어 매트릭스',   desc: '받는 피해 -12%',                       max: 3, cost: [20, 40, 65] },
+  { id: 't_hp',    group: '볼트', cls: 'tank',   name: '강화 장갑',       desc: '볼트 최대 체력 +30',                       max: 5, cost: [12, 25, 40, 60, 85] },
+  { id: 't_taunt', group: '볼트', cls: 'tank',   name: '도발 모듈',       desc: '주변 적이 주인공 대신 볼트를 노림',  max: 1, cost: [35] },
+  { id: 't_bash',  group: '볼트', cls: 'tank',   name: '방패 돌진',       desc: '볼트가 돌진해서 적을 날려버림 (날아간 적이 다른 적과 충돌)', max: 1, cost: [50] },
+  { id: 't_guard', group: '볼트', cls: 'tank',   name: '방어 매트릭스',   desc: '볼트가 받는 피해 -12%',                       max: 3, cost: [20, 40, 65] },
   // 공격형 전용
-  { id: 'a_pow',   group: '볼트', cls: 'attack', name: '전투 프로세서',   desc: '공격력 +15%',                         max: 5, cost: [15, 30, 45, 65, 90] },
-  { id: 'a_speed', group: '볼트', cls: 'attack', name: '고속 구동기',     desc: '이동·공격 속도 +10%',                 max: 3, cost: [20, 40, 65] },
-  { id: 'a_spin',  group: '볼트', cls: 'attack', name: '회전 차기 모듈',  desc: '적 2명 이상 근접 시 광역 회전 차기',   max: 1, cost: [45] },
+  { id: 'a_pow',   group: '볼트', cls: 'attack', name: '전투 프로세서',   desc: '볼트 공격력 +15%',                         max: 5, cost: [15, 30, 45, 65, 90] },
+  { id: 'a_speed', group: '볼트', cls: 'attack', name: '고속 구동기',     desc: '볼트 이동·공격 속도 +10%',                 max: 3, cost: [20, 40, 65] },
+  { id: 'a_spin',  group: '볼트', cls: 'attack', name: '회전 차기 모듈',  desc: '볼트가 적 2명 이상 근접 시 광역 회전 차기',   max: 1, cost: [45] },
   { id: 'a_blade', group: '볼트', cls: 'attack', name: '절단 블레이드',   desc: '볼트의 공격도 적의 부위를 잘라냄',     max: 1, cost: [55] },
 ];
