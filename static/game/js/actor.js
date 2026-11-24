@@ -562,6 +562,7 @@ export class Actor {
     mat4.scale(m, this.facing, 1, 1);
     if (this.hopLift || this.lean) { mat4.translate(m, 0, this.hopLift * this.scale, 0); mat4.rotateX(m, this.lean); }
     if (this.twist) mat4.rotateY(m, this.twist);
+    if (this.flip) { const h = 0.9 * this.scale; mat4.translate(m, 0, h, 0); mat4.rotateZ(m, this.flip); mat4.translate(m, 0, -h, 0); }
     const ff = this.fall / (Math.PI / 2);
     mat4.translate(m, 0, 0.22 * this.scale * ff - this.lowered * this.scale, 0);
     mat4.rotateZ(m, this.fall);
@@ -592,6 +593,12 @@ export class Actor {
     if (this.invuln > 0 && this.team === 'hero' && Math.floor(this.game.time * 20) % 2) return;
     const root = this.rootMatrix(M);
     const tint = this.tint();
+    if (this.shieldUp()) {
+      // 맨홀 방패: 몸 앞쪽에
+      mat4.copy(WM, root);
+      mat4.translate(WM, 0.42, 0.95, 0.05);
+      r.drawMesh(getModel(r, 'manhole').mesh, WM, this.guardBroken > 0 ? WARN : tint);
+    }
     for (const k of PART_ORDER) {
       const mp = this.model.parts[k];
       if (!this.parts[k].alive) {
@@ -641,6 +648,8 @@ export class Actor {
     }
   }
 
+  shieldUp() { return this.blocks && this.parts.armB.alive && this.parts.handB.alive; }
+
   // 부위(와 그 아래 마디)를 떼어냄. h.mode: cut/knock/saw → 덩어리로 날아감, crush → 그 자리에서 박살
   severPart(k, dir, h = {}) {
     const p = this.parts[k];
@@ -668,6 +677,7 @@ export class Actor {
     }
     g.gibs.spurt(this, k, h.mode === 'saw' ? 0.9 : 0.5);
     if ((k === 'armF' || k === 'handF') && this.weapon) g.dropWeapon(this);
+    if ((k === 'armB' || k === 'handB') && this.blocks) g.dropShield(this);
   }
 
   // 부위 k의 현재 월드 행렬 + 표시할 메시 변형

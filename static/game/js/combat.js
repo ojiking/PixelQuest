@@ -88,6 +88,24 @@ export function applyHit(game, v, h) {
   if ((v.state === 'down' || v.state === 'getup' || v.state === 'ko') && !h.explosion && !(h.otg && v.state === 'down')) return false;
   let dmg = h.dmg;
   let back = false;
+  // 맨홀 방패병: 정면 공격을 막음 (위에서, 뒤에서, 폭발·화염은 통과). 강한 넘어뜨리기 공격은 가드 브레이크
+  if (v.shieldUp?.() && h.attacker && !h.explosion && !h.ignite && v.facing === -h.dir && v.guardBroken <= 0
+      && h.attacker.y < v.y + 0.7 && v.state !== 'down') {
+    if (h.knockdown && Math.abs(h.knock) >= 5) {
+      v.guardBroken = 1.2; dmg *= 0.5;
+      game.texts.add(v.x, v.y + 2.3 * v.scale, v.z, '가드 브레이크!', 'back');
+    } else {
+      game.texts.add(v.x, v.y + 2.2 * v.scale, v.z, '막음!', 'item');
+      game.debris.sparks(v.x + v.facing * 0.45, v.y + 1.0 * v.scale, v.z + 0.1, 0xe8f0ff, 8, 3);
+      game.sfx?.('clang');
+      v.cool = Math.min(v.cool, 0.25); // 막고 나서 바로 반격
+      if (h.attacker.team === 'hero') h.attacker.vx = -h.dir * 2.5;
+      return true;
+    }
+  }
+  // 플레이어가 맨홀 뚜껑을 들고 있으면 정면 피해 감소
+  const vw = v.weapon && WEAPONS[v.weapon.type];
+  if (vw?.guard && !h.explosion && v.facing === -h.dir) { dmg *= vw.guard; game.debris.sparks(v.x + v.facing * .4, v.y + 1, v.z + .1, 0xe8f0ff, 5, 2); }
   if (h.attacker && !h.explosion && v.facing === h.dir && v.state !== 'down') { dmg *= h.attacker.backMul ?? 1.5; back = true; }
   if (v.state === 'down' && h.otgWeak) dmg *= 0.6;          // 쓰러진 적 공격 (업그레이드)
   if (h.explosion && v.perk('blast')) dmg *= 0.4;
@@ -127,7 +145,7 @@ export function applyHit(game, v, h) {
 
   v.interrupt();
   if (v.carry?.kind === 'barrel') game.dropCarry(v);
-  v.facing = -h.dir;
+  if (!v.blocks) v.facing = -h.dir; // 방패병은 맞아도 바로 돌아서지 않음 (뒤잡기 유지)
   if (knockdown) {
     v.setState('down');
     v.downT = 0;

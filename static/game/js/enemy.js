@@ -19,6 +19,9 @@ export class Enemy extends Actor {
     this.phase2 = false;
     this.facing = x > game.player.x ? -1 : 1;
     this.goItem = null;
+    this.blocks = !!def.shield;      // 맨홀 방패로 정면을 막음
+    this.guardBroken = 0; this.turnT = 0; this.dodgeCd = 1; this.flip = 0; this.flipping = false;
+    if (def.katana) this.weapon = { type: 'katana', dur: 999 };
     // 처음부터 무기를 들고 나오는 적
     if (def.armed && Math.random() < def.armed.chance) {
       const t = def.armed.types[Math.floor(Math.random() * def.armed.types.length)];
@@ -72,7 +75,19 @@ export class Enemy extends Actor {
   update(dt) {
     const g = this.game;
     this.physics(dt);
+    if (this.flipping) { this.flip += dt * 13; if (this.grounded) { this.flipping = false; this.flip = 0; } }
     if (this.updateCommon(dt)) { g.releaseToken(this); this.pose(dt); return; }
+    // 닌자: 근처에서 플레이어가 공격하려 하면 재주넘기로 회피
+    if (this.type === 'ninja') {
+      this.dodgeCd -= dt;
+      const p = g.player;
+      // 플레이어의 공격 하나당 한 번만 회피 판정 (약 45%)
+      if (this.grounded && this.dodgeCd <= 0 && (this.state !== 'attack' || this.attackPhase() === 'startup') && p.attack && p.attack !== this.seenAtk && p.attack.t < p.attack.def.startup + 0.06
+          && Math.abs(p.x - this.x) < 2.4 && Math.abs(p.z - this.z) < 0.7 && p.facing === Math.sign(this.x - p.x)
+          && (this.seenAtk = p.attack) && Math.random() < 0.45) {
+        this.ninjaFlip(this.x < p.x ? -1 : 1); this.pose(dt); return;
+      }
+    }
     if (this.state === 'attack') {
       if (this.attack.def.dash && this.attackPhase() === 'startup') this.vx = 0;
       this.updateAttack(dt);
@@ -80,6 +95,7 @@ export class Enemy extends Actor {
       this.pose(dt); return;
     }
     this.cool -= dt; this.think -= dt;
+    if (this.guardBroken > 0) this.guardBroken -= dt;
     if (this.think <= 0) {
       this.think = rand(0.6, 1.0);
       this.target = g.pickTarget(this);
@@ -128,7 +144,7 @@ export class Enemy extends Actor {
   // 팔/다리가 없으면 쓸 수 있는 공격으로 대체
   doAttack(key) {
     // 무기를 들고 있으면 무기로 휘두름 (덩치의 내려찍기는 유지)
-    if (this.weapon && this.hasArms() && key !== 'eSlam' && key !== 'eCharge' && key !== 'eFuse') {
+    if (this.weapon && this.hasArms() && !['eSlam', 'eCharge', 'eFuse', 'eShuriken', 'eSlash', 'eBash'].includes(key)) {
       const horiz = ['bat', 'chain', 'machete', 'whip'].includes(this.weapon.type);
       key = horiz ? 'eWeaponH' : 'eWeapon';
     }
@@ -209,5 +225,47 @@ export class Enemy extends Actor {
     }
   }
 
-  onAttackEnd() { this.game.releaseToken(this); }
+  onAttackEnd(interrupted) {
+    this.game.releaseToken(this);
+    // 닌자는 베고 나서 자주 뒤로 재주넘기
+    if (!interrupted && this.type === 'ninja' && this.grounded && Math.random() < 0.55 && this.target) this.ninjaFlip(this.x < this.target.x ? -1 : 1);
+  }
+
+  // 뒤로 재주넘기 (잠깐 무적)
+  ninjaFlip(away) {
+    if (!this.grounded || this.legCount() < 2) return;
+    this.interrupt();
+    this.vy = 8.8; this.vx = away * 5.5; this.vz = 0; this.grounded = false;
+    this.flipping = true; this.flip = 0; this.invuln = 0.3; this.dodgeCd = 1.6;
+    this.state = 'jump';
+    this.game.sfx?.('swing');
+  }
+
+  // 맨홀 방패병: 천천히 다가와 방패로 막고, 가까우면 방패 밀치기. 뒤돌기가 느려서 뒤를 잡을 수 있음
+  shield(dt, t) {
+    const g = this.game;
+    const side = this.x < t.x ? -1 : 1;
+    const want = t.x > this.x ? 1 : -1;
+    if (want !== this.facing) { this.turnT += dt; if (this.turnT > 0.75) { this.facing = want; this.turnT = 0; } } else this.turnT = 0;
+    const tok = g.requestToken(this, t);
+    const dist = tok ? 1.0 * this.scale : this.wait;
+    this.moveToward(tok ? t.x + side * dist : this.inScreen(t.x + side * dist, 0.6), tok ? t.z : t.z + this.slot, this.def.speed * (tok ? 1 : .7));
+    const dx = Math.abs(t.x - this.x), dz = Math.abs(t.z - this.z);
+    if (tok && dx < 1.35 && dz < 0.4 && this.cool <= 0 && this.facing === want) {
+      this.doAttack(Math.random() < 0.6 ? 'eBash' : 'ePunch');
+      this.cool = rand(1.1, 1.8);
+    }
+  }
+
+  // 닌자: 중거리에선 표창, 가까우면 베기, 수시로 재주넘기
+  ninja(dt, t) {
+    const side = this.x < t.x ? -1 : 1;
+    const dx = Math.abs(t.x - this.x), dz = Math.abs(t.z - this.z);
+    this.face(t);
+    if (dx < 1.5 && dz < 0.45 && this.cool <= 0) { this.doAttack('eSlash'); this.cool = rand(0.9, 1.4); return; }
+    if (dx < 1.6 && this.dodgeCd <= 0 && Math.random() < dt * 1.2) { this.ninjaFlip(side); return; }
+    if (dx > 3 && dx < 8.5 && dz < 0.5 && this.cool <= 0 && this.onScreen(1)) { this.doAttack('eShuriken'); this.cool = rand(1.3, 2.0); return; }
+    const want = this.cool < 0.35 ? 1.1 : 4.6; // 벨 준비가 되면 순식간에 파고듦
+    this.moveToward(this.inScreen(t.x + side * want, 1.0), t.z, this.def.speed * (this.cool < 0.35 ? 1.3 : 1));
+  }
 }

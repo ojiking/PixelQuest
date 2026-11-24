@@ -80,6 +80,10 @@ export const ATTACKS = {
   // 강철 체인 마무리: 제자리에서 돌며 주변을 휩쓸기
   chainSpin: { startup: .16, active: .42, recovery: .35, range: [0, 1.0], depth: 1.1, dmg: 1.4, knock: 8, zone: 'mid', hitstop: .1, anim: 'wspin', weapon: true, aoe: true, knockdown: true, finisher: true, shake: .2 },
   // 적이 무기를 휘두를 때 (예고 동작이 더 김)
+  // 방패병·닌자
+  eBash:     { startup: .40, active: .18, recovery: .55, range: [-.1, 1.1], depth: .55, dmg: 9, knock: 5.5, zone: 'mid', hitstop: .08, anim: 'dashAtk', knockdown: true, telegraph: true, dash: 6.5 },
+  eSlash:    { startup: .18, active: .08, recovery: .28, range: [.1, 1.0], depth: .5, dmg: .75, knock: 2, zone: 'high', hitstop: .06, anim: 'hslash', weapon: true, needArms: true },
+  eShuriken: { startup: .22, active: .05, recovery: .30, anim: 'throw', projectile: 'shuriken', dmg: 6, needArms: true },
   eWeapon:  { startup: .42, active: .10, recovery: .50, range: [.1, 1.0], depth: .5,  dmg: .7, knock: 2.5, zone: 'high', hitstop: .07, anim: 'swing',  weapon: true, needArms: true },
   eWeaponH: { startup: .42, active: .12, recovery: .50, range: [.1, 1.0], depth: .55, dmg: .7, knock: 3,   zone: 'mid',  hitstop: .07, anim: 'hswing', weapon: true, needArms: true },
   sledge:  { startup: .42, active: .10, recovery: .50, range: [.1, 1.0], depth: .7,  dmg: 1.0, knock: 5,   zone: 'high', hitstop: .15, anim: 'slam', weapon: true, knockdown: true, finisher: true, shake: .38,
@@ -114,14 +118,16 @@ export const ENEMIES = {
   charger: { name: '돌격 헬멧',    model: 'charger', hp: 60,  speed: 1.7,  scale: 1.08, ai: 'charger', attacks: ['eCharge'],                   scrap: [2, 3] },
   thrower: { name: '벽돌 배달부',  model: 'thrower', hp: 32,  speed: 2.0,  scale: 1,    ai: 'kiter',   attacks: ['eThrow'],                    scrap: [1, 3] },
   brute:   { name: '철거 덩치',    model: 'brute',   hp: 130, speed: 1.35, scale: 1.3,  ai: 'brawler', attacks: ['eSlam', 'ePunch'],           scrap: [3, 5], poise: 14, pickup: true, armed: { chance: .35, types: ['sledge', 'pipe', 'axe', 'chain', 'flail'] } },
+  shield:  { name: '맨홀 방패병',  model: 'shielder', hp: 70,  speed: 1.6,  scale: 1.05, ai: 'shield',  attacks: ['eBash', 'ePunch'],           scrap: [2, 4], shield: true },
+  ninja:   { name: '그림자 닌자',  model: 'ninja',    hp: 26,  speed: 3.6,  scale: .95,  ai: 'ninja',   attacks: ['eSlash', 'eShuriken'],      scrap: [2, 3], katana: true },
   bomber:  { name: '폭죽 꼬마',    model: 'bomber',  hp: 14,  speed: 3.7,  scale: .72,  ai: 'rusher',  attacks: ['eFuse'],                     scrap: [1, 1] },
   boss:    { name: '철거반장 굴삭', model: 'boss',    hp: 520, speed: 1.6,  scale: 1.55, ai: 'boss',    attacks: ['eSlam', 'eCharge', 'eThrow'], scrap: [30, 30], poise: 30, boss: true },
 };
 
 // 스테이지별 적 등장 가중치
 export const SPAWN_POOLS = [
-  { grunt: 5, thrower: 2, bomber: 1.2, charger: 1 },
-  { grunt: 4, thrower: 2, bomber: 1.5, charger: 2, brute: 1.5 },
+  { grunt: 5, thrower: 2, bomber: 1.2, charger: 1, shield: .8, ninja: .7 },
+  { grunt: 4, thrower: 2, bomber: 1.5, charger: 2, brute: 1.5, shield: 1.4, ninja: 1.3 },
 ];
 
 // ---------------- 무기 ----------------
@@ -143,6 +149,9 @@ export const WEAPONS = {
   flamer:   { name: '화염 스프레이', dmg: 3,  reach: 1.6, dur: 45, sever: .2,  knock: 1,   throwDmg: 10, mode: 'burn',  weight: 1, combo: ['flame'], fuel: true, noPickup: true },
   // 샷건: 6발. 한 방에 넓게 산탄, 처치한 적은 산산조각
   shotgun:  { name: '샷건',          dmg: 65, reach: 4.2, dur: 6,  sever: 3.5, knock: 1,   throwDmg: 12, mode: 'blast', fling: 3, weight: .9, combo: ['shotgun'], ammo: true, noPickup: true },
+  // 적에게서만 얻는 무기 (상자에서 안 나옴: weight 0)
+  katana:   { name: '닌자도',        dmg: 14, reach: .6,  dur: 14, sever: 2.8, knock: .8,  throwDmg: 16, mode: 'cut',   weight: 0, combo: ['slash', 'slash', 'slashF'] },
+  manhole:  { name: '맨홀 뚜껑',     dmg: 16, reach: .25, dur: 10, sever: .6,  knock: 1.6, throwDmg: 28, mode: 'knock', weight: 0, combo: ['swing', 'smash'], guard: .4 },
   nunchaku: { name: '쌍절곤',        dmg: 8,  reach: .6,  dur: 22, sever: .8,  knock: 1,   throwDmg: 10, mode: 'knock', weight: 2, combo: ['nun1', 'nun2', 'nun1', 'nunF'] },
   flail:    { name: '철퇴',          dmg: 21, reach: .95, dur: 12, sever: 1.8, knock: 1.3, throwDmg: 22, mode: 'crush', slow: 1.2, weight: 1.5, combo: ['swing', 'swing', 'smash'] },
   whip:     { name: '채찍',          dmg: 7,  reach: 1.75, dur: 18, sever: 1.3, knock: .6,  throwDmg: 6,  mode: 'cut',   zone: 'arms', weight: 2, combo: ['lash', 'lash', 'lashPull'] },

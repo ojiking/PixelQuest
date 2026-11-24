@@ -80,6 +80,7 @@ const SOUNDS = {
   fall: t => { tone(t, .9, { wave: 'triangle', f0: 800, f1: 140, peak: .2, attack: .02 }); },
   death: t => { SOUNDS.boom(t); SOUNDS.splat(t + .05); tone(t + .1, 1.2, { wave: 'sawtooth', f0: 220, f1: 40, peak: .15 }); },
   ui: t => tone(t, .05, { wave: 'square', f0: 880, peak: .06 }),
+  clang: t => { tone(t, .25, { wave: 'square', f0: 1300, f1: 900, peak: .12 }); tone(t, .3, { wave: 'triangle', f0: 2600, f1: 2200, peak: .08 }); noise(t, .05, { type: 'highpass', f0: 3000, peak: .3 }); },
   shot: t => { noise(t, .4, { type: 'lowpass', f0: 4000, f1: 150, peak: 1, attack: .002 }); tone(t, .3, { f0: 140, f1: 35, peak: .9 }); noise(t + .28, .03, { f0: 2500, q: 3, peak: .3 }); noise(t + .36, .03, { f0: 1800, q: 3, peak: .3 }); },
   flame: t => noise(t, .14, { f0: 700, f1: 400, q: .6, peak: .2, attack: .01 }),
   hurt: t => { tone(t, .12, { wave: 'square', f0: 300, f1: 120, peak: .12 }); noise(t, .06, { f0: 1200, peak: .25 }); },

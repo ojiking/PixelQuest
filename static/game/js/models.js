@@ -56,6 +56,14 @@ const HEADS = {
       g.fill(x, s - 1, cz - 1, x, top, cz, p.hair);
     }
   },
+  // 닌자 두건: 눈만 드러나고 뒤로 빨간 띠
+  ninja(g, s, p) {
+    g.fill(0, 0, 1, s - 1, s - 1, s, p.cloth);
+    g.fill(s - 1, 3, 2, s - 1, 3, s - 1, p.skin);
+    g.set(s - 1, 3, 2, 0x111111); g.set(s - 1, 3, s - 1, 0x111111);
+    for (let z = 1; z <= s; z++) { g.set(0, 4, z, p.band); g.set(s - 1, 4, z, p.band); }
+    g.set(0, 3, 0, p.band); g.set(0, 2, 0, p.band); // 뒤로 늘어진 띠
+  },
   cap(g, s, p) {
     HEADS.hair(g, s, p);
     g.fill(0, s - 1, 1, s - 1, s, s, p.cap);
@@ -135,6 +143,12 @@ const TORSOS = {
     g.fill(bx, th - 1, td - 2, bx + tw - 1, th - 1, td - 1, p.skin);
     g.fill(bx + tw, 1, 1, bx + tw, 4, td - 2, p.shirt);          // 배
     g.fill(bx, 0, 0, bx + tw - 1, 0, td - 1, 0x3a2a1a);
+  },
+  ninja(g, o, p) {
+    const { bx, tw, th, td } = o;
+    g.fill(bx, 0, 0, bx + tw - 1, th - 1, td - 1, p.shirt);
+    g.fill(bx, 1, 0, bx + tw - 1, 1, td - 1, p.band); // 허리띠
+    for (let y = 2; y < th; y++) g.set(bx + tw - 1, y, Math.min(td - 1, 1 + y - 2), 0x333338); // 앞 대각선 끈
   },
   stripe(g, o, p) {
     const { bx, tw, th, td } = o;
@@ -291,6 +305,14 @@ const BUILDERS = {
     head: 'mohawk', torso: 'tank', tw: 5, td: 9, fx: 1, th: 8, lw: 4, ld: 4, aw: 4, ad: 4, ah: 8, sleeve: 0,
     pal: { skin: 0xc68642, hair: 0x1c1410, shirt: 0xdedede, pants: 0x2f3f5f, shoes: 0x1a1a1a },
   }),
+  shielder: r => humanoid(r, {
+    head: 'cap', torso: 'leather', tw: 5, sleeve: 4,
+    pal: { skin: 0xd8a070, hair: 0x2a1a10, cap: 0x2f4a6a, shirt: 0x3a5a3a, metal: 0x8a8f96, pants: 0x2a2f3a, shoes: 0x151515, glove: 0x6a4a2a },
+  }),
+  ninja: r => humanoid(r, {
+    head: 'ninja', torso: 'ninja', sleeve: 7, tw: 3, td: 7,
+    pal: { skin: 0xe0b080, cloth: 0x16161c, band: 0xb3161d, shirt: 0x16161c, sleeve: 0x16161c, pants: 0x16161c, shoes: 0x0a0a0c, glove: 0x16161c },
+  }),
   bomber: r => humanoid(r, {
     head: 'bomb', torso: 'stripe', sleeve: 3,
     pal: { skin: 0xf6d0a0, helm: 0x2a2a2a, shirt: 0xd94a2a, tee: 0xf2f2f2, pants: 0x3a3a5a, shoes: 0xd94a2a },
@@ -370,6 +392,29 @@ const BUILDERS = {
     g.fill(4, 2, 1, 11, 2, 2, 0x5d636b); g.fill(4, 1, 1, 5, 1, 2, 0x2a2a2a);
     g.fill(12, 2, 1, 13, 3, 2, 0x2a2a2a); g.set(13, 3, 1, 0xff8a1f);
   }),
+  manhole: r => single(r, 2, 10, 10, [1, 5, 5], g => { // 맨홀 뚜껑 방패 (앞을 향한 원판)
+    for (let y = 0; y < 10; y++) for (let z = 0; z < 10; z++) {
+      const d = Math.hypot(y - 4.5, z - 4.5);
+      if (d > 5) continue;
+      const c = d > 4 ? 0x2c3035 : (y + z) % 3 === 0 ? 0x5d636b : 0x3e4349;
+      g.set(0, y, z, c); g.set(1, y, z, d > 4 ? 0x2c3035 : 0x34383d);
+    }
+  }),
+  w_manhole: r => single(r, 10, 2, 10, [0, 1, 5], g => { // 들고 휘두를 때: 원판을 앞으로
+    for (let x = 0; x < 10; x++) for (let z = 0; z < 10; z++) {
+      const d = Math.hypot(x - 4.5, z - 4.5);
+      if (d > 5) continue;
+      g.set(x, 0, z, d > 4 ? 0x2c3035 : (x + z) % 3 === 0 ? 0x5d636b : 0x3e4349); g.set(x, 1, z, 0x34383d);
+    }
+  }),
+  w_katana: r => single(r, 17, 2, 1, [1.5, 1, 0.5], g => {
+    for (let x = 0; x < 4; x++) g.fill(x, 0, 0, x, 1, 0, x % 2 ? 0x1a1a1a : 0x8a1a1a);
+    g.fill(4, 0, 0, 4, 1, 0, 0xc9a20f);
+    g.fill(5, 1, 0, 16, 1, 0, 0xd8dde3); g.fill(5, 0, 0, 15, 0, 0, 0xf4f6f8);
+  }),
+  shuriken: r => single(r, 5, 1, 5, [2.5, 0.5, 2.5], g => {
+    g.fill(2, 0, 0, 2, 0, 4, 0xb8bcc2); g.fill(0, 0, 2, 4, 0, 2, 0xb8bcc2); g.set(2, 0, 2, 0x4a4e55);
+  }),
   w_nunchaku_handle: r => single(r, 4, 2, 2, [0, 1, 1], g => { g.fill(0, 0, 0, 3, 1, 1, 0x8a5a2b); g.fill(0, 0, 0, 0, 1, 1, 0x1a1a1a); g.fill(3, 0, 0, 3, 1, 1, 0x1a1a1a); }),
   w_nunchaku: r => single(r, 10, 2, 5, [0, 1, 1], g => { // 쌍절곤: 막대 두 개 + 짧은 사슬
     g.fill(0, 0, 0, 3, 1, 1, 0x8a5a2b); g.fill(0, 0, 3, 3, 1, 4, 0x8a5a2b);
@@ -426,5 +471,5 @@ const BUILDERS = {
 
 export const WEAPON_MODEL = {
   pipe: 'w_pipe', machete: 'w_machete', block: 'w_block', golf: 'w_golf', chainsaw: 'w_chainsaw',
-  axe: 'w_axe', bat: 'w_bat', sledge: 'w_sledge', chain: 'w_chain', pickaxe: 'w_pickaxe', whip: 'w_whip', flail: 'w_flail', nunchaku: 'w_nunchaku', shotgun: 'w_shotgun', flamer: 'w_flamer',
+  axe: 'w_axe', bat: 'w_bat', sledge: 'w_sledge', chain: 'w_chain', pickaxe: 'w_pickaxe', whip: 'w_whip', flail: 'w_flail', nunchaku: 'w_nunchaku', shotgun: 'w_shotgun', flamer: 'w_flamer', katana: 'w_katana', manhole: 'w_manhole',
 };

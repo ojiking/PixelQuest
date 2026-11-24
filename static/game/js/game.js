@@ -335,6 +335,7 @@ export class Game {
     if (h.knock >= 7.5) v.flung = { owner: h.attacker, hit: new Set() };
     v.facing = -h.dir;
     if (v.weapon) this.dropWeapon(v);
+    if (v.blocks) this.dropShield(v);
     if (v.goItem) { v.goItem.claimed = null; v.goItem = null; }
     this.releaseToken(v);
     this.run.kills++;
@@ -581,7 +582,7 @@ export class Game {
 
   dropWeapon(a) {
     if (!a.weapon) return;
-    this.items.push(new Item('weapon', a.weapon.type, a.x, a.z, { y: 0.8, vy: 3, vx: -a.facing * 1.5, dur: a.weapon.dur }));
+    this.items.push(new Item('weapon', a.weapon.type, a.x, a.z, { y: 0.8, vy: 3, vx: -a.facing * 1.5, dur: Math.min(a.weapon.dur, WEAPONS[a.weapon.type].dur) }));
     a.weapon = null;
   }
 
@@ -628,6 +629,15 @@ export class Game {
     const vox = getModel(this.r, WEAPON_MODEL[w.type]).voxels;
     mat4.identity(M); mat4.translate(M, a.x - a.facing * .4, 1.0, a.z);
     this.debris.burst(vox, M, { frac: .7, size: .1, spread: 1.6, impulse: [-a.facing * 2, 2, 0] });
+  }
+
+  // 방패병의 맨홀 뚜껑이 떨어짐 → 플레이어가 주워 쓸 수 있음
+  dropShield(v) {
+    if (!v.blocks) return;
+    v.blocks = false;
+    this.items.push(new Item('weapon', 'manhole', v.x, v.z, { y: 1, vy: 4, vx: -v.facing * 1.5 }));
+    this.texts.add(v.x, v.y + 2.2 * v.scale, v.z, '방패 떨어짐!', 'sever');
+    this.sfx?.('clang');
   }
 
   // 들고 있던 것을 발밑에 내려놓음 (드럼통은 다시 오브젝트로)
@@ -677,7 +687,7 @@ export class Game {
     if (o.owner === this.player) dmg *= this.stats.player.throwMul;
     this.projectiles.push({
       ...o, dmg,
-      vx: o.dir * (o.kind === 'weapon' ? 11 : o.kind === 'barrel' ? 9 : 7.5), vy: o.kind === 'brick' ? 2.5 : o.kind === 'barrel' ? 1.5 : 1.2,
+      vx: o.dir * (o.kind === 'weapon' ? 11 : o.kind === 'barrel' ? 9 : o.kind === 'shuriken' ? 13 : 7.5), vy: o.kind === 'brick' ? 2.5 : o.kind === 'barrel' ? 1.5 : o.kind === 'shuriken' ? 0 : 1.2,
       spin: 0, life: 2.5, dead: false,
     });
   }
@@ -685,7 +695,7 @@ export class Game {
   updateProjectiles(dt) {
     for (const pr of this.projectiles) {
       pr.life -= dt;
-      pr.vy -= (pr.kind === 'barrel' ? 14 : 7) * dt;
+      pr.vy -= (pr.kind === 'barrel' ? 14 : pr.kind === 'shuriken' ? 0 : 7) * dt;
       pr.x += pr.vx * dt; pr.y += pr.vy * dt;
       pr.spin += dt * 16;
       if (pr.life <= 0) { pr.dead = true; continue; }
@@ -697,7 +707,7 @@ export class Game {
         if (pr.kind === 'barrel') { this.projectileEnd(pr); break; }
         const isW = pr.kind === 'weapon';
         applyHit(this, a, {
-          attacker: pr.owner, dmg: pr.dmg * (pr.owner?.power ?? 1), knock: isW ? 5 : 2.5, dir: sign(pr.vx), zone: 'high',
+          attacker: pr.owner, dmg: pr.dmg * (pr.owner?.power ?? 1), knock: isW ? 5 : pr.kind === 'shuriken' ? 1.2 : 2.5, dir: sign(pr.vx), zone: 'high', hitstun: pr.kind === 'shuriken' ? .18 : undefined,
           knockdown: isW, sever: isW ? WEAPONS[pr.weaponType].sever : 0.6, hitstop: .06, shake: .08,
         });
         this.projectileEnd(pr);
@@ -727,7 +737,7 @@ export class Game {
     if (pr.kind === 'weapon' && pr.dur > 1) {
       this.items.push(new Item('weapon', pr.weaponType, pr.x, pr.z, { y: Math.max(0.2, pr.y), vy: 3, vx: -sign(pr.vx) * 1.5, dur: pr.dur - 1 }));
     } else {
-      const key = pr.kind === 'weapon' ? WEAPON_MODEL[pr.weaponType] : pr.kind === 'barrel' ? 'barrel' : 'brick';
+      const key = pr.kind === 'weapon' ? WEAPON_MODEL[pr.weaponType] : pr.kind === 'barrel' ? 'barrel' : pr.kind === 'shuriken' ? 'shuriken' : 'brick';
       mat4.identity(M); mat4.translate(M, pr.x, Math.max(0.1, pr.y), pr.z);
       this.debris.burst(getModel(this.r, key).voxels, M, { frac: 0.9, size: 0.1, spread: 2 });
     }
@@ -764,7 +774,7 @@ export class Game {
     for (const a of this.actors) a.draw(r);
     for (const pr of this.projectiles) {
       mat4.identity(M); mat4.translate(M, pr.x, pr.y, pr.z); mat4.rotateZ(M, -pr.spin * sign(pr.vx));
-      const key = pr.kind === 'weapon' ? WEAPON_MODEL[pr.weaponType] : pr.kind === 'barrel' ? 'barrel' : 'brick';
+      const key = pr.kind === 'weapon' ? WEAPON_MODEL[pr.weaponType] : pr.kind === 'barrel' ? 'barrel' : pr.kind === 'shuriken' ? 'shuriken' : 'brick';
       r.drawMesh(getModel(r, key).mesh, M);
     }
     this.gibs.draw(r);
