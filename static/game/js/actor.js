@@ -1,6 +1,6 @@
 // 모든 캐릭터(플레이어/동료/적)의 공통 기반: 물리, 상태, 공격 진행, 절차적 애니메이션, 부위 렌더링
 import { mat4, clamp } from './math.js';
-import { GRAVITY, LANE, ATTACKS, WEAPONS } from './config.js';
+import { GRAVITY, LANE, ATTACKS, WEAPONS, LIMB_WEAPONS } from './config.js';
 import { getModel, WEAPON_MODEL } from './models.js';
 import { tryHits } from './combat.js';
 
@@ -19,6 +19,7 @@ export class Actor {
     this.modelKey = modelKey;
     this.model = getModel(game.r, modelKey);
     this.x = o.x ?? 0; this.y = 0; this.z = o.z ?? 0;
+    this.grounded = true; this.floor = 0;
     this.vx = 0; this.vy = 0; this.vz = 0;
     this.facing = 1;
     this.scale = o.scale ?? 1;
@@ -53,24 +54,54 @@ export class Actor {
   // 한 다리: 깡충 뛰는 순간에만 앞으로 나감 (절뚝거림)
   hopPulse() { return Math.max(0, Math.sin(this.walkPhase)); }
   perk() { return false; }
+  // 지금 휘두르는 무기 정의 (무기 > 집어 든 팔·다리·머리)
+  heldDef() {
+    if (this.weapon) return WEAPONS[this.weapon.type];
+    if (this.carry?.limb) return LIMB_WEAPONS[this.carry.limb];
+    return null;
+  }
 
+  // AI 이동: 낭떠러지·벽을 피하고, 건너편 목표면 점프해서 넘어감
   moveToward(tx, tz, speed) {
+    if (!this.grounded) return false; // 공중에선 관성 유지
     const dx = tx - this.x, dz = tz - this.z;
     const d = Math.hypot(dx, dz * 1.3);
     if (d < 0.1) { this.vx = 0; this.vz = 0; return true; }
     let sp = speed * this.legFactor();
     if (this.legCount() === 1) sp *= 0.15 + 1.25 * this.hopPulse();
-    this.vx = dx / d * sp;
-    this.vz = dz / d * sp * 0.8;
+    let vx = dx / d * sp, vz = dz / d * sp * 0.8;
+    const g = this.game, look = 0.5;
+    const ok = (x, z) => { const h = g.floorAt(x, z); return h > -50 && h <= this.y + 0.4; };
+    const ux = Math.abs(dx) > 0.05 ? Math.sign(dx) : 0, uz = Math.abs(dz) > 0.05 ? Math.sign(dz) : 0;
+    if (!ok(this.x + ux * look, this.z + uz * look * 0.8)) {
+      // 앞이 틈/벽: 건너편에 설 곳이 있으면 점프
+      if (ux && Math.abs(dx) > 1.2 && this.legCount() > 0) {
+        for (const far of [2.4, 3.0]) {
+          const lx = this.x + ux * far, lz = this.z;
+          const h = g.floorAt(lx, lz);
+          if (h > -50 && h <= this.y + 1.1 && ok(lx, lz)) {
+            this.vy = 8.8; this.grounded = false;
+            this.vx = ux * Math.max(sp, 3.7); this.vz = 0;
+            return false;
+          }
+        }
+      }
+      // 미끄러지듯 우회: 한 축만 움직여 봄
+      if (uz && ok(this.x, this.z + uz * look * 0.8)) vx = 0;
+      else if (ux && ok(this.x + ux * look, this.z)) vz = 0;
+      else { vx = 0; vz = 0; }
+    }
+    this.vx = vx; this.vz = vz;
     return false;
   }
 
   // ------------------------------------------------ 공격
   startAttack(key) {
     const def = ATTACKS[key];
+    if (this.team === 'hero' && (def.weapon || def.anim === 'kick' || def.anim === 'flykick' || def.anim === 'dashAtk')) this.game.sfx?.('swing');
     this.attack = { key, def, t: 0, hit: new Set(), activated: false, ended: false, spawned: false };
     this.setState('attack');
-    if (!def.air && this.y <= 0) { this.vx = 0; this.vz = 0; }
+    if (!def.air && this.grounded) { this.vx = 0; this.vz = 0; }
   }
 
   attackPhase() {
@@ -86,7 +117,8 @@ export class Actor {
     if (!a) return;
     const d = a.def;
     let spd = this.atkSpeed;
-    if (d.weapon && this.weapon && WEAPONS[this.weapon.type].slow) spd /= WEAPONS[this.weapon.type].slow;
+    const hd = d.weapon ? this.heldDef() : null;
+    if (hd?.slow) spd /= hd.slow;
     a.t += dt * spd;
     const s = d.startup, e = s + d.active;
     if (a.t >= s && (a.t < e || !a.activated)) {
@@ -136,6 +168,7 @@ export class Actor {
       if (!a.spawned) { a.spawned = true; g.explode(this.x, this.z, d.explode.radius, d.explode.dmg, this); }
       return;
     }
+    if (d.stomp) { this.vy = Math.min(this.vy, -15); return; } // 착지할 때 판정
     if (d.dash) this.vx = this.facing * d.dash * this.legFactor();
     tryHits(g, this, a);
     if (d.shock && !a.shocked) { a.shocked = true; g.groundShock(this, a); }
@@ -145,7 +178,7 @@ export class Actor {
     this.attack = null;
     this.armorAcc = 0;
     this.spin = 0;
-    this.setState(this.y > 0 ? 'jump' : 'idle');
+    this.setState(this.grounded ? 'idle' : 'jump');
     this.onAttackEnd?.();
   }
 
@@ -159,27 +192,48 @@ export class Actor {
     this.st += dt;
     if (this.flash > 0) this.flash -= dt;
     if (this.invuln > 0) this.invuln -= dt;
-    this.x += this.vx * dt;
-    this.z += this.vz * dt;
-    if (this.y > 0 || this.vy > 0) {
+    const g = this.game;
+    // 좌우 이동 (벽에 막힘. 날아가던 몸은 벽에 튕김)
+    const nx = this.x + this.vx * dt;
+    if (g.wallAt(nx, this.z, this.y)) {
+      if (this.state === 'down' || this.state === 'dying') {
+        if (this.flung && Math.abs(this.vx) > 5) g.wallSlam(this);
+        this.vx *= -0.3;
+      } else this.vx = 0;
+    } else this.x = nx;
+    const nz = clamp(this.z + this.vz * dt, LANE.zMin, LANE.zMax);
+    if (g.wallAt(this.x, nz, this.y)) this.vz = 0; else this.z = nz;
+    // 바닥 (낭떠러지면 끝없이 떨어짐)
+    const fl = g.floorAt(this.x, this.z);
+    this.floor = fl;
+    if (this.y > fl + 0.001 || this.vy > 0) {
       this.vy -= GRAVITY * dt;
       this.y += this.vy * dt;
-      if (this.y <= 0) {
+      this.grounded = false;
+      if (this.y <= fl && this.vy <= 0) {
         const impact = this.vy;
-        this.y = 0; this.vy = 0;
+        this.y = fl; this.vy = 0; this.grounded = true;
         this.onLand(impact);
       }
-    }
-    this.z = clamp(this.z, LANE.zMin, LANE.zMax);
-    const sliding = this.state === 'hurt' || ((this.state === 'down' || this.state === 'dying' || this.state === 'ko') && this.y <= 0);
+    } else { this.y = fl; this.grounded = true; }
+    if (this.y < -3.5 && !this.fellOut) { this.fellOut = true; g.fallOut(this); }
+    const sliding = this.state === 'hurt' || ((this.state === 'down' || this.state === 'dying' || this.state === 'ko') && this.grounded);
     if (sliding) { const f = Math.pow(0.004, dt); this.vx *= f; this.vz *= f; }
     this.lowered = this.fall < 0.2 ? this.model.legLen - Math.max(this.sideLegLen('F'), this.sideLegLen('B')) : 0;
   }
 
   onLand(impact) {
     const g = this.game;
-    if (this.state === 'jump') this.setState('idle');
-    else if (this.state === 'attack' && this.attack?.air) this.endAttack();
+    if (this.state === 'jump') { this.setState('idle'); if (impact < -6) g.sfx?.('land'); }
+    else if (this.state === 'attack' && this.attack?.def.stomp) {
+      const a = this.attack;
+      tryHits(g, this, a);
+      g.stompImpact(this);
+      a.t = a.def.startup + a.def.active; a.air = false; this.vx = 0;
+    }
+    else if (this.state === 'attack' && this.attack?.air) {
+      if (this.attack.def.momentum) this.attack.air = false; else this.endAttack();
+    }
     else if ((this.state === 'down' || this.state === 'dying' || this.state === 'ko') && impact < -4) {
       g.debris.puff(this.x, 0.1, this.z, [0xbdb6a6, 0x9c958a], 8, 1.5, .14, .45, -0.2);
       g.shake(0.06);
@@ -193,14 +247,14 @@ export class Actor {
         if (this.st >= this.hitstun) this.setState('idle');
         return true;
       case 'down':
-        if (this.y <= 0) this.downT += dt;
+        if (this.grounded) this.downT += dt;
         if (this.downT > 0.8) this.setState('getup');
         return true;
       case 'getup':
         if (this.st > 0.35) { this.setState('idle'); this.invuln = this.getupInvuln ?? 0.4; }
         return true;
       case 'dying':
-        if (this.y <= 0 && this.st > 0.55) this.shatter();
+        if (this.grounded && this.st > 0.55) this.shatter();
         return true;
     }
     return false;
@@ -241,6 +295,9 @@ export class Actor {
       case 'hurt': T.torso = .3; T.head = .3; T.armF = -.6; T.armB = -.4; T.handF = .6; T.handB = .6; T.shinF = -.3; rate = 30; break;
       case 'down': case 'dying': case 'ko': fallT = Math.PI / 2; T.armF = 2.6; T.armB = 2.4; T.handF = .2; T.handB = .5; T.legF = .2; T.shinF = -.4; break;
       case 'getup': fallT = Math.PI / 2 * (1 - Math.min(1, this.st / .35)); T.legF = .8; T.shinF = -1.4; break;
+      case 'dash':
+        T.torso = -.5; T.armF = -.9; T.armB = -.7; T.handF = .4; T.handB = .4;
+        T.legF = .9; T.shinF = -.3; T.legB = -.6; T.shinB = -1.2; T.head = .2; break;
       case 'repair': T.armF = 1.3 + Math.sin(t * 20) * .3; T.armB = 1.3 - Math.sin(t * 20) * .3; T.handF = .8; T.handB = .8; T.torso = -.4; break;
       case 'attack': this.attackPose(T); rate = 35; break;
     }
@@ -297,6 +354,12 @@ export class Actor {
         T.torso = -.15; T.twist = Math.sin(t * 50) * .03;
         T.legF = .4; T.legB = -.35; T.shinB = -.25; break;
       }
+      case 'dashAtk': // 어깨 박치기 + 무릎
+        T.torso = -.6; T.armF = 1.2; T.handF = 1.5; T.armB = -.6; T.handB = .8;
+        T.legF = 1.1; T.shinF = -1.1; T.legB = -.5; T.shinB = -.4; T.twist = -.35; T.head = .25; break;
+      case 'stomp': // 두 발로 내려찍기
+        T.legF = S ? .9 : .15; T.shinF = S ? -1.4 : -.1; T.legB = S ? .7 : -.15; T.shinB = S ? -1.4 : -.1;
+        T.armF = 2.4; T.armB = 2.2; T.torso = .15; break;
       case 'throw':
         T.armF = S ? 2.9 : 1.2; T.handF = S ? .8 : 0; T.torso = S ? .25 : -.2; T.armB = .4; break;
       case 'charge':
@@ -344,6 +407,7 @@ export class Actor {
   }
 
   draw(r) {
+    if (this.hidden) return;
     if (this.invuln > 0 && this.team === 'hero' && Math.floor(this.game.time * 20) % 2) return;
     const root = this.rootMatrix(M);
     const tint = this.tint();
@@ -368,11 +432,24 @@ export class Actor {
       if (k === 'handF' && this.carry) {
         const c = this.carry;
         mat4.copy(WM, PM);
-        mat4.translate(WM, 0.05, -this.model.handLen - 0.1, 0);
-        mat4.translate(WM, -c.c0[0], -c.c0[1], -c.c0[2]);
-        for (const mem of c.members) {
-          mat4.multiply(R2, WM, mem.M);
-          r.drawMesh(mem.mesh, R2, tint);
+        if (c.limb) {
+          // 팔·다리·머리: 관절 쪽을 쥐고 무기처럼 뻗음
+          if (!c.local) {
+            const M0 = c.members[0].M, s = Math.hypot(M0[0], M0[1], M0[2]);
+            const inv = mat4.invert(mat4.create(), M0);
+            c.local = c.members.map(m => { const L = mat4.multiply(mat4.create(), inv, m.M); return mat4.multiply(L, mat4.scale(mat4.create(), s, s, s), L); });
+          }
+          mat4.translate(WM, 0, -this.model.handLen, 0);
+          mat4.rotateZ(WM, this.grip);
+          mat4.rotateZ(WM, c.limb === 'head' ? -Math.PI / 2 : Math.PI / 2);
+          c.lastM = c.members.map((mem, i) => { const out = mat4.multiply(mat4.create(), WM, c.local[i]); r.drawMesh(mem.mesh, out, tint); return out; });
+        } else {
+          mat4.translate(WM, 0.05, -this.model.handLen - 0.1, 0);
+          mat4.translate(WM, -c.c0[0], -c.c0[1], -c.c0[2]);
+          for (const mem of c.members) {
+            mat4.multiply(R2, WM, mem.M);
+            r.drawMesh(mem.mesh, R2, tint);
+          }
         }
       }
     }

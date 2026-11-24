@@ -12,6 +12,10 @@ vec3 shade(vec3 col, vec3 n, vec3 world) {
   col *= (0.52 + 0.55 * d) * side;
   float dist = length(world - uCam);
   float f = clamp((dist - uFog.x) / (uFog.y - uFog.x), 0.0, 1.0);
+  // 낭떠러지: 아래로 내려갈수록 칠흑같이 어두워짐
+  float deep = clamp((world.y + 5.5) / 5.0, 0.0, 1.0);
+  col *= mix(0.04, 1.0, deep);
+  f *= deep;
   return mix(col, uFogColor, f);
 }`;
 

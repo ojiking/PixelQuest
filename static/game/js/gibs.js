@@ -35,7 +35,7 @@ export class Gibs {
       for (let i = 0; i < v.length; i += 18) { mat4.point(P, m.M, v[i], v[i + 1], v[i + 2]); ext = Math.max(ext, Math.hypot(P[0] - cx, P[1] - cy, P[2] - cz)); }
     }
     this.list.push({
-      members: members.map(m => ({ mesh: m.mesh, M: mat4.copy(mat4.create(), m.M) })),
+      members: members.map(m => ({ mesh: m.mesh, voxels: m.voxels, M: mat4.copy(mat4.create(), m.M) })),
       c0: [cx, cy, cz], pos: [cx, cy, cz], vel: [...vel],
       ax: 0, az: 0, wx: rand(-14, 14) * spinScale, wz: rand(-14, 14) * spinScale,
       r: Math.min(ext * 0.45, 0.32), rest: false, part, thrown: null,
@@ -94,8 +94,10 @@ export class Gibs {
         g.pos[2] = Math.max(-4, Math.min(3.5, g.pos[2]));
         g.ax += g.wx * dt; g.az += g.wz * dt;
         if (g.thrown) this.hitCheck(g);
-        if (g.pos[1] < g.r) {
-          g.pos[1] = g.r;
+        const fl = this.game.floorAt(g.pos[0], g.pos[2]);
+        if (g.pos[1] < -8) { this.list.splice(i, 1); continue; }
+        if (fl > -50 && g.pos[1] < fl + g.r && g.pos[1] > fl - 0.5) {
+          g.pos[1] = fl + g.r;
           g.thrown = null;
           if (Math.abs(g.vel[1]) < 2 && Math.hypot(g.vel[0], g.vel[2]) < 0.8) {
             g.rest = true;

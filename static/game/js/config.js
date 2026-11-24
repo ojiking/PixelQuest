@@ -11,7 +11,10 @@ export const PLAYER = {
   hp: 100,
   speed: 4.2,      // 좌우 이동 속도
   zSpeed: 3.0,     // 앞뒤 라인 이동 속도
-  jump: 8.2,
+  jump: 8.7,
+  dashSpeed: 12,     // 대쉬 속도
+  dashTime: 0.26,
+  dashCooldown: 0.35,
   invulnAfterGetup: 0.7,
 };
 
@@ -23,6 +26,12 @@ export const BOT = {
   koReviveRatio: 0.35,
   spinCooldown: 7,
   rescueHpRatio: 0.4,
+  bashCooldown: 6,
+  // 볼트 클래스: 정비소에서 선택
+  classes: {
+    tank:   { name: '방패형', desc: '튼튼한 몸으로 적을 끌어당기고 플레이어를 지킴', model: 'bot_tank', hp: 130, power: 0.8, speed: 3.5, scale: 1.08 },
+    attack: { name: '공격형', desc: '빠르고 강하게 적을 썰어버림',                   model: 'bot_atk',  hp: 70,  power: 1.3, speed: 4.3, scale: 1.0 },
+  },
   tactics: [
     { id: 'assault', name: '돌격', desc: '가장 가까운 적을 공격' },
     { id: 'guard',   name: '호위', desc: '플레이어 주변 적 우선, 곁을 지킴' },
@@ -39,7 +48,13 @@ export const ATTACKS = {
   jab:     { startup: .05, active: .08, recovery: .14, range: [.1, 1.2], depth: .5,  dmg: 6,  knock: 1.0, zone: 'high', hitstop: .045, anim: 'punchF' },
   cross:   { startup: .06, active: .08, recovery: .16, range: [.1, 1.3], depth: .5,  dmg: 8,  knock: 1.4, zone: 'high', hitstop: .055, anim: 'punchB' },
   kick:    { startup: .10, active: .10, recovery: .30, range: [.1, 1.5], depth: .55, dmg: 14, knock: 5.5, zone: 'mid',  hitstop: .10, anim: 'kick', knockdown: true, finisher: true },
-  flykick: { startup: .04, active: .40, recovery: .10, range: [0, 1.3],  depth: .55, dmg: 12, knock: 5,   zone: 'high', hitstop: .08, anim: 'flykick', knockdown: true },
+  flykick: { startup: .04, active: .40, recovery: .10, range: [0, 1.3],  depth: .55, dmg: 13, knock: 8,   zone: 'high', hitstop: .09, anim: 'flykick', knockdown: true },
+  // 대쉬 어택: 몸통 박치기. 맞은 적이 멀리 날아가 다른 적과 부딪힘
+  dashAtk: { startup: .03, active: .22, recovery: .28, range: [0, 1.25], depth: .6,  dmg: 12, knock: 12,  zone: 'mid',  hitstop: .12, anim: 'dashAtk', knockdown: true, launch: 3.2, momentum: true, shake: .18 },
+  // 공중 무기 휘두르기
+  airSlash: { startup: .06, active: .14, recovery: .12, range: [.1, 1.0], depth: .6, dmg: 1.2, knock: 5,   zone: 'high', hitstop: .09, anim: 'swing', weapon: true, knockdown: true },
+  // 내려찍기: 공중에서 아래+공격. 착지 충격으로 쓰러진 적까지 짓밟음
+  stomp:   { startup: .04, active: 9,   recovery: .25, range: [0, 1.15], depth: .8,  dmg: 16, knock: 3,   zone: 'head', hitstop: .12, anim: 'stomp', aoe: true, otg: true, stomp: true, knockdown: true, mode: 'crush', shake: .25 },
   // 무기 (dmg는 무기 공격력에 곱하는 배율)
   swing:   { startup: .12, active: .10, recovery: .20, range: [.1, 1.0], depth: .6,  dmg: 1.0, knock: 2.5, zone: 'high', hitstop: .07, anim: 'swing', weapon: true },
   // 무기 모션: swing=내려찍기, hslash/hswing=몸을 비트는 가로 휘두르기, golf=올려치기, saw=누르고 있으면 계속 갈기
@@ -61,6 +76,7 @@ export const ATTACKS = {
   // 동료
   botJab:  { startup: .10, active: .08, recovery: .22, range: [.1, 1.2], depth: .5,  dmg: 5,  knock: 1.2, zone: 'high', hitstop: .04, anim: 'punchF' },
   botKick: { startup: .14, active: .10, recovery: .40, range: [.1, 1.4], depth: .55, dmg: 10, knock: 5,   zone: 'mid',  hitstop: .08, anim: 'kick', knockdown: true },
+  botBash: { startup: .28, active: .30, recovery: .45, range: [-.1, 1.0], depth: .6,  dmg: 10, knock: 10,  zone: 'mid',  hitstop: .10, anim: 'dashAtk', knockdown: true, telegraph: true, dash: 8.5, shake: .15 },
   botSpin: { startup: .15, active: .30, recovery: .35, range: [0, 1.8],  depth: .9,  dmg: 11, knock: 6,   zone: 'mid',  hitstop: .08, anim: 'spin', knockdown: true, aoe: true },
   // 적
   ePunch:  { startup: .38, active: .10, recovery: .45, range: [.1, 1.15], depth: .45, dmg: 7,  knock: 1.6, zone: 'high', hitstop: .06, anim: 'punchF', needArms: true },
@@ -107,6 +123,19 @@ export const WEAPONS = {
 };
 export const FIST_SEVER = .55;
 
+// 집어 든 신체 부위를 무기로 휘두르기 (몸통/상·하반신은 던지기만)
+export const LIMB_WEAPONS = {
+  head: { name: '머리통', dmg: 9,  reach: .25, dur: 5, sever: 1.0, knock: 1.3, mode: 'knock', combo: ['swing', 'swing', 'smash'] },
+  arm:  { name: '팔',     dmg: 9,  reach: .45, dur: 7, sever: .8,  knock: 1.1, mode: 'knock', combo: ['swing', 'swing', 'smash'] },
+  leg:  { name: '다리',   dmg: 11, reach: .55, dur: 7, sever: .9,  knock: 1.3, mode: 'knock', combo: ['bash', 'bashF'] },
+};
+export function limbKind(part) {
+  if (part === 'head') return 'head';
+  if (/^(arm|hand)/.test(part)) return 'arm';
+  if (/^(leg|shin)/.test(part)) return 'leg';
+  return null;
+}
+
 // 떨어진 부위/시체 조각 던지기: 피해는 작지만 짧게 움찔하게 함
 export const GIB_THROW = { dmg: 4, knock: 1.6, speed: 10, hitstun: .18 };
 
@@ -152,11 +181,18 @@ export const PERKS = [
 
 // ---------------- 영구 업그레이드 (정비소) ----------------
 export const UPGRADES = [
-  { id: 'p_hp',    group: '청소반원', name: '체력 단련',        desc: '최대 체력 +15',              max: 5, cost: [15, 30, 50, 75, 105] },
-  { id: 'p_pow',   group: '청소반원', name: '근력 단련',        desc: '공격력 +8%',                 max: 5, cost: [20, 35, 55, 80, 110] },
-  { id: 'b_hp',    group: '볼트',     name: '장갑판 보강',      desc: '볼트 최대 체력 +20',         max: 5, cost: [12, 25, 40, 60, 85] },
-  { id: 'b_pow',   group: '볼트',     name: '강화 주먹',        desc: '볼트 공격력 +15%',           max: 5, cost: [15, 30, 45, 65, 90] },
-  { id: 'b_ai',    group: '볼트',     name: '전술 칩',          desc: 'Lv1: 호위 전술 / Lv2: 협공 전술 해금', max: 2, cost: [25, 60] },
-  { id: 'b_spin',  group: '볼트',     name: '회전 차기 모듈',   desc: '적 2명 이상 근접 시 광역 회전 차기', max: 1, cost: [45] },
-  { id: 'b_rescue',group: '볼트',     name: '구조 프로토콜',    desc: '런마다 1회, 쓰러진 플레이어를 체력 40%로 부활', max: 1, cost: [80] },
+  { id: 'p_hp',    group: '청소반원', name: '체력 단련',       desc: '최대 체력 +15',              max: 5, cost: [15, 30, 50, 75, 105] },
+  { id: 'p_pow',   group: '청소반원', name: '근력 단련',       desc: '공격력 +8%',                 max: 5, cost: [20, 35, 55, 80, 110] },
+  { id: 'b_ai',    group: '볼트', name: '전술 칩',          desc: 'Lv1: 호위 전술 / Lv2: 협공 전술 해금', max: 2, cost: [25, 60] },
+  { id: 'b_rescue',group: '볼트', name: '구조 프로토콜',    desc: '런마다 1회, 쓰러진 플레이어를 체력 40%로 부활', max: 1, cost: [80] },
+  // 방패형 전용
+  { id: 't_hp',    group: '볼트', cls: 'tank',   name: '강화 장갑',       desc: '최대 체력 +30',                       max: 5, cost: [12, 25, 40, 60, 85] },
+  { id: 't_taunt', group: '볼트', cls: 'tank',   name: '도발 모듈',       desc: '주변 적이 플레이어 대신 볼트를 노림',  max: 1, cost: [35] },
+  { id: 't_bash',  group: '볼트', cls: 'tank',   name: '방패 돌진',       desc: '돌진해서 적을 날려버림 (날아간 적이 다른 적과 충돌)', max: 1, cost: [50] },
+  { id: 't_guard', group: '볼트', cls: 'tank',   name: '방어 매트릭스',   desc: '받는 피해 -12%',                       max: 3, cost: [20, 40, 65] },
+  // 공격형 전용
+  { id: 'a_pow',   group: '볼트', cls: 'attack', name: '전투 프로세서',   desc: '공격력 +15%',                         max: 5, cost: [15, 30, 45, 65, 90] },
+  { id: 'a_speed', group: '볼트', cls: 'attack', name: '고속 구동기',     desc: '이동·공격 속도 +10%',                 max: 3, cost: [20, 40, 65] },
+  { id: 'a_spin',  group: '볼트', cls: 'attack', name: '회전 차기 모듈',  desc: '적 2명 이상 근접 시 광역 회전 차기',   max: 1, cost: [45] },
+  { id: 'a_blade', group: '볼트', cls: 'attack', name: '절단 블레이드',   desc: '볼트의 공격도 적의 부위를 잘라냄',     max: 1, cost: [55] },
 ];

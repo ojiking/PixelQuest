@@ -90,15 +90,17 @@ export class Item {
   update(dt, game) {
     this.life -= dt;
     if (this.life <= 0) { this.remove = true; return; }
-    if (this.y > 0 || this.vy > 0) {
+    const fl = game.floorAt(this.x, this.z);
+    if (this.y > fl || this.vy > 0) {
       this.vy -= 20 * dt; this.y += this.vy * dt; this.x += this.vx * dt;
-      if (this.y <= 0) { this.y = 0; this.vy = Math.abs(this.vy) > 3 ? -this.vy * 0.3 : 0; this.vx *= 0.5; }
+      if (this.y <= fl && this.y > fl - 0.5) { this.y = fl; this.vy = Math.abs(this.vy) > 3 ? -this.vy * 0.3 : 0; this.vx *= 0.5; }
+      if (this.y < -6) { this.remove = true; return; }
     }
     if (this.kind === 'scrap') {
       const p = game.player;
       if (p.state === 'ko') return;
       const dx = p.x - this.x, dz = p.z - this.z, d = Math.hypot(dx, dz);
-      if (d < 2.4 && this.y <= 0.01) { this.x += dx / d * dt * 7; this.z += dz / d * dt * 7; }
+      if (d < 2.4 && this.vy === 0) { this.x += dx / d * dt * 7; this.z += dz / d * dt * 7; }
       if (d < 0.45) { this.remove = true; game.collectScrap(this.value); }
     }
   }

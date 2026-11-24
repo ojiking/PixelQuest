@@ -20,6 +20,7 @@ export function setupTouch(stage, input) {
       <button class="tb tb-atk" data-key="KeyJ">공격</button>
       <button class="tb tb-jump" data-key="KeyK">점프</button>
       <button class="tb tb-grab" data-key="KeyL" id="tb-grab">줍기</button>
+      <button class="tb tb-dash" data-key="KeyI">대쉬</button>
       <button class="tb tb-tac" data-key="KeyT">전술</button>
     </div>
     <button class="tb tb-pause" data-key="Escape" aria-label="일시정지">❚❚</button>`;

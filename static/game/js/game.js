@@ -1,13 +1,13 @@
 // 게임 월드: 스테이지 진행, 카메라, 웨이브, 투사체, 폭발, 렌더링
 import { mat4, clamp, rand, randi, sign, shuffle, pick, weightedPick } from './math.js';
-import { BIOMES, BOT, LANE, WEAPONS, ENEMIES } from './config.js';
+import { BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind } from './config.js';
 import { Debris } from './fx.js';
 import { Gibs, bleed } from './gibs.js';
 import { getModel, WEAPON_MODEL } from './models.js';
 import { Player } from './player.js';
 import { Companion } from './companion.js';
 import { Enemy } from './enemy.js';
-import { Stage, STAGE_COUNT } from './level.js';
+import { Stage, STAGE_COUNT, PIT, SEG_HINTS } from './level.js';
 import { Item } from './props.js';
 import { applyHit } from './combat.js';
 
@@ -64,7 +64,7 @@ export class Game {
     this.projectiles = []; this.enemies = []; this.tokens.clear();
     this.debris.clear(); this.gibs.clear(); this.texts.clear();
     for (const h of [this.player, this.bot]) {
-      h.vx = h.vy = h.vz = 0; h.y = 0; h.facing = 1; h.attack = null; h.weapon = h === this.player ? h.weapon : null;
+      h.vx = h.vy = h.vz = 0; h.y = 0; h.grounded = true; h.fellOut = false; h.hidden = false; h.facing = 1; h.attack = null; h.weapon = h === this.player ? h.weapon : null;
       if (h.state !== 'ko') h.setState('idle');
     }
     this.player.x = 3; this.player.z = 0;
@@ -75,6 +75,8 @@ export class Game {
     }
     this.actors = [this.player, this.bot];
     this.camX = 0; this.lock = null; this.zoneIdx = 0;
+    this.lastSafe = { x: 3, z: 0, y: 0 };
+    this.curSeg = null;
     this.running = true;
     this.banner(`STAGE ${i + 1} — ${this.stage.biome.name}`, 2.4);
   }
@@ -90,13 +92,21 @@ export class Game {
 
     this.handleDevKeys();
     for (const a of this.actors) a.update(dt);
+    const P = this.player;
+    // 새 지형 구간에 들어서면 짧게 안내
+    const seg = this.stage.segments.find(sg => P.x >= sg.a && P.x < sg.b);
+    if (seg && seg !== this.curSeg) { this.curSeg = seg; if (SEG_HINTS[seg.type]) this.banner(SEG_HINTS[seg.type], 1.6); }
+    if (P.grounded && P.floor >= 0 && P.state !== 'ko' && [-.4, .4].every(d => this.floorAt(P.x + d, P.z) >= 0 && this.floorAt(P.x, P.z + d * .7) >= 0)) {
+      this.lastSafe = { x: P.x, z: P.z, y: P.floor };
+    }
     this.separate();
+    this.updateFlung();
     this.clampHeroes();
     this.updateProjectiles(dt);
     for (const it of this.items) it.update(dt, this);
     for (const p of this.props) p.update(dt, this);
     for (const t of this.traps) t.update(dt, this);
-    this.debris.update(dt);
+    this.debris.update(dt, (x, z) => this.floorAt(x, z));
     this.gibs.update(dt);
 
     for (const a of this.actors) if (a.remove) this.releaseToken(a);
@@ -212,15 +222,16 @@ export class Game {
 
   spawnEnemy(type, side) {
     const cx = this.lock ? this.lock.cx : this.camX;
-    const x = cx + side * (this.viewHalf + 1.2);
-    const z = rand(LANE.zMin + 0.2, LANE.zMax - 0.2);
-    const e = new Enemy(this, type, x, z, 1 + this.run.stage * 0.15);
+    const spot = this.stage.safeSpot(cx + side * (this.viewHalf + 1.2), rand(LANE.zMin + 0.2, LANE.zMax - 0.2));
+    const e = new Enemy(this, type, spot.x, spot.z, 1 + this.run.stage * 0.15);
     this.actors.push(e);
     this.enemies.push(e);
     return e;
   }
 
   pickTarget(e) {
+    // 방패형 볼트의 도발: 근처 적은 볼트를 먼저 노림
+    if (this.stats.bot.taunt && this.bot.alive && Math.hypot(this.bot.x - e.x, this.bot.z - e.z) < 5) return this.bot;
     const c = [];
     if (this.player.alive) c.push([this.player, Math.abs(this.player.x - e.x) * 0.8]);
     if (this.bot.alive) c.push([this.bot, Math.abs(this.bot.x - e.x)]);
@@ -257,6 +268,7 @@ export class Game {
   severPart(v, k, dir, h = {}) {
     v.severPart(k, dir, h);
     this.run.severs++;
+    this.sfx?.(h.mode === 'crush' ? 'crush' : 'splat');
     const crush = h.mode === 'crush';
     const fly = h.fling > 2 && k === 'head' ? '홈런!!' : null;
     this.texts.add(v.x, v.y + 2.2 * v.scale, v.z, fly ?? (crush ? CRUSH_TEXT[k] : SEVER_TEXT[k]) ?? '부위 파괴!', k === 'head' ? 'sever big' : 'sever');
@@ -271,7 +283,7 @@ export class Game {
     this.debris.puff(x, 0.1, z, [0xbdb6a6, 0x9c958a, 0x7a7266], 30, 4, .2, .5, 0.6);
     this.shake(0.3);
     for (const v of this.actors) {
-      if (v.team === att.team || a.hit.has(v) || v.dead || v.y > 0.5) continue;
+      if (v.team === att.team || a.hit.has(v) || v.dead || v.y - v.floor > 0.5) continue;
       const dist = Math.hypot(v.x - x, (v.z - z) * 1.3);
       if (dist > d.shock.radius) continue;
       a.hit.add(v);
@@ -287,7 +299,8 @@ export class Game {
     v.dead = true;
     v.interrupt();
     v.setState('dying');
-    v.vx = h.dir * Math.max(3, h.knock) * 1.1; v.vy = 6; v.y = Math.max(v.y, 0.01);
+    v.vx = h.dir * Math.max(3, h.knock) * 1.1; v.vy = 6; v.y = Math.max(v.y, 0.01); v.grounded = false;
+    if (h.knock >= 7.5) v.flung = { owner: h.attacker, hit: new Set() };
     v.facing = -h.dir;
     this.releaseToken(v);
     this.run.kills++;
@@ -317,7 +330,7 @@ export class Game {
     if (v === this.bot) {
       v.koT = BOT.koTime;
       this.say(v, '볼트 다운… 자가 수리 중');
-      if (this.rescuePending) this.endTimer = 1.6;
+      if (this.rescuePending) { this.explodeHero(this.player, h.dir || 1); this.endTimer = 2.6; }
       return;
     }
     if (this.stats.bot.rescue && !this.run.rescueUsed && this.bot.alive) {
@@ -325,7 +338,116 @@ export class Game {
       this.rescuePending = true;
       this.say(this.bot, '버텨! 지금 간다!');
     } else {
-      this.endTimer = 1.8;
+      this.explodeHero(v, h.dir || 1);
+      this.endTimer = 2.6;
+    }
+  }
+
+  // 플레이어 사망: 온몸이 터지며 붉은 복셀을 대량으로 뿌림
+  explodeHero(p, dir) {
+    if (p.hidden) return;
+    const root = p.rootMatrix(mat4.create());
+    const cx = p.x, cy = p.y + 1, cz = p.z;
+    for (const { k, list } of p.groups(root, ['head', 'torso', 'armF', 'armB', 'legF', 'legB'])) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 3 + Math.random() * 4;
+      p.game.gibs.spawnGroup(list, [Math.cos(a) * sp + dir * 2, 6 + Math.random() * 5, Math.sin(a) * sp * 0.4], k, 1.4);
+    }
+    for (let i = 0; i < 4; i++) this.bleed(cx, cy + Math.random() * 0.6, cz, i % 2 ? 1 : -1, 90);
+    this.debris.puff(cx, cy, cz, [0xc81e24, 0x9e1219, 0xe0382c, 0x6a0a10], 80, 6, .22, 1.6, 1);
+    p.hidden = true;
+    this.texts.add(cx, cy + 1.5, cz, '청소반원 사망', 'hurt big');
+    this.hitstop(0.3); this.shake(0.8);
+    this.sfx?.('death');
+  }
+
+  // ------------------------------------------------ 날아가는 몸 (볼링)
+  // 세게 맞아 날아가는 적이 다른 적과 부딪히면 둘 다 피해. 맞은 적도 날아가며 연쇄
+  updateFlung() {
+    for (const a of this.actors) {
+      const f = a.flung;
+      if (!f) continue;
+      if (a.remove || (a.grounded && Math.abs(a.vx) < 2.5)) { a.flung = null; continue; }
+      const spd = Math.abs(a.vx);
+      if (spd < 3) continue;
+      const dir = Math.sign(a.vx);
+      for (const o of this.actors) {
+        if (o === a || o.team !== a.team || f.hit.has(o) || o.dead || o.remove || o.state === 'down') continue;
+        if (Math.abs(o.x - a.x) > a.radius + o.radius + 0.1 || Math.abs(o.z - a.z) > 0.55 || Math.abs(o.y - a.y) > 1.3) continue;
+        f.hit.add(o);
+        applyHit(this, o, {
+          attacker: f.owner, dmg: 6 + spd * 0.9, knock: spd * 0.78, dir, zone: 'mid', knockdown: true,
+          sever: 0.8, hitstop: .07, shake: .14,
+        });
+        if (o.flung) o.flung.hit.add(a);
+        if (!a.dead) { a.hp -= 5; if (a.hp <= 0) this.kill(a, { dir, knock: spd * 0.4 }); }
+        a.vx *= 0.45;
+        this.texts.add(o.x, o.y + 2.1 * o.scale, o.z, '충돌!', 'back');
+        this.sfx?.('thud');
+      }
+      for (const p of this.props) {
+        if (p.broken || f.hit.has(p)) continue;
+        if (Math.abs(p.x - a.x) > a.radius + p.radius || Math.abs(p.z - a.z) > 0.6 || a.y > 1.2) continue;
+        f.hit.add(p);
+        p.hit(this, 20, dir);
+      }
+    }
+  }
+
+  wallSlam(a) {
+    const dmg = Math.round(Math.abs(a.vx) * 1.2);
+    this.texts.add(a.x, a.y + 2, a.z, '벽꽝!', 'back');
+    this.shake(0.15); this.hitstop(0.05);
+    this.debris.puff(a.x + Math.sign(a.vx) * .3, a.y + 1, a.z, [0xbdb6a6, 0x8a8478], 10, 2, .14, .4, 0.3);
+    this.sfx?.('thud');
+    if (!a.dead) { a.hp -= dmg; a.flash = 0.1; if (a.hp <= 0) this.kill(a, { dir: -Math.sign(a.vx), knock: 3 }); }
+    a.flung = null;
+  }
+
+  // 내려찍기 착지: 흙먼지 + 화면 흔들림
+  stompImpact(a) {
+    this.debris.puff(a.x, a.y + 0.1, a.z, [0xbdb6a6, 0x9c958a, 0x7a7266], 22, 3.5, .18, .45, 0.5);
+    this.shake(0.28);
+    this.sfx?.('heavy');
+  }
+
+  // ------------------------------------------------ 지형
+  floorAt(x, z) { return this.stage.heightAt(x, z); }
+  wallAt(x, z, y) { const h = this.stage.heightAt(x, z); return h !== PIT && h > y + 0.4; }
+
+  // 낭떠러지로 떨어짐: 적은 즉사, 플레이어도 사망(구조 프로토콜이 있으면 마지막 안전 지점에서 부활 대기)
+  fallOut(a) {
+    a.vx = a.vz = 0;
+    if (Math.abs(a.x - this.camX) < this.viewHalf + 2) this.sfx?.('fall');
+    if (a.team === 'enemy') {
+      if (!a.dead) {
+        a.dead = true;
+        this.releaseToken(a);
+        this.run.kills++;
+        this.texts.add(a.x, 0.5, a.z, '추락!', 'sever');
+      }
+      a.remove = true;
+      return;
+    }
+    const safe = a === this.player ? this.lastSafe : this.lastSafe;
+    if (a === this.bot) {
+      // 볼트: 플레이어 근처로 복귀해서 자가 수리
+      a.x = safe.x - 1; a.z = safe.z; a.y = safe.y; a.vy = 0; a.fellOut = false;
+      if (a.state !== 'ko') { a.hp = 0; a.interrupt(); a.setState('ko'); a.koT = BOT.koTime; this.say(a, '추락… 자가 수리 중'); }
+      return;
+    }
+    this.texts.add(a.x, 0.5, a.z, '추락!!', 'hurt big');
+    a.hp = 0; a.interrupt(); a.setState('ko');
+    if (a.weapon) a.weapon = null;
+    if (a.carry) a.carry = null;
+    if (this.stats.bot.rescue && !this.run.rescueUsed && this.bot.alive) {
+      this.run.rescueUsed = true;
+      this.rescuePending = true;
+      a.x = safe.x; a.z = safe.z; a.y = safe.y; a.vy = 0; a.fellOut = false;
+      this.say(this.bot, '붙잡았다! 버텨!');
+    } else {
+      a.hidden = true;
+      this.endTimer = 1.6;
     }
   }
 
@@ -352,6 +474,7 @@ export class Game {
       source.shatter();
     }
     this.debris.puff(x, 0.8, z, [0xffe14a, 0xff8a1f, 0xd94a2a, 0x555555, 0x8a8a8a], 70, 5.5, .26, .8, 0.15);
+    this.sfx?.('boom');
     this.shake(0.45);
     this.hitstop(0.07);
     for (const a of this.actors) {
@@ -376,6 +499,7 @@ export class Game {
     }
     if (best) {
       best.remove = true;
+      this.sfx?.('pickup');
       if (best.kind === 'food') {
         p.hp = Math.min(p.maxHp, p.hp + 30);
         this.texts.add(p.x, 2.2, p.z, '+30', 'heal');
@@ -394,7 +518,11 @@ export class Game {
     const gib = this.gibs.nearest(p.x, p.z);
     if (gib) {
       p.carry = this.gibs.take(gib);
-      this.texts.add(p.x, 2.3, p.z, PART_NAME[gib.part] ?? '조각', 'item');
+      this.sfx?.('pickup');
+      const lk = limbKind(gib.part);
+      p.carry.limb = lk; p.carry.local = null;
+      if (lk) p.carry.dur = LIMB_WEAPONS[lk].dur;
+      this.texts.add(p.x, 2.3, p.z, (PART_NAME[gib.part] ?? '조각') + (lk ? ' — 휘둘러라!' : ''), 'item');
     }
   }
 
@@ -409,7 +537,19 @@ export class Game {
     mat4.identity(M); mat4.translate(M, a.x + a.facing * 0.6, 1.0, a.z);
     this.debris.burst(vox, M, { frac: 0.8, size: 0.1, spread: 2 });
     this.texts.add(a.x, 2.3, a.z, '무기 파손!', 'hurt');
+    this.sfx?.('crush');
     a.weapon = null;
+  }
+
+  // 휘두르던 신체 부위가 박살남
+  breakCarry(a) {
+    const c = a.carry;
+    a.carry = null;
+    if (!c) return;
+    (c.lastM ?? []).forEach((M, i) => this.debris.burst(c.members[i].voxels, M, { frac: .85, size: .1, spread: 2.4 }));
+    this.bleed(a.x + a.facing * 0.8, 1.2, a.z, a.facing, 30);
+    this.texts.add(a.x, 2.3, a.z, '박살!', 'sever');
+    this.sfx?.('splat');
   }
 
   breakProp(p, dir) {
@@ -424,6 +564,7 @@ export class Game {
 
   collectScrap(v) {
     this.run.scrap += v * (this.run.perks.has('scrapper') ? 1.5 : 1);
+    this.sfx?.('coin');
   }
 
   // ------------------------------------------------ 투사체
@@ -464,7 +605,8 @@ export class Game {
           break;
         }
       }
-      if (!pr.dead && pr.y <= 0) this.projectileEnd(pr);
+      if (!pr.dead && pr.y <= this.floorAt(pr.x, pr.z)) this.projectileEnd(pr);
+      if (pr.y < -6) pr.dead = true;
     }
     this.projectiles = this.projectiles.filter(p => !p.dead);
   }
@@ -520,15 +662,15 @@ export class Game {
     // 발밑 그림자 (라인 깊이를 읽게 해주는 핵심 장치)
     const sb = this.shadowBuf;
     let n = 0;
-    const add = (x, z, s) => {
-      if (n >= 256) return;
+    const add = (x, z, s, fy = this.floorAt(x, z)) => {
+      if (n >= 256 || fy === PIT) return;
       const o = n * 7;
-      sb[o] = x; sb[o + 1] = -s / 2 + 0.03; sb[o + 2] = z; sb[o + 3] = s; sb[o + 4] = sb[o + 5] = sb[o + 6] = 0;
+      sb[o] = x; sb[o + 1] = fy - s / 2 + 0.03; sb[o + 2] = z; sb[o + 3] = s; sb[o + 4] = sb[o + 5] = sb[o + 6] = 0;
       n++;
     };
-    for (const a of this.actors) if (!a.remove) add(a.x, a.z, (a.fall > 0.5 ? 1.0 : 0.62) * a.scale * Math.max(0.4, 1 - a.y / 4));
+    for (const a of this.actors) if (!a.remove && !a.hidden) add(a.x, a.z, (a.fall > 0.5 ? 1.0 : 0.62) * a.scale * Math.max(0.4, 1 - (a.y - a.floor) / 4), a.floor);
     for (const it of this.items) add(it.x, it.z, 0.3);
-    for (const gb of this.gibs.list) if (Math.abs(gb.pos[0] - this.camX) < this.viewHalf + 2) add(gb.pos[0], gb.pos[2], 0.35 * Math.max(0.3, 1 - gb.pos[1] / 3));
+    for (const gb of this.gibs.list) if (Math.abs(gb.pos[0] - this.camX) < this.viewHalf + 2) add(gb.pos[0], gb.pos[2], 0.35);
     for (const pr of this.projectiles) add(pr.x, pr.z, 0.25);
     r.drawInstances(sb, n, 0.3, true);
   }

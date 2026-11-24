@@ -5,11 +5,14 @@ import { clamp } from './math.js';
 
 export class Companion extends Actor {
   constructor(game, stats) {
-    super(game, 'bot', { hp: stats.maxHp, team: 'hero', x: 1.6, z: 0.9 });
+    super(game, stats.model, { hp: stats.maxHp, team: 'hero', x: 1.6, z: 0.9, scale: stats.scale });
     this.stats = stats;
     this.power = stats.power;
     this.atkSpeed = stats.speedMul;
-    this.speed = BOT.speed * stats.speedMul;
+    this.speed = stats.speed * stats.speedMul;
+    this.blade = stats.blade;
+    this.dmgTakenMul = stats.dmgTaken;
+    this.bashCd = 3;
     this.tactic = 0;
     this.target = null;
     this.think = 0;
@@ -43,8 +46,16 @@ export class Companion extends Actor {
     if (this.updateCommon(dt)) { this.pose(dt); return; }
     if (this.state === 'attack') { this.updateAttack(dt); this.pose(dt); return; }
 
-    this.cool -= dt; this.spinCd -= dt; this.think -= dt;
+    this.cool -= dt; this.spinCd -= dt; this.bashCd -= dt; this.think -= dt;
     const p = g.player;
+    if (!this.grounded) { this.state = 'jump'; this.pose(dt); return; }
+    // 너무 멀어지면 (틈 건너편 등) 부스터로 플레이어 곁에 복귀
+    if (Math.abs(this.x - p.x) > 11 && p.grounded && !g.rescuePending) {
+      const s = g.stage.safeSpot(p.x - p.facing * 1.2, p.z + 0.6);
+      g.debris.puff(this.x, 0.5, this.z, [0xff8a1f, 0xffe14a, 0x888888], 12, 2, .15, .4, -0.5);
+      this.x = s.x; this.z = s.z; this.y = g.floorAt(s.x, s.z); this.vx = this.vz = 0;
+      g.say(this, '부스터 점프!');
+    }
 
     // 구조 프로토콜: 쓰러진 플레이어에게 달려감
     if (g.rescuePending) {
@@ -68,6 +79,13 @@ export class Companion extends Actor {
       tz = t.z;
       this.facing = t.x > this.x ? 1 : -1;
       const dx = Math.abs(t.x - this.x), dz = Math.abs(t.z - this.z);
+      // 방패형: 방패 돌진 (적을 날려 볼링)
+      if (this.stats.bash && this.bashCd <= 0 && dz < 0.4 && dx > 1.2 && dx < 3.8) {
+        this.bashCd = BOT.bashCooldown;
+        this.startAttack('botBash');
+        g.say(this, '방패 돌진!');
+        this.pose(dt); return;
+      }
       if (this.stats.spin && this.spinCd <= 0 && this.nearbyEnemies(1.9) >= 2) {
         this.spinCd = BOT.spinCooldown;
         this.startAttack('botSpin');

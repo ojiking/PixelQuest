@@ -3,11 +3,12 @@ import { Renderer } from './gl.js';
 import { Input } from './input.js';
 import { Texts } from './fx.js';
 import { Game } from './game.js';
-import { PERKS, UPGRADES, WEAPONS } from './config.js';
+import { PERKS, UPGRADES, WEAPONS, BOT } from './config.js';
 import { STAGE_COUNT } from './level.js';
 import { loadMeta, saveMeta, resetMeta, computeStats, upgradeCost, buyUpgrade, level, botLevel } from './meta.js';
 import { shuffle } from './math.js';
 import { setupTouch, IS_MOBILE } from './touch.js';
+import { play as playSfx, sawLoop, isMuted, setMuted } from './sfx.js';
 
 const $ = id => document.getElementById(id);
 import { PART_NAME as CARRY_NAME } from './game.js';
@@ -36,6 +37,7 @@ const game = new Game(renderer, input, texts, {
   onStageClear: final => (final ? finishRun(true) : showPerks()),
   onRunEnd: () => finishRun(false),
 });
+game.sfx = playSfx;
 window.__game = game; // 디버그용
 
 // 배경으로 쓸 미리보기 스테이지
@@ -62,15 +64,18 @@ function showTitle() {
       <div class="sub">블록 청소반 — 벨트스크롤 로그라이트 프로토타입 v0.1</div>
       ${IS_MOBILE ? `<div class="controls">
         <div><b>왼쪽 아래 드래그</b> 이동 (위아래 = 라인 이동)</div>
-        <div><b>공격</b> 연타 콤보 · 점프 중 공격 = 날아차기 · 전기톱은 누르고 있기</div>
-        <div><b>점프</b> · <b>줍기/던지기</b> 무기·음식·떨어진 부위</div>
+        <div><b>공격</b> 연타 콤보 · 전기톱은 누르고 있기 · 점프 중 = 날아차기 · 점프 중 아래+공격 = 내려찍기</div>
+        <div><b>대쉬</b> 대쉬 중 공격 = 몸통 박치기 (적이 날아가 다른 적과 충돌) · 대쉬 중 점프 = 멀리뛰기</div>
+        <div><b>점프</b> 낭떠러지와 벽을 넘기 · <b>줍기/던지기</b> 팔·다리·머리는 들고 공격으로 휘두르기</div>
         <div><b>전술</b> 볼트 전술 변경 · <b>❚❚</b> 일시정지</div>
         <div class="dim">가로 화면으로 플레이하세요</div>
       </div>` : `<div class="controls">
         <div><b>WASD / 방향키</b> 이동 (위아래 = 라인 이동)</div>
-        <div><b>J</b> 공격 (연타 콤보, 전기톱은 누르고 있기) · 점프 중 J = 날아차기</div>
-        <div><b>K</b> 점프 · <b>L</b> 줍기 / 던지기 (떨어진 부위·시체도 가능)</div>
-        <div><b>T</b> 볼트 전술 변경 · <b>Esc</b> 일시정지</div>
+        <div><b>J</b> 공격 (연타 콤보, 전기톱은 누르고 있기)</div>
+        <div><b>K</b> 점프 · 점프 중 <b>J</b> 날아차기 · 점프 중 <b>S+J</b> 내려찍기 (쓰러진 적도 짓밟음)</div>
+        <div><b>Shift</b> 또는 좌우 두 번: 대쉬 · 대쉬 중 <b>J</b> 몸통 박치기 · 대쉬 중 <b>K</b> 멀리뛰기</div>
+        <div><b>L</b> 줍기/던지기 · 팔·다리·머리를 들면 <b>J</b>로 휘두르기</div>
+        <div><b>T</b> 볼트 전술 · <b>M</b> 효과음 · <b>Esc</b> 일시정지</div>
         <div class="dim"><b>P</b> 픽셀 크기 · <b>B</b> (테스트) 적 소환</div>
       </div>`}
       <button class="btn primary" data-act="hub">시작 (Enter)</button>
@@ -81,9 +86,13 @@ function showHub(msg = '') {
   mode = 'hub';
   hud.classList.add('hidden');
   const groups = {};
-  for (const u of UPGRADES) (groups[u.group] ||= []).push(u);
+  const cls = meta.botClass === 'tank' ? 'tank' : 'attack';
+  for (const u of UPGRADES) if (!u.cls || u.cls === cls) (groups[u.group] ||= []).push(u);
+  const clsPick = `<div class="clspick">${Object.entries(BOT.classes).map(([k, c]) => `
+      <button class="cls ${k === cls ? 'on' : ''}" data-cls="${k}"><b>${c.name}</b><span>${c.desc}</span></button>`).join('')}</div>`;
   const cards = Object.entries(groups).map(([g, list]) => `
-    <div class="ugroup"><h3>${g}${g === '볼트' ? ` <small>Lv ${botLevel(meta)}</small>` : ''}</h3>
+    <div class="ugroup"><h3>${g}${g === '볼트' ? ` <small>Lv ${botLevel(meta)} · ${BOT.classes[cls].name}</small>` : ''}</h3>
+      ${g === '볼트' ? clsPick : ''}
       ${list.map(u => {
         const lv = level(meta, u.id), cost = upgradeCost(meta, u);
         const can = cost != null && meta.scrap >= cost;
@@ -172,6 +181,7 @@ function togglePause() {
     mode = 'pause';
     setScreen(`<div class="panel"><h1>일시정지</h1>
       <p class="dim">볼트 전술: <b>${game.bot.tacticDef.name}</b> — ${game.bot.tacticDef.desc}</p>
+      <button class="btn small" data-act="mute">효과음: ${isMuted() ? '꺼짐' : '켜짐'} (M)</button>
       <div class="row"><button class="btn primary" data-act="resume">계속 (Esc)</button>
       <button class="btn ghost" data-act="giveup">포기하고 정비소로</button></div></div>`);
   } else if (mode === 'pause') {
@@ -189,8 +199,10 @@ function showBanner(text, dur) {
 
 // ------------------------------------------------------------ 입력 (메뉴)
 screen.addEventListener('click', e => {
-  const t = e.target.closest('[data-act],[data-buy],[data-perk]');
+  const t = e.target.closest('[data-act],[data-buy],[data-perk],[data-cls]');
   if (!t) return;
+  playSfx('ui');
+  if (t.dataset.cls) { meta.botClass = t.dataset.cls; saveMeta(meta); preview(); showHub(`볼트를 ${BOT.classes[t.dataset.cls].name}으로 바꿨습니다.`); return; }
   if (t.dataset.buy) { if (buyUpgrade(meta, t.dataset.buy)) showHub('업그레이드 완료!'); return; }
   if (t.dataset.perk) { choosePerk(+t.dataset.perk); return; }
   act(t.dataset.act);
@@ -202,6 +214,7 @@ function act(a) {
     case 'hub': showHub(); break;
     case 'start': startRun(); break;
     case 'resume': togglePause(); break;
+    case 'mute': setMuted(!isMuted()); mode = 'run'; togglePause(); break;
     case 'giveup': game.running = false; finishRun(false); break;
     case 'reset':
       if (resetArmed) { resetArmed = false; meta = resetMeta(); showHub('기록을 초기화했습니다.'); }
@@ -218,6 +231,7 @@ addEventListener('keydown', e => {
     showBanner(`픽셀 크기 x${renderer.pixelScale}`, 1);
   }
   if (e.code === 'Escape') togglePause();
+  if (e.code === 'KeyM') { setMuted(!isMuted()); showBanner(isMuted() ? '효과음 꺼짐' : '효과음 켜짐', 1); }
   if (e.code === 'Enter') {
     if (mode === 'title' || mode === 'result') showHub();
     else if (mode === 'hub') startRun();
@@ -248,8 +262,8 @@ function updateHud(dt) {
   setWidth('hp-player', p.hp / p.maxHp);
   setWidth('hp-bot', b.hp / b.maxHp);
   setText('hp-player-t', `${Math.max(0, Math.ceil(p.hp))} / ${p.maxHp}`);
-  setText('weapon', p.carry ? `${CARRY_NAME[p.carry.part] ?? '조각'} 들고 있음 (J/L 던지기)` : p.weapon ? `${WEAPONS[p.weapon.type].name} (${p.weapon.dur})` : '맨손');
-  setText('bot-lv', String(botLevel(meta)));
+  setText('weapon', p.carry ? (p.carry.limb ? `${CARRY_NAME[p.carry.part] ?? '조각'} (${p.carry.dur}) J 휘두르기 · L 던지기` : `${CARRY_NAME[p.carry.part] ?? '조각'} 들고 있음 (J/L 던지기)`) : p.weapon ? `${WEAPONS[p.weapon.type].name} (${p.weapon.dur})` : '맨손');
+  setText('bot-lv', `${botLevel(meta)} ${BOT.classes[game.stats.bot.cls].name}`);
   setText('tactic', b.state === 'ko' ? `수리 중 ${Math.ceil(b.koT)}s` : game.rescuePending ? '구조 중!' : b.tacticDef.name);
   setText('scrap-n', String(Math.floor(game.run.scrap)));
   const z = game.stage.zones.length;
@@ -269,6 +283,9 @@ let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+  // 전기톱을 돌리는 동안 엔진 소리
+  const pa = game.player?.attack;
+  sawLoop(mode === 'run' && !!pa?.def.hold && pa.t >= pa.def.startup && pa.t < pa.def.startup + pa.def.active);
   if (mode === 'run') {
     if (game.update(dt)) input.endFrame();
   } else {

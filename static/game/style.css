@@ -110,7 +110,8 @@ h3 small { color: var(--bot); }
 .tb-atk  { right: 0; bottom: 0; width: 19cqh; height: 19cqh; font-size: 4.2cqh; background: rgba(210, 59, 59, .82); }
 .tb-jump { right: 21cqh; bottom: 0; width: 14cqh; height: 14cqh; font-size: 3.4cqh; background: rgba(47, 111, 214, .8); }
 .tb-grab { right: 3cqh; bottom: 21cqh; width: 14cqh; height: 14cqh; font-size: 3cqh; background: rgba(214, 160, 40, .82); }
-.tb-tac  { right: 21cqh; bottom: 17cqh; width: 10cqh; height: 10cqh; font-size: 2.6cqh; background: rgba(255, 138, 31, .75); }
+.tb-tac  { right: 4cqh; bottom: 37cqh; width: 9cqh; height: 9cqh; font-size: 2.4cqh; background: rgba(255, 138, 31, .75); }
+.tb-dash { right: 21cqh; bottom: 16cqh; width: 12cqh; height: 12cqh; font-size: 3cqh; background: rgba(90, 200, 120, .8); }
 .tb-pause { top: 2cqh; right: max(2cqw, env(safe-area-inset-right, 0px)); width: 9cqh; height: 9cqh; font-size: 3cqh; border-radius: 12px; background: rgba(0, 0, 0, .45); }
 .mobile #scrap { right: calc(max(2cqw, env(safe-area-inset-right, 0px)) + 11cqh); }
 .mobile .bars { left: max(16px, env(safe-area-inset-left, 0px)); }
@@ -154,3 +155,12 @@ h3 small { color: var(--bot); }
 /* 정비소: 업그레이드 목록이 길어도 출동 버튼은 항상 보이게 */
 .hub .row { position: sticky; bottom: -22px; background: var(--panel); padding: 10px 0 4px; margin-bottom: -4px; }
 @media (max-height: 520px) { .hub .row { bottom: -12px; padding: 6px 0 2px; } }
+
+/* 볼트 클래스 선택 */
+.clspick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.cls { font-family: var(--font); text-align: left; background: rgba(0,0,0,.35); color: var(--dim); border: 2px solid #333; padding: 8px 10px; cursor: pointer; display: grid; gap: 3px; }
+.cls b { color: var(--ink); font-size: 14px; }
+.cls span { font-size: 11px; }
+.cls.on { border-color: var(--bot); background: rgba(255,138,31,.15); }
+.cls.on b { color: var(--bot); }
+@media (max-height: 520px) { .cls { padding: 5px 8px; } .cls span { font-size: 10px; } }

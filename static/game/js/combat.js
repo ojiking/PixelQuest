@@ -35,27 +35,29 @@ function inBox(att, v, d, r0, reach, isProp) {
 }
 
 function buildHit(att, d, v) {
-  let dmg = d.dmg, sever = FIST_SEVER, knock = d.knock, zone = d.zone, mode, fling = 1, bisect = 0;
-  if (d.weapon && att.weapon) {
-    const w = WEAPONS[att.weapon.type];
+  let dmg = d.dmg, sever = FIST_SEVER, knock = d.knock, zone = d.zone, mode = d.mode, fling = 1, bisect = 0;
+  const held = d.weapon ? att.heldDef() : null;
+  if (held) {
+    const w = held;
     dmg = w.dmg * d.dmg; sever = w.sever; knock *= w.knock;
     zone = w.zone ?? zone; mode = w.mode; fling = w.fling ?? 1;
     if (d.finisher || d.hold) bisect = w.bisect ?? 0;
   }
+  if (!held && att.blade) { mode = 'cut'; sever = 2.2; } // 공격형 볼트의 절단 블레이드
   dmg *= att.power;
   if (d.finisher && att.perk('finisher')) dmg *= 1.4;
   if (att.perk('sever')) sever *= 1.6;
   const dir = d.aoe ? (sign(v.x - att.x) || att.facing) : att.facing;
   return {
     attacker: att, dmg, knock, dir, zone, knockdown: !!d.knockdown, sever, mode, fling, bisect,
-    launch: d.launch, hitstun: d.hitstun, hitstop: d.hitstop ?? .05, shake: d.shake ?? (d.knockdown ? .12 : .04),
+    launch: d.launch, hitstun: d.hitstun, otg: d.otg, hitstop: d.hitstop ?? .05, shake: d.shake ?? (d.knockdown ? .12 : .04),
   };
 }
 
 export function tryHits(game, att, a) {
   const d = a.def;
   let reach = d.range[1];
-  if (d.weapon && att.weapon) reach += WEAPONS[att.weapon.type].reach;
+  if (d.weapon && att.heldDef()) reach += att.heldDef().reach;
   reach *= att.scale;
   const r0 = d.range[0] * att.scale;
   for (const v of game.actors) {
@@ -79,11 +81,12 @@ export function tryHits(game, att, a) {
 
 export function applyHit(game, v, h) {
   if (v.dead || v.invuln > 0 || v.state === 'ko') return false;
-  if ((v.state === 'down' || v.state === 'getup' || v.state === 'ko') && !h.explosion) return false;
+  if ((v.state === 'down' || v.state === 'getup' || v.state === 'ko') && !h.explosion && !(h.otg && v.state === 'down')) return false;
   let dmg = h.dmg;
   let back = false;
   if (h.attacker && !h.explosion && v.facing === h.dir) { dmg *= 1.5; back = true; }
   if (h.explosion && v.perk('blast')) dmg *= 0.4;
+  dmg *= v.dmgTakenMul ?? 1;
   dmg = Math.max(1, Math.round(dmg));
   v.hp -= dmg;
   v.flash = 0.09;
@@ -99,6 +102,7 @@ export function applyHit(game, v, h) {
   }
   game.hitstop(h.hitstop);
   game.shake(h.shake);
+  if (!h.explosion) game.sfx?.(h.mode === 'cut' || h.mode === 'saw' ? 'cut' : h.mode === 'crush' ? 'crush' : (dmg >= 15 || h.knockdown) ? 'heavy' : v.team === 'hero' ? 'hurt' : 'hit');
   game.debris.sparks(v.x - h.dir * 0.1, v.y + 1.1 * v.scale, v.z + 0.3, back ? 0xffb03a : 0xfff3a0, back ? 14 : 8);
   // 날붙이/톱으로 벨 때마다 붉은 블록이 튐
   if (v.destructible && (h.mode === 'cut' || h.mode === 'saw')) game.bleed(v.x - h.dir * 0.1, v.y + 1.1 * v.scale, v.z + 0.2, h.dir, h.mode === 'saw' ? 5 : 8);
@@ -119,14 +123,16 @@ export function applyHit(game, v, h) {
   if (knockdown) {
     v.setState('down');
     v.downT = 0;
-    v.vx = h.dir * h.knock * (h.launch ? 0.4 : 1);
+    v.vx = h.dir * h.knock * (h.launch && h.launch > 5 ? 0.4 : 1);
     v.vy = h.launch ?? 5.5;
+    // 세게 맞으면 날아가는 몸이 됨 → 다른 적과 충돌
+    if (h.knock >= 7.5 && v.team === 'enemy') v.flung = { owner: h.attacker, hit: new Set() };
     v.y = Math.max(v.y, 0.01);
   } else {
     v.setState('hurt');
     v.hitstun = h.hitstun ?? (v.isBoss ? 0.18 : 0.32);
     v.vx = h.dir * h.knock;
-    if (v.y > 0) { v.vy = Math.max(v.vy, 2); }
+    if (!v.grounded) { v.vy = Math.max(v.vy, 2); }
   }
   return true;
 }

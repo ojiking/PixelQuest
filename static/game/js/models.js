@@ -255,6 +255,14 @@ const BUILDERS = {
     head: 'robot', torso: 'robot', robot: true, tw: 5, bx: 1, lh: 6,
     pal: { metal: 0x9aa3ad, accent: 0xff8a1f, visor: 0x22e0ff, joint: 0x4a4f57, pants: 0x6a727c, shoes: 0xff8a1f },
   }),
+  bot_tank: r => humanoid(r, {
+    head: 'robot', headS: 7, torso: 'robot', robot: true, tw: 6, td: 9, bx: 1, lh: 6, lw: 4, ld: 4, aw: 4, ad: 4, ah: 7,
+    pal: { metal: 0x4f6178, accent: 0xf2c20f, visor: 0x7dff6a, joint: 0x2a313b, pants: 0x3c4a5c, shoes: 0xf2c20f },
+  }),
+  bot_atk: r => humanoid(r, {
+    head: 'robot', torso: 'robot', robot: true, tw: 4, bx: 1, lh: 7,
+    pal: { metal: 0xbcc3cc, accent: 0xe8402a, visor: 0xff3a3a, joint: 0x3a3f47, pants: 0x8a929c, shoes: 0xe8402a },
+  }),
   grunt: r => humanoid(r, {
     head: 'hair', torso: 'hoodie', sleeve: 5,
     pal: { skin: 0xe0ac69, hair: 0x1a1a1a, shirt: 0x7a7f86, pants: 0x3a4a6a, shoes: 0x222222 },

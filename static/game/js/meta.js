@@ -2,11 +2,16 @@
 import { PLAYER, BOT, UPGRADES } from './config.js';
 
 const KEY = 'pixelquest_meta_v1';
-const DEFAULT = () => ({ scrap: 0, up: {}, runs: 0, wins: 0, bestStage: 0 });
+const DEFAULT = () => ({ scrap: 0, up: {}, runs: 0, wins: 0, bestStage: 0, botClass: 'attack' });
 
 export function loadMeta() {
-  try { return { ...DEFAULT(), ...JSON.parse(localStorage.getItem(KEY) || '{}') }; }
-  catch { return DEFAULT(); }
+  let m;
+  try { m = { ...DEFAULT(), ...JSON.parse(localStorage.getItem(KEY) || '{}') }; }
+  catch { m = DEFAULT(); }
+  // 예전 볼트 업그레이드를 새 체계로 옮김
+  const mv = { b_hp: 't_hp', b_pow: 'a_pow', b_spin: 'a_spin' };
+  for (const [o, n] of Object.entries(mv)) if (m.up[o]) { m.up[n] = Math.max(m.up[n] || 0, m.up[o]); delete m.up[o]; }
+  return m;
 }
 
 export function saveMeta(m) {
@@ -34,20 +39,29 @@ export function buyUpgrade(meta, id) {
 
 export function computeStats(meta) {
   const L = id => level(meta, id);
+  const cls = meta.botClass === 'tank' ? 'tank' : 'attack';
+  const C = BOT.classes[cls];
+  const tank = cls === 'tank';
   return {
     player: { maxHp: PLAYER.hp + 15 * L('p_hp'), power: 1 + 0.08 * L('p_pow') },
     bot: {
-      maxHp: BOT.hp + 20 * L('b_hp'),
-      power: 1 + 0.15 * L('b_pow'),
-      speedMul: 1,
+      cls, model: C.model, scale: C.scale,
+      maxHp: C.hp + (tank ? 30 * L('t_hp') : 0),
+      power: C.power * (tank ? 1 : 1 + 0.15 * L('a_pow')),
+      speedMul: tank ? 1 : 1 + 0.1 * L('a_speed'),
+      speed: C.speed,
       tactics: 1 + L('b_ai'),
-      spin: L('b_spin') > 0,
       rescue: L('b_rescue') > 0,
+      spin: !tank && L('a_spin') > 0,
+      blade: !tank && L('a_blade') > 0,
+      taunt: tank && L('t_taunt') > 0,
+      bash: tank && L('t_bash') > 0,
+      dmgTaken: tank ? 1 - 0.12 * L('t_guard') : 1,
     },
   };
 }
 
 export function botLevel(meta) {
-  return 1 + ['b_hp', 'b_pow', 'b_ai', 'b_spin', 'b_rescue'].reduce((s, id) => s + L0(meta, id), 0);
+  const cls = meta.botClass === 'tank' ? 'tank' : 'attack';
+  return 1 + UPGRADES.filter(u => u.group === '볼트' && (!u.cls || u.cls === cls)).reduce((s, u) => s + (meta.up[u.id] || 0), 0);
 }
-const L0 = (m, id) => m.up[id] || 0;

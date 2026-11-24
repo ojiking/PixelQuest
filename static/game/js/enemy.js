@@ -48,7 +48,7 @@ export class Enemy extends Actor {
     this.x = clamp(this.x, g.camX - g.viewHalf - 3, g.camX + g.viewHalf + 3);
     if (this.state !== 'attack') {
       const moving = Math.abs(this.vx) + Math.abs(this.vz) > 0.2;
-      this.state = moving ? 'walk' : 'idle';
+      this.state = !this.grounded ? 'jump' : moving ? 'walk' : 'idle';
       if (moving) this.walkPhase += dt * 10 * this.legFactor();
     }
     this.pose(dt);

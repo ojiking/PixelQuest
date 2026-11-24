@@ -1,5 +1,5 @@
 // 키보드 입력. 보조 키(Z/X/C/Space/방향키)는 기본 키로 통일
-const ALIAS = { KeyZ: 'KeyJ', KeyX: 'KeyK', Space: 'KeyK', KeyC: 'KeyL' };
+const ALIAS = { KeyZ: 'KeyJ', KeyX: 'KeyK', Space: 'KeyK', KeyC: 'KeyL', ShiftLeft: 'KeyI', ShiftRight: 'KeyI' };
 const BLOCK = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);
 
 export class Input {

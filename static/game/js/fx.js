@@ -57,7 +57,7 @@ export class Debris {
 
   clear() { this.n = 0; }
 
-  update(dt) {
+  update(dt, floorAt = null) {
     for (let i = 0; i < this.n; i++) {
       this.life[i] -= dt;
       if (this.life[i] <= 0) {
@@ -76,8 +76,9 @@ export class Debris {
       this.p[i3 + 1] += this.v[i3 + 1] * dt;
       this.p[i3 + 2] += this.v[i3 + 2] * dt;
       const half = this.s[i] / 2;
-      if (this.g[i] > 0 && this.p[i3 + 1] < half) {
-        this.p[i3 + 1] = half;
+      const fl = this.g[i] > 0 && floorAt ? floorAt(this.p[i3], this.p[i3 + 2]) : 0;
+      if (this.g[i] > 0 && fl > -50 && this.p[i3 + 1] < fl + half && this.p[i3 + 1] > fl - 0.4) {
+        this.p[i3 + 1] = fl + half;
         this.v[i3 + 1] *= -0.35;
         this.v[i3] *= 0.6; this.v[i3 + 2] *= 0.6;
       }
