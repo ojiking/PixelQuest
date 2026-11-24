@@ -157,9 +157,9 @@ export const STAGE_COUNT = 2;
 // 구간 종류: 걸을 수 있는 높이 맵(hmap)을 칠함. 값: PIT=낭떠러지, 1=올라설 블록, 2=넘을 수 없는 벽
 const SEG = {
   open() {},
-  cliffFront(h, a, b) { fill(h, a, b, 1, PIT_Z1, PIT); },                 // 앞쪽 두 줄이 낭떠러지
-  cliffBack(h, a, b) { fill(h, a, b, PIT_Z0, -3, PIT); },                 // 뒤쪽이 낭떠러지
-  bridge(h, a, b) { fill(h, a, b, PIT_Z0, -2, PIT); fill(h, a, b, 1, PIT_Z1, PIT); }, // 좁은 다리 (2칸)
+  cliffFront(h, a, b) { fill(h, a, b, 2, PIT_Z1, PIT); },                 // 앞쪽 한 줄이 낭떠러지
+  cliffBack(h, a, b) { fill(h, a, b, PIT_Z0, -4, PIT); },                 // 뒤쪽 한 줄이 낭떠러지
+  bridge(h, a, b) { fill(h, a, b, PIT_Z0, -4, PIT); fill(h, a, b, 2, PIT_Z1, PIT); }, // 다리 (5칸 폭: 피할 공간 확보)
   gaps(h, a, b) {                                                           // 점프로 건너야 하는 틈
     for (let x = a + 2; x + 2 <= b - 2; x += randi(4, 6)) fill(h, x, x + 2, PIT_Z0, PIT_Z1, PIT);
   },
@@ -177,8 +177,11 @@ const SEG = {
 function fill(h, x0, x1, z0, z1, v) {
   for (let x = x0; x < x1; x++) for (let z = z0; z <= z1; z++) h.set(x + ',' + z, v);
 }
-const ARENA_TYPES = { open: 3, cliffFront: 2, cliffBack: 1.3, walls: 1.3, platforms: 1.5, bridge: 0.8 };
-const PATH_TYPES = { gaps: 3, barrier: 2, bridge: 2, cliffFront: 1.2, platforms: 1.2, walls: 0.8 };
+// 전투 구역은 대부분 평지. 낭떠러지 구간은 스테이지당 최대 MAX_PIT_SEGS개
+const ARENA_TYPES = { open: 5, platforms: 2, walls: 1.2, cliffFront: 0.8, cliffBack: 0.5 };
+const PATH_TYPES = { barrier: 2.5, platforms: 2, open: 1.5, walls: 1.2, gaps: 1.3, bridge: 0.6, cliffFront: 0.5 };
+const PIT_TYPES = new Set(['cliffFront', 'cliffBack', 'bridge', 'gaps']);
+const MAX_PIT_SEGS = 2;
 export const SEG_HINTS = { cliffFront: '절벽길 — 앞쪽은 낭떠러지', cliffBack: '벼랑 끝 — 뒤쪽은 낭떠러지', bridge: '외나무 다리 — 떨어지면 끝', gaps: '끊어진 길 — 점프로 건너라', barrier: '바리케이드 — 뛰어넘어라', walls: '좁은 골목', platforms: '잔해 더미 — 올라설 수 있다' };
 export const SEG_NAMES = { open: '광장', cliffFront: '절벽길', cliffBack: '벼랑 끝', bridge: '외나무 다리', gaps: '끊어진 길', barrier: '바리케이드', walls: '좁은 골목', platforms: '잔해 더미' };
 
@@ -205,12 +208,12 @@ export class Stage {
     let cursor = 8;
     triggers.forEach((t, zi) => {
       const [a0, a1] = arenaSpan(t);
-      if (a0 - cursor >= 5) this.addSeg(weightedPick(PATH_TYPES), cursor, a0);
+      if (a0 - cursor >= 5) this.addSeg(this.pickSeg(PATH_TYPES), cursor, a0);
       const boss = this.final && zi === triggers.length - 1;
-      this.addSeg(boss ? (Math.random() < .5 ? 'open' : 'cliffFront') : weightedPick(ARENA_TYPES), Math.max(cursor, a0), a1);
+      this.addSeg(boss ? 'open' : this.pickSeg(ARENA_TYPES), Math.max(cursor, a0), a1);
       cursor = a1;
     });
-    if (this.L - 6 - cursor >= 5) this.addSeg(weightedPick(PATH_TYPES), cursor, this.L - 6);
+    if (this.L - 6 - cursor >= 5) this.addSeg(this.pickSeg(PATH_TYPES), cursor, this.L - 6);
 
     this.terrain = buildTerrain(game.r, this.L, this.biome, randi(1, 9999), this.hmap);
 
@@ -257,6 +260,18 @@ export class Stage {
       const spot = this.safeSpot(triggers[k] - rand(3, 5), rand(LANE.zMin + .5, LANE.zMax - .5));
       this.items.push(new Item('weapon', w, spot.x, spot.z));
     }
+  }
+
+  // 낭떠러지 구간이 이미 많으면 평지 계열로 다시 뽑음
+  pickSeg(table) {
+    let type = weightedPick(table);
+    const pits = this.segments.filter(sg => PIT_TYPES.has(sg.type)).length;
+    const prev = this.segments[this.segments.length - 1];
+    if (PIT_TYPES.has(type) && (pits >= MAX_PIT_SEGS || (prev && PIT_TYPES.has(prev.type)))) {
+      const safe = Object.fromEntries(Object.entries(table).filter(([k]) => !PIT_TYPES.has(k)));
+      type = weightedPick(safe);
+    }
+    return type;
   }
 
   addSeg(type, a, b) {
