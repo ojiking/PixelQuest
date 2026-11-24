@@ -45,6 +45,7 @@ export class Player extends Actor {
           g.interact(this);
         } else if (this.buffer > 0) {
           this.buffer = 0;
+          if (this.carry) { this.startAttack('pThrowGib'); break; }
           const idx = this.comboWindow > 0 ? (this.comboIdx + 1) % this.combo.length : 0;
           this.doCombo(idx);
         }

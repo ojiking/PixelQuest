@@ -9,6 +9,7 @@ import { loadMeta, saveMeta, resetMeta, computeStats, upgradeCost, buyUpgrade, l
 import { shuffle } from './math.js';
 
 const $ = id => document.getElementById(id);
+const CARRY_NAME = { head: '머리', armF: '팔', armB: '팔', legF: '다리', legB: '다리', torso: '몸통' };
 const screen = $('screen');
 const hud = $('hud');
 
@@ -59,7 +60,7 @@ function showTitle() {
       <div class="controls">
         <div><b>WASD / 방향키</b> 이동 (위아래 = 라인 이동)</div>
         <div><b>J</b> 공격 (연타 콤보) · 점프 중 J = 날아차기</div>
-        <div><b>K</b> 점프 · <b>L</b> 줍기 / 무기 던지기</div>
+        <div><b>K</b> 점프 · <b>L</b> 줍기 / 던지기 (떨어진 부위·시체도 가능)</div>
         <div><b>T</b> 볼트 전술 변경 · <b>Esc</b> 일시정지</div>
         <div class="dim"><b>P</b> 픽셀 크기 · <b>B</b> (테스트) 적 소환</div>
       </div>
@@ -231,7 +232,7 @@ function updateHud(dt) {
   setWidth('hp-player', p.hp / p.maxHp);
   setWidth('hp-bot', b.hp / b.maxHp);
   setText('hp-player-t', `${Math.max(0, Math.ceil(p.hp))} / ${p.maxHp}`);
-  setText('weapon', p.weapon ? `${WEAPONS[p.weapon.type].name} (${p.weapon.dur})` : '맨손');
+  setText('weapon', p.carry ? `${CARRY_NAME[p.carry.part] ?? '조각'} 들고 있음 (J/L 던지기)` : p.weapon ? `${WEAPONS[p.weapon.type].name} (${p.weapon.dur})` : '맨손');
   setText('bot-lv', String(botLevel(meta)));
   setText('tactic', b.state === 'ko' ? `수리 중 ${Math.ceil(b.koT)}s` : game.rescuePending ? '구조 중!' : b.tacticDef.name);
   setText('scrap-n', String(Math.floor(game.run.scrap)));

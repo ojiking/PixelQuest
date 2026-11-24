@@ -94,6 +94,14 @@ export class Actor {
 
   activeFrame(a) {
     const d = a.def, g = this.game;
+    if (d.projectile === 'gib') {
+      if (!a.spawned) {
+        a.spawned = true;
+        if (this.carry) g.gibs.throwGib(this.carry, this.x + this.facing * 0.5, 1.4 * this.scale, this.z, this.facing, this);
+        this.carry = null;
+      }
+      return;
+    }
     if (d.projectile) {
       if (!a.spawned) {
         a.spawned = true;
@@ -310,6 +318,14 @@ export class Actor {
         mat4.rotateZ(WM, -0.6);
         r.drawMesh(getModel(r, WEAPON_MODEL[this.weapon.type]).mesh, WM, tint);
       }
+      if (k === 'armF' && this.carry) {
+        const c = this.carry;
+        mat4.copy(WM, PM);
+        mat4.translate(WM, 0.05, -this.model.armLen - 0.05, 0);
+        mat4.scale(WM, c.scale / this.scale, c.scale / this.scale, c.scale / this.scale);
+        mat4.translate(WM, -c.c[0], -c.c[1], -c.c[2]);
+        r.drawMesh(c.mesh, WM, tint);
+      }
     }
   }
 
@@ -322,7 +338,7 @@ export class Actor {
     const root = this.rootMatrix(M);
     this.partMatrix(k, root, PM);
     const g = this.game;
-    g.gibs.spawn(PM, this.model.parts[k].cut, gibVelocity(k, dir, this.vx), this.scale);
+    g.gibs.spawn(PM, this.model.parts[k].cut, gibVelocity(k, dir, this.vx), this.scale, k);
     g.gibs.spurt(this, k, 0.5);
     g.bleed(PM[12], PM[13], PM[14], dir, 26);
     if (k === 'armF' && this.weapon) g.dropWeapon(this);
@@ -338,7 +354,7 @@ export class Actor {
     for (const k of PART_ORDER) {
       if (!this.parts[k].alive) continue;
       this.partMatrix(k, root, PM);
-      g.gibs.spawn(PM, this.model.parts[k].cut, gibVelocity(k, dir * 0.6, this.vx * 0.3, true), this.scale);
+      g.gibs.spawn(PM, this.model.parts[k].cut, gibVelocity(k, dir * 0.6, this.vx * 0.3, true), this.scale, k);
       if (k !== 'torso') g.bleed(PM[12], PM[13], PM[14], dir, 12);
     }
     g.onShatter(this);

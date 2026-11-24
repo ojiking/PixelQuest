@@ -11,6 +11,7 @@ import { Stage, STAGE_COUNT } from './level.js';
 import { Item } from './props.js';
 import { applyHit } from './combat.js';
 
+const PART_NAME = { head: '머리', armF: '팔', armB: '팔', legF: '다리', legB: '다리', torso: '몸통' };
 const IDENT = mat4.create();
 const M = mat4.create();
 
@@ -276,6 +277,7 @@ export class Game {
     v.setState('ko');
     v.vx = (h.dir || 1) * 4; v.vy = 5; v.y = Math.max(v.y, 0.01); v.facing = -(h.dir || 1);
     v.weapon && v === this.player && this.dropWeapon(v);
+    if (v.carry) { this.gibs.drop(v.carry, v.x, v.z); v.carry = null; }
     if (v === this.bot) {
       v.koT = BOT.koTime;
       this.say(v, '볼트 다운… 자가 수리 중');
@@ -342,6 +344,7 @@ export class Game {
         p.hp = Math.min(p.maxHp, p.hp + 30);
         this.texts.add(p.x, 2.2, p.z, '+30', 'heal');
       } else {
+        if (p.carry) { this.gibs.drop(p.carry, p.x, p.z); p.carry = null; }
         if (p.weapon) this.dropWeapon(p);
         const dur = best.dur * (this.run.perks.has('durable') && best.dur === WEAPONS[best.type].dur ? 1.6 : 1);
         p.weapon = { type: best.type, dur: Math.round(dur) };
@@ -349,7 +352,14 @@ export class Game {
       }
       return;
     }
-    if (p.weapon) p.startAttack('pThrow');
+    if (p.carry) { p.startAttack('pThrowGib'); return; }
+    if (p.weapon) { p.startAttack('pThrow'); return; }
+    // 맨손이면 떨어진 부위/시체 조각을 집음
+    const gib = this.gibs.nearest(p.x, p.z);
+    if (gib) {
+      p.carry = this.gibs.take(gib);
+      this.texts.add(p.x, 2.3, p.z, PART_NAME[gib.part] ?? '조각', 'item');
+    }
   }
 
   dropWeapon(a) {
@@ -482,7 +492,7 @@ export class Game {
     };
     for (const a of this.actors) if (!a.remove) add(a.x, a.z, (a.fall > 0.5 ? 1.0 : 0.62) * a.scale * Math.max(0.4, 1 - a.y / 4));
     for (const it of this.items) add(it.x, it.z, 0.3);
-    for (const gb of this.gibs.list) add(gb.pos[0], gb.pos[2], 0.35 * Math.max(0.3, 1 - gb.pos[1] / 3));
+    for (const gb of this.gibs.list) if (Math.abs(gb.pos[0] - this.camX) < this.viewHalf + 2) add(gb.pos[0], gb.pos[2], 0.35 * Math.max(0.3, 1 - gb.pos[1] / 3));
     for (const pr of this.projectiles) add(pr.x, pr.z, 0.25);
     r.drawInstances(sb, n, 0.3, true);
   }

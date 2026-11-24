@@ -115,7 +115,7 @@ export function applyHit(game, v, h) {
     v.y = Math.max(v.y, 0.01);
   } else {
     v.setState('hurt');
-    v.hitstun = v.isBoss ? 0.18 : 0.32;
+    v.hitstun = h.hitstun ?? (v.isBoss ? 0.18 : 0.32);
     v.vx = h.dir * h.knock;
     if (v.y > 0) { v.vy = Math.max(v.vy, 2); }
   }

@@ -43,6 +43,7 @@ export const ATTACKS = {
   // 무기 (dmg는 무기 공격력에 곱하는 배율)
   swing:   { startup: .12, active: .10, recovery: .20, range: [.1, 1.0], depth: .6,  dmg: 1.0, knock: 2.5, zone: 'high', hitstop: .07, anim: 'swing', weapon: true },
   pThrow:  { startup: .10, active: .05, recovery: .22, anim: 'throw', projectile: 'weapon' },
+  pThrowGib: { startup: .10, active: .05, recovery: .20, anim: 'throw', projectile: 'gib' },
   smash:   { startup: .18, active: .10, recovery: .34, range: [.1, 1.0], depth: .65, dmg: 1.5, knock: 6,   zone: 'high', hitstop: .12, anim: 'swing', weapon: true, knockdown: true, finisher: true },
   // 동료
   botJab:  { startup: .10, active: .08, recovery: .22, range: [.1, 1.2], depth: .5,  dmg: 5,  knock: 1.2, zone: 'high', hitstop: .04, anim: 'punchF' },
@@ -82,6 +83,9 @@ export const WEAPONS = {
   block:   { name: '콘크리트 블록', dmg: 24, reach: .15, dur: 5,  sever: 1.2, knock: 1.6, throwDmg: 30, slow: 1.4 },
 };
 export const FIST_SEVER = .55;
+
+// 떨어진 부위/시체 조각 던지기: 피해는 작지만 짧게 움찔하게 함
+export const GIB_THROW = { dmg: 4, knock: 1.6, speed: 10, hitstun: .18 };
 
 // ---------------- 함정/오브젝트 ----------------
 export const TRAPS = {
