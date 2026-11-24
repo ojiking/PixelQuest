@@ -42,6 +42,19 @@ export const ATTACKS = {
   flykick: { startup: .04, active: .40, recovery: .10, range: [0, 1.3],  depth: .55, dmg: 12, knock: 5,   zone: 'high', hitstop: .08, anim: 'flykick', knockdown: true },
   // 무기 (dmg는 무기 공격력에 곱하는 배율)
   swing:   { startup: .12, active: .10, recovery: .20, range: [.1, 1.0], depth: .6,  dmg: 1.0, knock: 2.5, zone: 'high', hitstop: .07, anim: 'swing', weapon: true },
+  // 무기 모션: swing=내려찍기, hslash/hswing=몸을 비트는 가로 휘두르기, golf=올려치기, saw=누르고 있으면 계속 갈기
+  slash:   { startup: .07, active: .08, recovery: .14, range: [.1, 1.0], depth: .55, dmg: .8,  knock: 1.2, zone: 'arms', hitstop: .05, anim: 'hslash', weapon: true },
+  slashF:  { startup: .10, active: .10, recovery: .26, range: [.1, 1.0], depth: .6,  dmg: 1.4, knock: 4,   zone: 'head', hitstop: .09, anim: 'hslash', weapon: true, knockdown: true, finisher: true },
+  chop:    { startup: .20, active: .10, recovery: .30, range: [.1, 1.0], depth: .6,  dmg: 1.0, knock: 2.5, zone: 'mid',  hitstop: .09, anim: 'swing', weapon: true },
+  chopF:   { startup: .26, active: .10, recovery: .42, range: [.1, 1.0], depth: .65, dmg: 1.6, knock: 6,   zone: 'mid',  hitstop: .14, anim: 'swing', weapon: true, knockdown: true, finisher: true, shake: .22 },
+  golf:    { startup: .24, active: .10, recovery: .34, range: [.1, 1.1], depth: .6,  dmg: 1.0, knock: 2.5, zone: 'head', hitstop: .13, anim: 'golf', weapon: true, knockdown: true, launch: 9.5, finisher: true, shake: .16 },
+  bash:    { startup: .14, active: .10, recovery: .25, range: [.1, 1.0], depth: .65, dmg: 1.0, knock: 3,   zone: 'mid',  hitstop: .08, anim: 'hswing', weapon: true },
+  bashF:   { startup: .20, active: .10, recovery: .36, range: [.1, 1.0], depth: .7,  dmg: 1.5, knock: 8,   zone: 'high', hitstop: .13, anim: 'hswing', weapon: true, knockdown: true, finisher: true, shake: .2 },
+  whip:    { startup: .10, active: .12, recovery: .20, range: [.2, 1.0], depth: .85, dmg: 1.0, knock: 1.5, zone: 'low',  hitstop: .05, anim: 'hswing', weapon: true },
+  whipF:   { startup: .14, active: .14, recovery: .30, range: [.2, 1.0], depth: .9,  dmg: 1.4, knock: 2.5, zone: 'low',  hitstop: .08, anim: 'hswing', weapon: true, knockdown: true, finisher: true },
+  sledge:  { startup: .42, active: .10, recovery: .50, range: [.1, 1.0], depth: .7,  dmg: 1.0, knock: 5,   zone: 'high', hitstop: .15, anim: 'slam', weapon: true, knockdown: true, finisher: true, shake: .38,
+             shock: { radius: 1.9, dmg: .35, zone: 'low' } },
+  saw:     { startup: .12, active: 999, recovery: .15, range: [.1, .95], depth: .55, dmg: 1.0, knock: .3,  zone: 'all',  hitstop: 0, anim: 'saw', weapon: true, hold: true, tick: .09, hitstun: .22 },
   pThrow:  { startup: .10, active: .05, recovery: .22, anim: 'throw', projectile: 'weapon' },
   pThrowGib: { startup: .10, active: .05, recovery: .20, anim: 'throw', projectile: 'gib' },
   smash:   { startup: .18, active: .10, recovery: .34, range: [.1, 1.0], depth: .65, dmg: 1.5, knock: 6,   zone: 'high', hitstop: .12, anim: 'swing', weapon: true, knockdown: true, finisher: true },
@@ -77,10 +90,20 @@ export const SPAWN_POOLS = [
 
 // ---------------- 무기 ----------------
 // sever: 부위 파괴 배율 (날붙이는 높게, 둔기는 낮게)
+// mode: cut=잘려서 날아감 / knock=맞아서 멀리 튕겨 나감 / crush=그 자리에서 박살 / saw=갈아서 절단
+// fling: 떨어진 부위가 날아가는 세기 / bisect: 마무리 시 몸통이 반으로 갈릴 확률 / zone: 노리는 부위(공격 기본값 덮어씀)
+// weight: 상자에서 나올 확률 가중치 / combo: 연타 시 공격 순서
 export const WEAPONS = {
-  pipe:    { name: '쇠파이프',      dmg: 15, reach: .55, dur: 14, sever: .7,  knock: 1.2, throwDmg: 18 },
-  machete: { name: '마체테',        dmg: 12, reach: .45, dur: 12, sever: 2.4, knock: .8,  throwDmg: 16 },
-  block:   { name: '콘크리트 블록', dmg: 24, reach: .15, dur: 5,  sever: 1.2, knock: 1.6, throwDmg: 30, slow: 1.4 },
+  pipe:     { name: '쇠파이프',      dmg: 15, reach: .55, dur: 14, sever: .7,  knock: 1.2, throwDmg: 18, mode: 'knock', fling: 1.3, weight: 3,  combo: ['swing', 'swing', 'smash'] },
+  machete:  { name: '마체테',        dmg: 11, reach: .45, dur: 16, sever: 2.6, knock: .8,  throwDmg: 16, mode: 'cut',   weight: 3,  combo: ['slash', 'slash', 'slashF'] },
+  block:    { name: '콘크리트 블록', dmg: 24, reach: .15, dur: 5,  sever: 1.4, knock: 1.6, throwDmg: 30, mode: 'crush', slow: 1.4, weight: 2, combo: ['smash'] },
+  golf:     { name: '골프채',        dmg: 16, reach: .8,  dur: 12, sever: 1.5, knock: 1,   throwDmg: 14, mode: 'knock', fling: 2.6, zone: 'head', weight: 2.5, combo: ['golf'] },
+  chainsaw: { name: '전기톱',        dmg: 3.2, reach: .5, dur: 70, sever: 3.5, knock: 1,   throwDmg: 12, mode: 'saw',   bisect: .85, weight: 1, combo: ['saw'] },
+  axe:      { name: '소방 도끼',     dmg: 18, reach: .55, dur: 12, sever: 2.8, knock: 1,   throwDmg: 24, mode: 'cut',   bisect: .5, slow: 1.15, weight: 2, combo: ['chop', 'chopF'] },
+  bat:      { name: '못 박힌 배트',  dmg: 14, reach: .6,  dur: 14, sever: 1.1, knock: 1.3, throwDmg: 16, mode: 'knock', fling: 1.8, weight: 2.5, combo: ['bash', 'bashF'] },
+  sledge:   { name: '오함마',        dmg: 30, reach: .5,  dur: 8,  sever: 1.6, knock: 1.2, throwDmg: 28, mode: 'crush', weight: 1.2, combo: ['sledge'] },
+  chain:    { name: '쇠사슬',        dmg: 9,  reach: 1.3, dur: 18, sever: .9,  knock: 1,   throwDmg: 10, mode: 'knock', fling: 1.4, weight: 2, combo: ['whip', 'whip', 'whipF'] },
+  pickaxe:  { name: '곡괭이',        dmg: 17, reach: .55, dur: 12, sever: 2.2, knock: 1,   throwDmg: 20, mode: 'crush', zone: 'head', weight: 2, combo: ['swing', 'smash'] },
 };
 export const FIST_SEVER = .55;
 

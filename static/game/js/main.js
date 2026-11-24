@@ -9,7 +9,7 @@ import { loadMeta, saveMeta, resetMeta, computeStats, upgradeCost, buyUpgrade, l
 import { shuffle } from './math.js';
 
 const $ = id => document.getElementById(id);
-const CARRY_NAME = { head: '머리', armF: '팔', armB: '팔', legF: '다리', legB: '다리', torso: '몸통' };
+import { PART_NAME as CARRY_NAME } from './game.js';
 const screen = $('screen');
 const hud = $('hud');
 
@@ -59,7 +59,7 @@ function showTitle() {
       <div class="sub">블록 청소반 — 벨트스크롤 로그라이트 프로토타입 v0.1</div>
       <div class="controls">
         <div><b>WASD / 방향키</b> 이동 (위아래 = 라인 이동)</div>
-        <div><b>J</b> 공격 (연타 콤보) · 점프 중 J = 날아차기</div>
+        <div><b>J</b> 공격 (연타 콤보, 전기톱은 누르고 있기) · 점프 중 J = 날아차기</div>
         <div><b>K</b> 점프 · <b>L</b> 줍기 / 던지기 (떨어진 부위·시체도 가능)</div>
         <div><b>T</b> 볼트 전술 변경 · <b>Esc</b> 일시정지</div>
         <div class="dim"><b>P</b> 픽셀 크기 · <b>B</b> (테스트) 적 소환</div>

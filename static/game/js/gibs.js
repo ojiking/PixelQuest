@@ -18,22 +18,27 @@ export class Gibs {
 
   clear() { this.list = []; this.spurts = []; }
 
-  // partMat: 떨어지는 순간 부위의 월드 행렬, cut: { mesh, voxels }
-  spawn(partMat, cut, vel, scale = 1, part = 'torso') {
-    const v = cut.voxels;
+  // 여러 마디를 하나의 덩어리로 (예: 위팔+아래팔, 상반신 전체)
+  // members: [{ mesh, voxels, M(떨어지는 순간의 월드 행렬) }]
+  spawnGroup(members, vel, part = 'torso', spinScale = 1) {
+    const P = [0, 0, 0];
     let cx = 0, cy = 0, cz = 0, n = 0;
-    for (let i = 0; i < v.length; i += 6) { cx += v[i]; cy += v[i + 1]; cz += v[i + 2]; n++; }
+    for (const m of members) {
+      const v = m.voxels;
+      for (let i = 0; i < v.length; i += 6) { mat4.point(P, m.M, v[i], v[i + 1], v[i + 2]); cx += P[0]; cy += P[1]; cz += P[2]; n++; }
+    }
     if (!n) return;
     cx /= n; cy /= n; cz /= n;
     let ext = 0;
-    for (let i = 0; i < v.length; i += 6) ext = Math.max(ext, Math.hypot(v[i] - cx, v[i + 1] - cy, v[i + 2] - cz));
-    const O = mat4.copy(mat4.create(), partMat);
-    O[12] = O[13] = O[14] = 0;
-    const pos = mat4.point([0, 0, 0], partMat, cx, cy, cz);
+    for (const m of members) {
+      const v = m.voxels;
+      for (let i = 0; i < v.length; i += 18) { mat4.point(P, m.M, v[i], v[i + 1], v[i + 2]); ext = Math.max(ext, Math.hypot(P[0] - cx, P[1] - cy, P[2] - cz)); }
+    }
     this.list.push({
-      mesh: cut.mesh, voxels: v, O, c: [cx, cy, cz], pos, vel: [...vel],
-      ax: 0, az: 0, wx: rand(-14, 14), wz: rand(-14, 14),
-      r: Math.min(ext * scale * 0.45, 0.22), rest: false, scale, part, thrown: null,
+      members: members.map(m => ({ mesh: m.mesh, M: mat4.copy(mat4.create(), m.M) })),
+      c0: [cx, cy, cz], pos: [cx, cy, cz], vel: [...vel],
+      ax: 0, az: 0, wx: rand(-14, 14) * spinScale, wz: rand(-14, 14) * spinScale,
+      r: Math.min(ext * 0.45, 0.32), rest: false, part, thrown: null,
     });
     if (this.list.length > MAX_GIBS) this.list.shift();
   }
@@ -69,13 +74,13 @@ export class Gibs {
   // 잘린 관절에서 dur초 동안 붉은 블록이 뿜어져 나옴
   spurt(actor, part, dur) { this.spurts.push({ actor, part, t: dur }); }
 
-  matrix(g, out) {
+  matrix(g, mem, out) {
     mat4.identity(out);
     mat4.translate(out, g.pos[0], g.pos[1], g.pos[2]);
     mat4.rotateZ(out, g.az);
     mat4.rotateX(out, g.ax);
-    mat4.multiply(out, out, g.O);
-    mat4.translate(out, -g.c[0], -g.c[1], -g.c[2]);
+    mat4.translate(out, -g.c0[0], -g.c0[1], -g.c0[2]);
+    mat4.multiply(out, out, mem.M);
     return out;
   }
 
@@ -137,7 +142,7 @@ export class Gibs {
     const { camX, viewHalf } = this.game;
     for (const g of this.list) {
       if (Math.abs(g.pos[0] - camX) > viewHalf + 4) continue; // 화면 밖은 그리지 않음
-      r.drawMesh(g.mesh, this.matrix(g, M));
+      for (const mem of g.members) r.drawMesh(mem.mesh, this.matrix(g, mem, M));
     }
   }
 }

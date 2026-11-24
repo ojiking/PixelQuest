@@ -4,10 +4,12 @@ import { sign } from './math.js';
 
 // 공격 zone별로 맞는 부위 확률 (torso = 부위 피해 없음)
 const ZONES = {
-  high: { head: .3, armF: .22, armB: .22, torso: .26 },
-  mid:  { armF: .26, armB: .26, legF: .16, legB: .16, torso: .16 },
-  low:  { legF: .5, legB: .5 },
-  all:  { head: .2, armF: .2, armB: .2, legF: .2, legB: .2 },
+  high: { head: .3, armF: .1, handF: .12, armB: .1, handB: .12, torso: .26 },
+  mid:  { armF: .12, handF: .14, armB: .12, handB: .14, legF: .08, shinF: .08, legB: .08, shinB: .08, torso: .16 },
+  low:  { legF: .2, shinF: .3, legB: .2, shinB: .3 },
+  head: { head: .6, handF: .08, handB: .08, torso: .24 },
+  arms: { armF: .2, handF: .3, armB: .2, handB: .3 },
+  all:  { head: .14, armF: .1, handF: .1, armB: .1, handB: .1, legF: .1, shinF: .1, legB: .1, shinB: .1, torso: .06 },
 };
 
 function pickPart(v, zone) {
@@ -33,16 +35,21 @@ function inBox(att, v, d, r0, reach, isProp) {
 }
 
 function buildHit(att, d, v) {
-  let dmg = d.dmg, sever = FIST_SEVER, knock = d.knock;
+  let dmg = d.dmg, sever = FIST_SEVER, knock = d.knock, zone = d.zone, mode, fling = 1, bisect = 0;
   if (d.weapon && att.weapon) {
     const w = WEAPONS[att.weapon.type];
     dmg = w.dmg * d.dmg; sever = w.sever; knock *= w.knock;
+    zone = w.zone ?? zone; mode = w.mode; fling = w.fling ?? 1;
+    if (d.finisher || d.hold) bisect = w.bisect ?? 0;
   }
   dmg *= att.power;
   if (d.finisher && att.perk('finisher')) dmg *= 1.4;
   if (att.perk('sever')) sever *= 1.6;
   const dir = d.aoe ? (sign(v.x - att.x) || att.facing) : att.facing;
-  return { attacker: att, dmg, knock, dir, zone: d.zone, knockdown: !!d.knockdown, sever, hitstop: d.hitstop ?? .05, shake: d.shake ?? (d.knockdown ? .12 : .04) };
+  return {
+    attacker: att, dmg, knock, dir, zone, knockdown: !!d.knockdown, sever, mode, fling, bisect,
+    launch: d.launch, hitstun: d.hitstun, hitstop: d.hitstop ?? .05, shake: d.shake ?? (d.knockdown ? .12 : .04),
+  };
 }
 
 export function tryHits(game, att, a) {
@@ -87,12 +94,14 @@ export function applyHit(game, v, h) {
     if (k) {
       const p = v.parts[k];
       p.hp -= dmg * h.sever;
-      if (p.hp <= 0) game.severPart(v, k, h.dir);
+      if (p.hp <= 0) game.severPart(v, k, h.dir, h);
     }
   }
   game.hitstop(h.hitstop);
   game.shake(h.shake);
   game.debris.sparks(v.x - h.dir * 0.1, v.y + 1.1 * v.scale, v.z + 0.3, back ? 0xffb03a : 0xfff3a0, back ? 14 : 8);
+  // 날붙이/톱으로 벨 때마다 붉은 블록이 튐
+  if (v.destructible && (h.mode === 'cut' || h.mode === 'saw')) game.bleed(v.x - h.dir * 0.1, v.y + 1.1 * v.scale, v.z + 0.2, h.dir, h.mode === 'saw' ? 5 : 8);
   if (v.dead) return true;
   if (v.hp <= 0) { game.kill(v, h); return true; }
 
@@ -110,8 +119,8 @@ export function applyHit(game, v, h) {
   if (knockdown) {
     v.setState('down');
     v.downT = 0;
-    v.vx = h.dir * h.knock;
-    v.vy = 5.5;
+    v.vx = h.dir * h.knock * (h.launch ? 0.4 : 1);
+    v.vy = h.launch ?? 5.5;
     v.y = Math.max(v.y, 0.01);
   } else {
     v.setState('hurt');

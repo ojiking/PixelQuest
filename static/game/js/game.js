@@ -1,5 +1,5 @@
 // 게임 월드: 스테이지 진행, 카메라, 웨이브, 투사체, 폭발, 렌더링
-import { mat4, clamp, rand, randi, sign, shuffle, pick } from './math.js';
+import { mat4, clamp, rand, randi, sign, shuffle, pick, weightedPick } from './math.js';
 import { BIOMES, BOT, LANE, WEAPONS, ENEMIES } from './config.js';
 import { Debris } from './fx.js';
 import { Gibs, bleed } from './gibs.js';
@@ -11,7 +11,16 @@ import { Stage, STAGE_COUNT } from './level.js';
 import { Item } from './props.js';
 import { applyHit } from './combat.js';
 
-const PART_NAME = { head: '머리', armF: '팔', armB: '팔', legF: '다리', legB: '다리', torso: '몸통' };
+export const PART_NAME = { head: '머리', armF: '팔', armB: '팔', handF: '아래팔', handB: '아래팔', legF: '다리', legB: '다리', shinF: '정강이', shinB: '정강이', torso: '몸통', upper: '상반신', lower: '하반신' };
+const SEVER_TEXT = { head: '목 절단!', armF: '팔 절단!', armB: '팔 절단!', handF: '손목 절단!', handB: '손목 절단!', legF: '다리 절단!', legB: '다리 절단!', shinF: '정강이 절단!', shinB: '정강이 절단!' };
+const CRUSH_TEXT = { head: '헤드 크러시!!', armF: '팔 분쇄!', armB: '팔 분쇄!', handF: '손 분쇄!', handB: '손 분쇄!', legF: '다리 분쇄!', legB: '다리 분쇄!', shinF: '정강이 분쇄!', shinB: '정강이 분쇄!' };
+
+// 가중치 기반 무기 뽑기
+export function rollWeapon(exclude = []) {
+  const w = {};
+  for (const [k, d] of Object.entries(WEAPONS)) if (!exclude.includes(k)) w[k] = d.weight ?? 1;
+  return weightedPick(w);
+}
 const IDENT = mat4.create();
 const M = mat4.create();
 
@@ -245,11 +254,32 @@ export class Game {
     if (back) this.texts.add(v.x, v.y + 2.4 * v.scale, v.z, '백어택!', 'back');
   }
 
-  severPart(v, k, dir) {
-    v.severPart(k, dir);
+  severPart(v, k, dir, h = {}) {
+    v.severPart(k, dir, h);
     this.run.severs++;
-    this.texts.add(v.x, v.y + 2.2 * v.scale, v.z, k === 'head' ? '헤드 브레이크!' : '부위 파괴!', 'sever');
-    if (k === 'head' && !v.dead) this.kill(v, { dir, knock: 3 });
+    const crush = h.mode === 'crush';
+    const fly = h.fling > 2 && k === 'head' ? '홈런!!' : null;
+    this.texts.add(v.x, v.y + 2.2 * v.scale, v.z, fly ?? (crush ? CRUSH_TEXT[k] : SEVER_TEXT[k]) ?? '부위 파괴!', k === 'head' ? 'sever big' : 'sever');
+    if (k === 'head' && !v.dead) this.kill(v, { ...h, dir, knock: 3, bisect: 0 });
+  }
+
+  // 오함마 충격파: 내려찍은 지점 주변 적의 다리를 부숨
+  groundShock(att, a) {
+    const d = a.def, w = WEAPONS[att.weapon?.type];
+    if (!w) return;
+    const x = att.x + att.facing * 1.1 * att.scale, z = att.z;
+    this.debris.puff(x, 0.1, z, [0xbdb6a6, 0x9c958a, 0x7a7266], 30, 4, .2, .5, 0.6);
+    this.shake(0.3);
+    for (const v of this.actors) {
+      if (v.team === att.team || a.hit.has(v) || v.dead || v.y > 0.5) continue;
+      const dist = Math.hypot(v.x - x, (v.z - z) * 1.3);
+      if (dist > d.shock.radius) continue;
+      a.hit.add(v);
+      applyHit(this, v, {
+        attacker: att, dmg: w.dmg * d.shock.dmg * att.power, knock: 2, dir: sign(v.x - x) || att.facing, zone: d.shock.zone,
+        knockdown: false, sever: w.sever, mode: 'crush', hitstun: .45, hitstop: 0, shake: 0,
+      });
+    }
   }
 
   kill(v, h) {
@@ -269,6 +299,12 @@ export class Game {
       this.items.push(new Item('scrap', null, v.x, v.z, { y: 1, vy: rand(4, 7), vx: rand(-2, 2), value: n / pieces }));
     }
     if (v.isBoss) { this.banner('철거반장 격파!', 2.5); this.hitstop(0.35); this.shake(0.6); }
+    // 전기톱/도끼 마무리: 허리가 두 동강
+    if (h.bisect && v.destructible && !v.remove && Math.random() < h.bisect) {
+      v.bisect(h.dir);
+      this.texts.add(v.x, v.y + 2.4 * v.scale, v.z, '두 동강!!', 'sever big');
+      this.hitstop(0.12); this.shake(0.3);
+    }
   }
 
   heroDown(v, h) {
@@ -381,8 +417,8 @@ export class Game {
     mat4.identity(M); mat4.translate(M, p.x, 0, p.z);
     this.debris.burst(getModel(this.r, p.model).voxels, M, { frac: 0.5, size: 0.14, impulse: [dir * 2, 1, 0] });
     const roll = Math.random();
-    if (roll < 0.4) this.items.push(new Item('weapon', pick(Object.keys(WEAPONS)), p.x, p.z, { y: 0.5, vy: 4 }));
-    else if (roll < 0.7) this.items.push(new Item('food', null, p.x, p.z, { y: 0.5, vy: 4 }));
+    if (roll < 0.5) this.items.push(new Item('weapon', rollWeapon(), p.x, p.z, { y: 0.5, vy: 4 }));
+    else if (roll < 0.75) this.items.push(new Item('food', null, p.x, p.z, { y: 0.5, vy: 4 }));
     else for (let i = 0; i < 2; i++) this.items.push(new Item('scrap', null, p.x, p.z, { y: .5, vy: rand(4, 6), vx: rand(-2, 2) }));
   }
 

@@ -3,6 +3,7 @@ import { BIOMES, SPAWN_POOLS, LANE } from './config.js';
 import { hash3, hexToRgb, FACES, MeshBuilder } from './voxel.js';
 import { rand, randi, weightedPick } from './math.js';
 import { Prop, SpikeTrap, Item } from './props.js';
+import { rollWeapon } from './game.js';
 
 const AIR = 0, GRASS = 1, DIRT = 2, LANEB = 3, STONE = 4, WALL = 5, WALL2 = 6, GLASS = 7, WOOD = 8, LEAVES = 9;
 
@@ -189,8 +190,15 @@ export class Stage {
       this.traps.push(new SpikeTrap(x0 + 1, z0 + 1, rand(0, 3)));
     }
     // 시작 무기
-    this.items.push(new Item('weapon', index === 0 ? 'pipe' : 'machete', 6.5, -1));
-    this.items.push(new Item('weapon', 'block', triggers[1] - 4, 1.5));
+    // 첫 무기 + 구간마다 무작위 무기 (서로 다른 종류)
+    const first = index === 0 ? 'pipe' : rollWeapon(['pipe']);
+    const got = [first];
+    this.items.push(new Item('weapon', first, 6.5, -1));
+    for (let k = 1; k < triggers.length; k++) {
+      const w = rollWeapon(got);
+      got.push(w);
+      this.items.push(new Item('weapon', w, triggers[k] - rand(3, 5), rand(LANE.zMin + .5, LANE.zMax - .5)));
+    }
   }
 
   dispose(r) { r.deleteMesh(this.terrain); }

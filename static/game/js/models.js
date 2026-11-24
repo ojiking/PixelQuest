@@ -180,36 +180,61 @@ function humanoid(r, o) {
   if (robot) leg.fill(0, Math.floor(lh / 2), 0, lw - 1, Math.floor(lh / 2), ld - 1, p.joint);
 
   const LH = lh * V, TH = th * V;
-  // 부위 메시 + 잘린 면이 붉은 변형(cut, 떨어져 나간 덩어리) + 몸에 남는 붉은 단면(stump)
-  const mk = (grid, origin, jy) => {
-    const cut = new VoxGrid(grid.w, grid.h, grid.d);
-    cut.data.set(grid.data);
-    const stump = new VoxGrid(grid.w, grid.h, grid.d);
-    for (let z = 0; z < grid.d; z++) for (let x = 0; x < grid.w; x++) {
-      if (grid.get(x, jy, z) < 0) continue;
-      const c = WOUND[(x * 7 + z * 3) % WOUND.length];
-      cut.set(x, jy, z, c); stump.set(x, jy, z, c);
+  // 부위 메시 + 붉은 단면 변형들
+  //  cut: 붙어있던 쪽(관절) 면이 붉음 / cutTB: 양쪽 면이 붉음 / cutB: 반대쪽 면만 붉음 / stump: 몸에 남는 붉은 단면
+  const mk = (grid, origin, joint, far = null) => {
+    const paint = (g, y) => {
+      for (let z = 0; z < grid.d; z++) for (let x = 0; x < grid.w; x++) {
+        if (grid.get(x, y, z) >= 0) g.set(x, y, z, WOUND[(x * 7 + z * 3 + y) % WOUND.length]);
+      }
+    };
+    const copy = () => { const g = new VoxGrid(grid.w, grid.h, grid.d); g.data.set(grid.data); return g; };
+    const cut = copy(); paint(cut, joint);
+    const stump = new VoxGrid(grid.w, grid.h, grid.d); paint(stump, joint);
+    const out = { ...meshGrid(r, grid, V, origin), cut: meshGrid(r, cut, V, origin), stump: meshGrid(r, stump, V, origin).mesh };
+    if (far != null) {
+      const tb = copy(); paint(tb, joint); paint(tb, far);
+      const b = copy(); paint(b, far);
+      out.cutTB = meshGrid(r, tb, V, origin);
+      out.cutB = meshGrid(r, b, V, origin);
     }
-    return { ...meshGrid(r, grid, V, origin), cut: meshGrid(r, cut, V, origin), stump: meshGrid(r, stump, V, origin).mesh };
+    return out;
   };
+  const slice = (g, y0, y1) => {
+    const o = new VoxGrid(g.w, y1 - y0 + 1, g.d);
+    for (let z = 0; z < g.d; z++) for (let y = y0; y <= y1; y++) for (let x = 0; x < g.w; x++) o.set(x, y - y0, z, g.get(x, y, z));
+    return o;
+  };
+  // 팔 = 위팔 + 아래팔, 다리 = 허벅지 + 정강이 (팔꿈치/무릎에서 따로 잘림)
+  const ahU = Math.ceil(ah / 2), ahL = ah - ahU;
+  const lhU = Math.ceil(lh / 2), lhL = lh - lhU;
   const headM = mk(head, [s / 2, 0, (s + 2) / 2], 0);
-  const torsoM = mk(torso, [bx + tw / 2, 0, td / 2], th - 1);
-  const armM = mk(arm, [aw / 2, ah, ad / 2], ah - 1);
-  const legM = mk(leg, [lw / 2, lh, ld / 2], lh - 1);
+  const torsoM = mk(torso, [bx + tw / 2, 0, td / 2], th - 1, 0);
+  const armUM = mk(slice(arm, ahL, ah - 1), [aw / 2, ahU, ad / 2], ahU - 1, 0);
+  const armLM = mk(slice(arm, 0, ahL - 1), [aw / 2, ahL, ad / 2], ahL - 1);
+  const legUM = mk(slice(leg, lhL, lh - 1), [lw / 2, lhU, ld / 2], lhU - 1, 0);
+  const legLM = mk(slice(leg, 0, lhL - 1), [lw / 2, lhL, ld / 2], lhL - 1);
   const hipZ = (td / 2 - ld / 2) * V;
   const shZ = (td / 2 + ad / 2) * V;
 
   return {
     height: (lh + th + s) * V,
     armLen: ah * V,
+    armULen: ahU * V,
+    handLen: ahL * V,
     legLen: LH,
+    legULen: lhU * V,
     parts: {
-      legB:  { ...legM,   pivot: [0, LH, -hipZ] },
-      armB:  { ...armM,   pivot: [0, LH + TH, -shZ] },
+      legB:  { ...legUM, pivot: [0, LH, -hipZ] },
+      shinB: { ...legLM, pivot: [0, -lhU * V, 0], parent: 'legB' },
+      armB:  { ...armUM, pivot: [0, LH + TH, -shZ] },
+      handB: { ...armLM, pivot: [0, -ahU * V, 0], parent: 'armB' },
       torso: { ...torsoM, pivot: [0, LH, 0] },
-      head:  { ...headM,  pivot: [0, LH + TH, 0] },
-      legF:  { ...legM,   pivot: [0, LH, hipZ] },
-      armF:  { ...armM,   pivot: [0, LH + TH, shZ] },
+      head:  { ...headM, pivot: [0, LH + TH, 0] },
+      legF:  { ...legUM, pivot: [0, LH, hipZ] },
+      shinF: { ...legLM, pivot: [0, -lhU * V, 0], parent: 'legF' },
+      armF:  { ...armUM, pivot: [0, LH + TH, shZ] },
+      handF: { ...armLM, pivot: [0, -ahU * V, 0], parent: 'armF' },
     },
   };
 }
@@ -272,6 +297,48 @@ const BUILDERS = {
     g.fill(1, 1, 0, 4, 4, 0, 0x6a6a68);
     g.fill(1, 1, 5, 4, 4, 5, 0x6a6a68);
   }),
+  w_golf: r => single(r, 18, 4, 1, [2, 3.5, 0.5], g => {
+    g.fill(0, 3, 0, 15, 3, 0, 0xc8ccd2);
+    g.fill(0, 3, 0, 3, 3, 0, 0x222222);
+    g.fill(15, 0, 0, 17, 2, 0, 0x3a3f46);
+    g.fill(17, 0, 0, 17, 1, 0, 0x8a9099);
+  }),
+  w_chainsaw: r => single(r, 18, 5, 4, [2, 2, 2], g => {
+    g.fill(0, 0, 0, 5, 4, 3, 0xe8731a);
+    g.fill(1, 4, 1, 4, 4, 2, 0x1a1a1a);
+    g.fill(2, 1, 0, 3, 2, 0, 0x3a3a3a); g.fill(2, 1, 3, 3, 2, 3, 0x3a3a3a);
+    g.fill(6, 1, 1, 16, 2, 2, 0x9aa0a8);
+    for (let x = 6; x <= 17; x += 2) { g.fill(x, 0, 1, x, 0, 2, 0x55595e); g.fill(x, 3, 1, x, 3, 2, 0x55595e); }
+    g.fill(17, 1, 1, 17, 2, 2, 0x55595e);
+  }),
+  w_axe: r => single(r, 16, 8, 1, [1.5, 4.5, 0.5], g => {
+    g.fill(0, 4, 0, 14, 4, 0, 0xb52a22);
+    g.fill(0, 4, 0, 2, 4, 0, 0x1a1a1a);
+    g.fill(11, 5, 0, 14, 6, 0, 0x8d939a);
+    g.fill(10, 7, 0, 15, 7, 0, 0xe6eaee);
+    g.fill(12, 1, 0, 13, 3, 0, 0x6f757c);
+  }),
+  w_bat: r => single(r, 15, 5, 5, [2, 2.5, 2.5], g => {
+    g.fill(0, 2, 2, 5, 2, 2, 0x9a6a3a);
+    g.fill(6, 1, 1, 14, 3, 3, 0xb07a45);
+    g.fill(0, 2, 2, 1, 2, 2, 0x2a1a10);
+    for (const [x, y, z] of [[8, 4, 2], [10, 0, 2], [11, 2, 4], [12, 2, 0], [13, 4, 1], [9, 2, 4], [14, 0, 3], [7, 2, 0], [12, 4, 3], [9, 0, 1]]) g.set(x, y, z, 0xd8d8d8);
+  }),
+  w_sledge: r => single(r, 15, 6, 3, [1.5, 2.5, 1.5], g => {
+    g.fill(0, 2, 1, 12, 3, 1, 0x7a5232);
+    g.fill(11, 0, 0, 14, 5, 2, 0x4a4e55);
+    g.fill(11, 0, 0, 14, 0, 2, 0x6a6f77); g.fill(11, 5, 0, 14, 5, 2, 0x6a6f77);
+  }),
+  w_chain: r => single(r, 22, 2, 1, [1.5, 1, 0.5], g => {
+    g.fill(0, 0, 0, 2, 1, 0, 0x2a2a2a);
+    for (let x = 3; x < 22; x++) g.set(x, Math.floor(x / 2) % 2, 0, x % 2 ? 0x9aa0a8 : 0x6f757c);
+    g.fill(20, 0, 0, 21, 1, 0, 0x4a4e55);
+  }),
+  w_pickaxe: r => single(r, 14, 9, 1, [1.5, 4.5, 0.5], g => {
+    g.fill(0, 4, 0, 11, 4, 0, 0x7a5232);
+    g.fill(11, 1, 0, 12, 7, 0, 0x8d939a);
+    g.set(10, 0, 0, 0xc8cdd2); g.set(11, 0, 0, 0xc8cdd2); g.set(10, 8, 0, 0xc8cdd2); g.set(11, 8, 0, 0xc8cdd2);
+  }),
   brick: r => single(r, 4, 2, 2, [2, 1, 1], g => g.fill(0, 0, 0, 3, 1, 1, 0xb5523b)),
   food: r => single(r, 3, 4, 3, [1.5, 0, 1.5], g => {
     g.fill(0, 0, 0, 2, 3, 2, 0xd9442b);
@@ -302,4 +369,7 @@ const BUILDERS = {
   }),
 };
 
-export const WEAPON_MODEL = { pipe: 'w_pipe', machete: 'w_machete', block: 'w_block' };
+export const WEAPON_MODEL = {
+  pipe: 'w_pipe', machete: 'w_machete', block: 'w_block', golf: 'w_golf', chainsaw: 'w_chainsaw',
+  axe: 'w_axe', bat: 'w_bat', sledge: 'w_sledge', chain: 'w_chain', pickaxe: 'w_pickaxe',
+};

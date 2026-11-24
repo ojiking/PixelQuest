@@ -1,8 +1,7 @@
 import { Actor } from './actor.js';
-import { PLAYER } from './config.js';
+import { PLAYER, WEAPONS } from './config.js';
 
 const FIST_COMBO = ['jab', 'cross', 'kick'];
-const WEAPON_COMBO = ['swing', 'swing', 'smash'];
 
 export class Player extends Actor {
   constructor(game, stats) {
@@ -18,7 +17,7 @@ export class Player extends Actor {
   }
 
   perk(id) { return this.game.run.perks.has(id); }
-  get combo() { return this.weapon ? WEAPON_COMBO : FIST_COMBO; }
+  get combo() { return this.weapon ? WEAPONS[this.weapon.type].combo : FIST_COMBO; }
 
   update(dt) {
     const g = this.game, inp = g.input;
@@ -65,6 +64,14 @@ export class Player extends Actor {
       }
       case 'attack': {
         const a = this.attack;
+        if (a.def.hold) {
+          // 전기톱: J를 누르는 동안 계속, 천천히 이동 가능
+          const endT = a.def.startup + a.def.active;
+          if ((!inp.held('KeyJ') || !this.weapon) && a.t < endT) a.t = Math.max(a.t, endT);
+          this.vx = mx * PLAYER.speed * 0.35; this.vz = mz * PLAYER.zSpeed * 0.35;
+          this.updateAttack(dt);
+          break;
+        }
         if (!a.air) {
           this.vx *= Math.pow(0.001, dt);
           this.vz = 0;
