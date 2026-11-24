@@ -37,6 +37,7 @@ export class Game {
     this.camX = 8; this.viewHalf = 7; this.aspect = 16 / 9;
     this.lock = null; this.zoneIdx = 0;
     this.shadowBuf = new Float32Array(256 * 7);
+    this.ropeBuf = new Float32Array(1200 * 7);
     this.running = false;
     this.combo = 0; this.comboT = 0;
     this.goT = 0;
@@ -723,6 +724,9 @@ export class Game {
       r.drawMesh(getModel(r, key).mesh, M);
     }
     this.gibs.draw(r);
+    let rn = 0;
+    for (const a of this.actors) rn = a.fillRope(this.ropeBuf, rn, 1200);
+    r.drawInstances(this.ropeBuf, rn);
     r.drawInstances(this.debris.inst, this.debris.fill());
 
     // 발밑 그림자 (라인 깊이를 읽게 해주는 핵심 장치)

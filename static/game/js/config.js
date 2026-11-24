@@ -68,7 +68,7 @@ export const ATTACKS = {
   whip:    { startup: .10, active: .12, recovery: .20, range: [.2, 1.0], depth: .85, dmg: 1.0, knock: 1.5, zone: 'low',  hitstop: .05, anim: 'hswing', weapon: true },
   whipF:   { startup: .14, active: .14, recovery: .30, range: [.2, 1.0], depth: .9,  dmg: 1.4, knock: 2.5, zone: 'low',  hitstop: .08, anim: 'hswing', weapon: true, knockdown: true, finisher: true },
   // 채찍: 빠른 채찍질, 마무리는 적을 끌어당김 (knock 음수)
-  lash:     { startup: .08, active: .08, recovery: .15, range: [.2, 1.0], depth: .45, dmg: 1.0, knock: .8, zone: 'arms', hitstop: .04, anim: 'swing', weapon: true },
+  lash:     { startup: .11, active: .08, recovery: .14, range: [.2, 1.0], depth: .45, dmg: 1.0, knock: .8, zone: 'arms', hitstop: .04, anim: 'swing', weapon: true },
   lashPull: { startup: .12, active: .10, recovery: .28, range: [.3, 1.0], depth: .5,  dmg: 1.3, knock: -11, zone: 'head', hitstop: .08, anim: 'hslash', weapon: true, hitstun: .5, finisher: true, pull: true },
   // 강철 체인 마무리: 제자리에서 돌며 주변을 휩쓸기
   chainSpin: { startup: .16, active: .42, recovery: .35, range: [0, 1.0], depth: 1.1, dmg: 1.4, knock: 8, zone: 'mid', hitstop: .1, anim: 'wspin', weapon: true, aoe: true, knockdown: true, finisher: true, shake: .2 },
@@ -136,6 +136,14 @@ export const WEAPONS = {
   pickaxe:  { name: '곡괭이',        dmg: 17, reach: .55, dur: 12, sever: 2.2, knock: 1,   throwDmg: 20, mode: 'crush', zone: 'head', weight: 2, combo: ['swing', 'smash'] },
 };
 export const FIST_SEVER = .55;
+
+// 휘어지는 무기(채찍·체인): 마디 수, 마디 길이, 평소/공격 중 펴짐 정도, 무게
+export const FLEX = {
+  whip:  { handleModel: 'w_whip_handle',  handle: .30, segs: 14, seg: .13,  stiffIdle: .03, stiffAtk: .5, grav: 16, damp: .90,
+           colors: [0x7a4a28, 0x5a361e], tip: 0xc08a50, size: [.09, .05], crack: true },
+  chain: { handleModel: 'w_chain_handle', handle: .22, segs: 9,  seg: .155, stiffIdle: .015, stiffAtk: .26, grav: 22, damp: .88,
+           colors: [0x9aa2ab, 0x5d636b], tip: 0x3e4349, size: [.095, .095], ball: .24 },
+};
 
 // 집어 든 신체 부위를 무기로 휘두르기 (몸통/상·하반신은 던지기만)
 export const LIMB_WEAPONS = {

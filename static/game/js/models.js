@@ -346,6 +346,8 @@ const BUILDERS = {
     }
     g.fill(21, 0, 0, 23, 2, 2, 0x3e4349);
   }),
+  w_whip_handle: r => single(r, 4, 2, 1, [1.5, 1, 0.5], g => g.fill(0, 0, 0, 3, 1, 0, 0x3a2414)),
+  w_chain_handle: r => single(r, 3, 2, 2, [1.5, 1, 1], g => g.fill(0, 0, 0, 2, 1, 1, 0x2a2a2a)),
   w_whip: r => single(r, 27, 2, 1, [1.5, 1, 0.5], g => { // 채찍: 가는 가죽 끈
     g.fill(0, 0, 0, 3, 1, 0, 0x3a2414);
     for (let x = 4; x < 27; x++) g.set(x, x < 16 ? 1 : 0, 0, x > 23 ? 0xb07a48 : x % 3 ? 0x6b4226 : 0x5a361e);

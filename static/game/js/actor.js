@@ -1,10 +1,11 @@
 // 모든 캐릭터(플레이어/동료/적)의 공통 기반: 물리, 상태, 공격 진행, 절차적 애니메이션, 부위 렌더링
 import { mat4, clamp } from './math.js';
-import { GRAVITY, LANE, ATTACKS, WEAPONS, LIMB_WEAPONS } from './config.js';
+import { GRAVITY, LANE, ATTACKS, WEAPONS, LIMB_WEAPONS, FLEX } from './config.js';
+import { hexToRgb } from './voxel.js';
 import { getModel, WEAPON_MODEL } from './models.js';
 import { tryHits } from './combat.js';
 
-const M = mat4.create(), PM = mat4.create(), WM = mat4.create();
+const M = mat4.create(), PM = mat4.create(), WM = mat4.create(), RM = mat4.create(), RP = mat4.create();
 // 부모가 자식보다 먼저 (위팔→아래팔, 허벅지→정강이)
 export const PART_ORDER = ['legB', 'shinB', 'armB', 'handB', 'torso', 'head', 'legF', 'shinF', 'armF', 'handF'];
 const PART_HP = { head: .5, armF: .35, armB: .35, handF: .25, handB: .25, legF: .4, legB: .4, shinF: .3, shinB: .3 };
@@ -327,6 +328,88 @@ export class Actor {
     const leanT = this.legCount() === 1 && this.fall < 0.3 ? (this.legOK('F') ? 0.14 : -0.14) : 0;
     this.lean += (leanT - this.lean) * Math.min(1, dt * 10);
     this.fall += (fallT - this.fall) * Math.min(1, dt * 12);
+    if (this.weapon && FLEX[this.weapon.type] && this.parts.handF.alive) this.simRope(dt); else this.rope = null;
+  }
+
+  // 채찍·체인: 손잡이 끝에 매달린 마디들을 간단한 물리(Verlet)로 움직임
+  simRope(dt) {
+    const type = this.weapon.type, f = FLEX[type], g = this.game;
+    const root = this.rootMatrix(RM);
+    this.partMatrix('handF', root, RP);
+    mat4.translate(RP, 0, -this.model.handLen, 0);
+    mat4.rotateZ(RP, this.grip);
+    mat4.translate(RP, f.handle / this.scale, 0, 0);
+    const ax = RP[12], ay = RP[13], az = RP[14];
+    let dx = RP[0], dy = RP[1], dz = RP[2];
+    const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
+    const L = f.seg * this.scale;
+    if (!this.rope || this.rope.type !== type) {
+      this.rope = { type, p: [] };
+      for (let i = 0; i <= f.segs; i++) {
+        const x = ax + dx * L * i, y = ay + dy * L * i, z = az + dz * L * i;
+        this.rope.p.push([x, y, z, x, y, z]);
+      }
+    }
+    const P = this.rope.p;
+    const swinging = this.attack?.def.weapon && this.attackPhase() !== 'recovery';
+    const stiff = 1 - Math.pow(1 - (swinging ? f.stiffAtk : f.stiffIdle), dt * 60);
+    P[0][0] = P[0][3] = ax; P[0][1] = P[0][4] = ay; P[0][2] = P[0][5] = az;
+    const gstep = f.grav * dt * dt;
+    for (let i = 1; i < P.length; i++) {
+      const q = P[i];
+      const vx = (q[0] - q[3]) * f.damp, vy = (q[1] - q[4]) * f.damp, vz = (q[2] - q[5]) * f.damp;
+      q[3] = q[0]; q[4] = q[1]; q[5] = q[2];
+      q[0] += vx; q[1] += vy - gstep; q[2] += vz;
+      // 손잡이 방향으로 곧게 뻗으려는 힘 (휘두를 때 강해짐 → 휘어지며 펴짐)
+      q[0] += (ax + dx * L * i - q[0]) * stiff;
+      q[1] += (ay + dy * L * i - q[1]) * stiff;
+      q[2] += (az + dz * L * i - q[2]) * stiff;
+    }
+    for (let it = 0; it < 4; it++) {
+      for (let i = 1; i < P.length; i++) {
+        const a = P[i - 1], b = P[i];
+        const ex = b[0] - a[0], ey = b[1] - a[1], ez = b[2] - a[2];
+        const d = Math.hypot(ex, ey, ez) || 1e-6;
+        const k = L / d;
+        b[0] = a[0] + ex * k; b[1] = a[1] + ey * k; b[2] = a[2] + ez * k;
+      }
+    }
+    for (let i = 1; i < P.length; i++) {
+      const fl = g.floorAt(P[i][0], P[i][2]);
+      if (fl > -50 && P[i][1] < fl + 0.04) P[i][1] = fl + 0.04;
+    }
+    // 채찍 끝이 빠르게 움직이면 '딱' 불꽃
+    if (f.crack && swinging && this.attackPhase() === 'active') {
+      const t = P[P.length - 1];
+      if (Math.hypot(t[0] - t[3], t[1] - t[4], t[2] - t[5]) / Math.max(dt, 1e-3) > 9 && Math.random() < 0.5) g.debris.sparks(t[0], t[1], t[2], 0xfff3c0, 3, 2);
+    }
+  }
+
+  // 줄 마디를 인스턴스 큐브로 채움
+  fillRope(buf, n, cap) {
+    if (!this.rope || this.hidden) return n;
+    const f = FLEX[this.rope.type], P = this.rope.p, s = this.scale;
+    const C = f.colors.map(hexToRgb), T = hexToRgb(f.tip);
+    const put = (x, y, z, size, c) => {
+      if (n >= cap) return;
+      const o = n * 7;
+      buf[o] = x; buf[o + 1] = y; buf[o + 2] = z; buf[o + 3] = size; buf[o + 4] = c[0]; buf[o + 5] = c[1]; buf[o + 6] = c[2];
+      n++;
+    };
+    for (let i = 1; i < P.length; i++) {
+      const a = P[i - 1], b = P[i], u = i / (P.length - 1);
+      const size = (f.size[0] + (f.size[1] - f.size[0]) * u) * s;
+      const c = i >= P.length - 2 ? T : C[i % C.length];
+      if (f.ball) {
+        put(b[0], b[1], b[2], size, c);                                                     // 고리
+        put((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2, size * 0.55, C[1]);    // 연결부
+      } else {
+        put((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2, size, c);
+        put(b[0], b[1], b[2], size * 0.95, c);
+      }
+    }
+    if (f.ball) { const t = P[P.length - 1]; put(t[0], t[1], t[2], f.ball * s, T); }
+    return n;
   }
 
   attackPose(T) {
@@ -447,7 +530,8 @@ export class Actor {
         mat4.copy(WM, PM);
         mat4.translate(WM, 0, -this.model.handLen, 0);
         mat4.rotateZ(WM, this.grip);
-        r.drawMesh(getModel(r, WEAPON_MODEL[this.weapon.type]).mesh, WM, tint);
+        const fx = FLEX[this.weapon.type];
+        r.drawMesh(getModel(r, fx ? fx.handleModel : WEAPON_MODEL[this.weapon.type]).mesh, WM, tint);
       }
       if (k === 'handF' && this.carry?.kind === 'barrel') {
         mat4.copy(WM, root);
