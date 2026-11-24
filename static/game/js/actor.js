@@ -12,6 +12,8 @@ const PART_HP = { head: .5, armF: .35, armB: .35, handF: .25, handB: .25, legF: 
 export const CHILD = { armF: 'handF', armB: 'handB', legF: 'shinF', legB: 'shinB' };
 const TOP = ['head', 'torso', 'armF', 'armB', 'legF', 'legB'];
 const FLASH = [1, 1, 1, .75];
+const CHAR = [.08, .05, .03, .7];
+const BURN = [1, .45, .08, .35];
 const WARN = [1, .2, .08, .5];
 
 export class Actor {
@@ -136,12 +138,33 @@ export class Actor {
 
   activeFrame(a, dt = 0) {
     const d = a.def, g = this.game;
+    // 샷건: 한 번만 발사 (탄약 1 소모, 총구 불꽃·산탄 궤적·반동)
+    if (d.shot) {
+      if (a.spawned) return;
+      a.spawned = true;
+      const tip = this.weaponTip(1.15);
+      g.muzzleFlash(tip, this.facing);
+      this.vx = -this.facing * 3.2;
+      if (this.weapon) { this.weapon.dur -= 1; if (this.weapon.dur <= 0) this.weapon.empty = true; }
+      tryHits(g, this, a);
+      return;
+    }
+    // 화염 분사: 매 프레임 불길 입자, 일정 간격마다 판정과 연료 소모
+    if (d.flame) {
+      const tip = this.weaponTip(1.05);
+      g.flameSpray(tip, this.facing, dt);
+    }
     if (d.tick) {
       // 전기톱: 일정 간격마다 판정을 새로 해서 계속 갈아냄
       a.tickT = (a.tickT ?? 0) - dt;
       if (a.tickT > 0) return;
       a.tickT = d.tick;
       a.hit.clear();
+      if (d.flame && this.weapon) {
+        this.weapon.dur -= 1;
+        g.sfx?.('flame');
+        if (this.weapon.dur <= 0) { this.weapon.empty = true; a.t = d.startup + d.active; }
+      }
       g.debris.sparks(this.x + this.facing * 1.2 * this.scale, 1.2 * this.scale, this.z + 0.2, 0xffd27a, 3, 3);
       tryHits(g, this, a);
       return;
@@ -198,9 +221,32 @@ export class Actor {
     this.armorAcc = 0;
   }
 
+  // 손에 든 무기의 끝(총구/노즐) 월드 위치
+  weaponTip(len) {
+    const root = this.rootMatrix(RM);
+    this.partMatrix('handF', root, RP);
+    mat4.translate(RP, 0, -this.model.handLen, 0);
+    mat4.rotateZ(RP, this.grip);
+    return mat4.point([0, 0, 0], RP, len / this.scale, 0.05, 0);
+  }
+
+  // 불붙은 상태: 3초 동안 지속 피해 + 몸에서 불길
+  updateBurn(dt) {
+    if (!(this.burnT > 0) || this.remove) return;
+    const g = this.game;
+    this.burnT -= dt;
+    if (Math.random() < dt * 25) g.debris.puff(this.x + (Math.random() - .5) * .4, this.y + 0.4 + Math.random() * 1.3 * this.scale, this.z, [0xffe14a, 0xff8a1f, 0xd94a2a], 2, .6, .13, .4, -0.6);
+    this.burnTick = (this.burnTick ?? 0.3) - dt;
+    if (this.burnTick > 0 || this.dead) return;
+    this.burnTick = 0.3;
+    this.hp -= 2;
+    if (this.hp <= 0) { this.charred = true; g.kill(this, { dir: this.facing, knock: 2, attacker: this.burnBy, mode: 'burn' }); }
+  }
+
   // ------------------------------------------------ 물리 / 공통 상태
   physics(dt) {
     this.st += dt;
+    this.updateBurn(dt);
     if (this.flash > 0) this.flash -= dt;
     if (this.invuln > 0) this.invuln -= dt;
     const g = this.game;
@@ -466,6 +512,15 @@ export class Actor {
         T.handF = 0; T.handB = .2; T.grip = -1.57;
         T.torso = S ? -.35 : .15; T.twist = S ? .5 : A ? -.6 : -.4;
         T.legF = .3; T.shinF = -.35; T.legB = -.2; T.shinB = -.35; break;
+      case 'flame': { // 화염 스프레이: 노즐을 앞으로, 살짝 흔들며 분사
+        const j = Math.sin(t * 7) * .12;
+        T.armF = 1.3 + j; T.armB = 1.15 + j; T.handF = .1; T.handB = .5; T.grip = -1.5;
+        T.torso = -.1; T.legF = .4; T.legB = -.3; T.shinB = -.25; break;
+      }
+      case 'shoot': // 샷건: 겨누기 → 반동으로 총구가 들림
+        T.armF = A ? 1.95 : ph === 'recovery' && a.t - d.startup - d.active < .12 ? 1.9 : 1.5;
+        T.armB = T.armF - .15; T.handF = 0; T.handB = .35; T.grip = -1.57;
+        T.torso = A ? .25 : 0; T.head = A ? .15 : 0; T.legF = .45; T.legB = -.35; T.shinB = -.3; break;
       case 'saw': { // 전기톱: 앞으로 내밀고 덜덜 떨림
         const j = Math.sin(t * 90) * .05;
         T.armF = 1.25 + j; T.armB = 1.1 - j; T.handF = .15; T.handB = .45; T.grip = -1.35;
@@ -525,6 +580,8 @@ export class Actor {
 
   tint() {
     if (this.flash > 0) return FLASH;
+    if (this.charred) return CHAR;
+    if (this.burnT > 0 && Math.floor(this.game.time * 12) % 2) return BURN;
     const a = this.attack;
     if (a && a.def.telegraph && this.attackPhase() === 'startup' && Math.floor(this.game.time * 14) % 2) return WARN;
     return null;
@@ -598,6 +655,7 @@ export class Actor {
     const jx = PM[12], jy = PM[13], jz = PM[14];
     p.alive = false; p.rz = 0; p.rx = 0;
     if (withChild) { const c = this.parts[child]; c.alive = false; c.rz = 0; c.rx = 0; }
+    if (h.mode === 'blast') h = { ...h, mode: 'knock', fling: 3 }; // 샷건: 부위가 멀리 날아감
     if (h.mode === 'crush') {
       for (const m of members) g.debris.burst(m.voxels, m.M, { frac: .9, size: .1, impulse: [dir * 2, 1.5, 0], spread: 2.8 });
       g.bleed(jx, jy, jz, dir, 45);
@@ -645,6 +703,25 @@ export class Actor {
       g.gibs.spawnGroup(list, gibVelocity(k, dir * 0.6, this.vx * 0.3, true), k);
       if (k !== 'torso') g.bleed(list[0].M[12], list[0].M[13], list[0].M[14], dir, 12);
     }
+    g.onShatter(this);
+  }
+
+  // 샷건 처치: 모든 부위가 사방으로 날아가고 몸통 일부는 터져 흩어짐
+  blastApart(dir) {
+    if (this.remove) return;
+    this.remove = true;
+    const root = this.rootMatrix(M);
+    const g = this.game;
+    const parts = ['head', 'armF', 'handF', 'armB', 'handB', 'legF', 'shinF', 'legB', 'shinB', 'torso'];
+    for (const k of parts) {
+      if (!this.parts[k].alive) continue;
+      const m = this.member(k, root, k === 'torso' ? 'cutTB' : (this.model.parts[k].cutTB ? 'cutTB' : 'cut'));
+      if (k === 'torso') g.debris.burst(m.voxels, m.M, { frac: .55, size: .12, impulse: [dir * 5, 3, 0], spread: 3.5 });
+      const sp = 6 + Math.random() * 6;
+      g.gibs.spawnGroup([m], [dir * sp + (Math.random() - .5) * 3, 3 + Math.random() * 5, (Math.random() - .5) * 4], k, 1.6);
+    }
+    const c = this.partMatrix('torso', root, PM);
+    for (let i = 0; i < 3; i++) g.bleed(c[12], c[13] + .5, c[14], dir, 60);
     g.onShatter(this);
   }
 

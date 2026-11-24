@@ -197,6 +197,7 @@ export class Player extends Actor {
   }
 
   onAttackEnd(interrupted) {
+    if (this.weapon?.empty) this.game.discardWeapon(this);
     this.comboWindow = interrupted ? 0 : 0.35;
   }
 
@@ -204,7 +205,7 @@ export class Player extends Actor {
     this.lastTarget = v;
     this.lastTargetT = 3;
     this.game.addCombo();
-    if (d.weapon && this.weapon) {
+    if (d.weapon && this.weapon && !d.shot && !d.flame) {
       this.weapon.dur -= 1;
       if (this.weapon.dur <= 0) this.game.breakWeapon(this);
     } else if (d.weapon && this.carry?.limb) {

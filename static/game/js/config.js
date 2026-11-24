@@ -67,6 +67,9 @@ export const ATTACKS = {
   bashF:   { startup: .20, active: .10, recovery: .36, range: [.1, 1.0], depth: .7,  dmg: 1.5, knock: 8,   zone: 'high', hitstop: .13, anim: 'hswing', weapon: true, knockdown: true, finisher: true, shake: .2 },
   whip:    { startup: .10, active: .12, recovery: .20, range: [.2, 1.0], depth: .85, dmg: 1.0, knock: 1.5, zone: 'low',  hitstop: .05, anim: 'hswing', weapon: true },
   whipF:   { startup: .14, active: .14, recovery: .30, range: [.2, 1.0], depth: .9,  dmg: 1.4, knock: 2.5, zone: 'low',  hitstop: .08, anim: 'hswing', weapon: true, knockdown: true, finisher: true },
+  // 화염 분사 (누르고 있기) / 샷건 사격
+  flame:    { startup: .08, active: 999, recovery: .15, range: [.2, 1.0], depth: .75, dmg: 1.0, knock: .2, zone: 'all', hitstop: 0, anim: 'flame', weapon: true, hold: true, tick: .1, hitstun: .12, ignite: 3, flame: true },
+  shotgun:  { startup: .10, active: .05, recovery: .48, range: [0, 1.0], depth: 1.0, dmg: 1.0, knock: 11, zone: 'all', hitstop: .12, anim: 'shoot', weapon: true, knockdown: true, shake: .38, shot: true },
   // 쌍절곤: 빠른 연타 → 회전 마무리
   nun1:     { startup: .05, active: .07, recovery: .09, range: [.1, 1.0], depth: .5,  dmg: 1.0, knock: .9, zone: 'high', hitstop: .035, anim: 'swing',  weapon: true },
   nun2:     { startup: .05, active: .07, recovery: .09, range: [.1, 1.0], depth: .55, dmg: 1.0, knock: .9, zone: 'mid',  hitstop: .035, anim: 'hslash', weapon: true },
@@ -136,6 +139,10 @@ export const WEAPONS = {
   bat:      { name: '못 박힌 배트',  dmg: 14, reach: .6,  dur: 14, sever: 1.1, knock: 1.3, throwDmg: 16, mode: 'knock', fling: 1.8, weight: 2.5, combo: ['bash', 'bashF'] },
   sledge:   { name: '오함마',        dmg: 30, reach: .5,  dur: 8,  sever: 1.6, knock: 1.2, throwDmg: 28, mode: 'crush', weight: 1.2, combo: ['sledge'] },
   chain:    { name: '강철 체인',     dmg: 13, reach: 1.35, dur: 16, sever: 1.0, knock: 1.2, throwDmg: 14, mode: 'knock', fling: 1.8, slow: 1.1, weight: 1.8, combo: ['whip', 'whip', 'chainSpin'] },
+  // 화염 스프레이: J를 누르는 동안 불길 분사 (연료 = 내구도, 분사하는 동안 줄어듦)
+  flamer:   { name: '화염 스프레이', dmg: 3,  reach: 1.6, dur: 45, sever: .2,  knock: 1,   throwDmg: 10, mode: 'burn',  weight: 1, combo: ['flame'], fuel: true, noPickup: true },
+  // 샷건: 6발. 한 방에 넓게 산탄, 처치한 적은 산산조각
+  shotgun:  { name: '샷건',          dmg: 65, reach: 4.2, dur: 6,  sever: 3.5, knock: 1,   throwDmg: 12, mode: 'blast', fling: 3, weight: .9, combo: ['shotgun'], ammo: true, noPickup: true },
   nunchaku: { name: '쌍절곤',        dmg: 8,  reach: .6,  dur: 22, sever: .8,  knock: 1,   throwDmg: 10, mode: 'knock', weight: 2, combo: ['nun1', 'nun2', 'nun1', 'nunF'] },
   flail:    { name: '철퇴',          dmg: 21, reach: .95, dur: 12, sever: 1.8, knock: 1.3, throwDmg: 22, mode: 'crush', slow: 1.2, weight: 1.5, combo: ['swing', 'swing', 'smash'] },
   whip:     { name: '채찍',          dmg: 7,  reach: 1.75, dur: 18, sever: 1.3, knock: .6,  throwDmg: 6,  mode: 'cut',   zone: 'arms', weight: 2, combo: ['lash', 'lash', 'lashPull'] },

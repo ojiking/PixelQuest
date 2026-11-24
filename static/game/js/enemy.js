@@ -32,7 +32,7 @@ export class Enemy extends Actor {
     const g = this.game;
     let best = null, bd = 4.5;
     for (const it of g.items) {
-      if (it.kind !== 'weapon' || it.type === 'chainsaw' || it.claimed || it.remove || it.vy !== 0) continue;
+      if (it.kind !== 'weapon' || it.type === 'chainsaw' || WEAPONS[it.type].noPickup || it.claimed || it.remove || it.vy !== 0) continue;
       // 올라갈 수 없는 블록 위·낭떠러지 근처 무기는 무시
       const fl = g.floorAt(it.x, it.z);
       if (fl < -50 || fl > this.y + 0.4) continue;

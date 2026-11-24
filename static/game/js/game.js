@@ -291,6 +291,7 @@ export class Game {
 
   // ------------------------------------------------ 피해 / 사망
   onDamage(v, dmg, h, back) {
+    if (h.ignite) return; // 화염 지속 피해 숫자는 생략 (화면이 지저분해짐)
     const cls = v.team === 'hero' ? 'hurt' : (dmg >= 18 ? 'crit' : '');
     this.texts.add(v.x, v.y + 1.9 * v.scale, v.z, String(dmg), cls);
     if (back) this.texts.add(v.x, v.y + 2.4 * v.scale, v.z, '백어택!', 'back');
@@ -345,6 +346,13 @@ export class Game {
       this.items.push(new Item('scrap', null, v.x, v.z, { y: 1, vy: rand(4, 7), vx: rand(-2, 2), value: n / pieces }));
     }
     if (v.isBoss) { this.banner('철거반장 격파!', 2.5); this.hitstop(0.35); this.shake(0.6); }
+    // 샷건으로 처치: 산산조각 (부위가 사방으로 멀리 날아감)
+    if (h.mode === 'blast' && v.destructible && !v.remove) {
+      v.blastApart(h.dir);
+      this.texts.add(v.x, v.y + 2.4 * v.scale, v.z, '산산조각!!', 'sever big');
+      this.hitstop(0.1);
+      return;
+    }
     // 전기톱/도끼 마무리: 허리가 두 동강
     if (h.bisect && v.destructible && !v.remove && Math.random() < h.bisect) {
       v.bisect(h.dir);
@@ -584,6 +592,42 @@ export class Game {
     this.texts.add(a.x, 2.3, a.z, '무기 파손!', 'hurt');
     this.sfx?.('crush');
     a.weapon = null;
+  }
+
+  // 샷건 총구 불꽃 + 산탄 궤적
+  muzzleFlash(tip, dir) {
+    const [x, y, z] = tip;
+    this.debris.puff(x + dir * .2, y, z, [0xffffff, 0xfff3a0, 0xffb03a], 18, 3, .16, .12, 0);
+    for (let i = 0; i < 18; i++) {
+      const sp = 26 + Math.random() * 10;
+      this.debris.spawn(x, y, z, dir * sp, (Math.random() - .45) * 5, (Math.random() - .5) * 9, 1, .9, .6, .06, .14, 0);
+    }
+    this.debris.puff(x + dir * .6, y + .1, z, [0x9c9c9c, 0x6a6a6a], 8, 1.2, .2, .7, -0.4);
+    this.shake(0.38);
+    this.sfx?.('shot');
+  }
+
+  // 화염 분사 입자 (위로 피어오르는 불길)
+  flameSpray(tip, dir, dt) {
+    const [x, y, z] = tip;
+    const n = Math.ceil(dt * 240);
+    for (let i = 0; i < n; i++) {
+      const c = [[1, .92, .45], [1, .7, .15], [1, .5, .08], [.92, .3, .06], [.45, .4, .38]][Math.floor(Math.random() * 5)];
+      const sp = 6 + Math.random() * 3.5;
+      // 멀리 갈수록 커지며 위로 피어오름
+      this.debris.spawn(x, y, z, dir * sp, (Math.random() - .25) * 2, (Math.random() - .5) * 3, c[0], c[1], c[2], .12 + Math.random() * .16, .3 + Math.random() * .18, -0.35);
+    }
+  }
+
+  // 탄약·연료를 다 쓴 무기를 내던짐
+  discardWeapon(a) {
+    const w = a.weapon;
+    if (!w) return;
+    a.weapon = null;
+    this.texts.add(a.x, 2.3, a.z, WEAPONS[w.type].ammo ? '탄약 소진!' : '연료 소진!', 'hurt');
+    const vox = getModel(this.r, WEAPON_MODEL[w.type]).voxels;
+    mat4.identity(M); mat4.translate(M, a.x - a.facing * .4, 1.0, a.z);
+    this.debris.burst(vox, M, { frac: .7, size: .1, spread: 1.6, impulse: [-a.facing * 2, 2, 0] });
   }
 
   // 들고 있던 것을 발밑에 내려놓음 (드럼통은 다시 오브젝트로)

@@ -52,7 +52,7 @@ function buildHit(att, d, v) {
   const dir = d.aoe ? (sign(v.x - att.x) || att.facing) : att.facing;
   return {
     attacker: att, dmg, knock, dir, zone, knockdown: !!d.knockdown, sever, mode, fling, bisect,
-    launch: d.launch, hitstun: d.hitstun, otg: d.otg || att.otgAll, otgWeak: !d.otg && att.otgAll, hitstop: d.hitstop ?? .05, shake: d.shake ?? (d.knockdown ? .12 : .04),
+    launch: d.launch, hitstun: d.hitstun, ignite: d.ignite, otg: d.otg || att.otgAll, otgWeak: !d.otg && att.otgAll, hitstop: d.hitstop ?? .05, shake: d.shake ?? (d.knockdown ? .12 : .04),
   };
 }
 
@@ -66,6 +66,7 @@ export function tryHits(game, att, a) {
     if (v.team === att.team || a.hit.has(v)) continue;
     if (!inBox(att, v, d, r0, reach, false)) continue;
     const hit = buildHit(att, d, v);
+    if (d.shot) hit.dmg *= Math.max(0.68, 1 - Math.abs(v.x - att.x) / reach * 0.32); // 산탄: 멀수록 약함
     if (applyHit(game, v, hit)) {
       a.hit.add(v);
       att.onHitLanded?.(v, d, hit);
@@ -93,8 +94,9 @@ export function applyHit(game, v, h) {
   dmg *= v.dmgTakenMul ?? 1;
   dmg = Math.max(1, Math.round(dmg));
   v.hp -= dmg;
-  v.flash = 0.09;
+  v.flash = h.ignite ? 0 : 0.09; // 화염은 하얀 번쩍임 대신 불타는 색이 보이게
   game.onDamage(v, dmg, h, back);
+  if (h.ignite && !v.dead) { v.burnT = Math.max(v.burnT || 0, h.ignite); v.burnBy = h.attacker; }
 
   if (v.destructible) {
     const k = pickPart(v, h.zone);
