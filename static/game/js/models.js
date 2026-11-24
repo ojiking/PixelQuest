@@ -44,6 +44,18 @@ const HEADS = {
     g.fill(s - 1, 4, s - 2, s - 1, 4, s - 1, 0x2a1a10);
     g.fill(s - 1, 0, 2, s - 1, 1, s - 1, darken(p.skin, 0.8)); // 수염 자국
   },
+  // 모히칸: 옆머리는 짧게 밀고(수염 자국 색), 가운데만 높게 세운 머리
+  mohawk(g, s, p) {
+    HEADS.bald(g, s, p);
+    const stub = darken(p.skin, 0.78);
+    g.fill(0, s - 1, 1, s - 1, s - 1, s, stub);
+    g.fill(0, s - 3, 1, 0, s - 1, s, stub);
+    const cz = Math.floor((s + 2) / 2);
+    for (let x = 0; x < s; x++) {
+      const top = x === 0 || x === s - 1 ? s : x === 1 || x === s - 2 ? s + 1 : s + 2;
+      g.fill(x, s - 1, cz - 1, x, top, cz, p.hair);
+    }
+  },
   cap(g, s, p) {
     HEADS.hair(g, s, p);
     g.fill(0, s - 1, 1, s - 1, s, s, p.cap);
@@ -276,8 +288,8 @@ const BUILDERS = {
     pal: { skin: 0xf0c08a, hair: 0x6a3a1a, cap: 0xf2c230, shirt: 0x3f8a4a, tee: 0xe8e8e8, sleeve: 0xe8e8e8, pack: 0x8a5a2b, pants: 0x5a4a3a, shoes: 0x3a2a1a },
   }),
   brute: r => humanoid(r, {
-    head: 'bald', torso: 'tank', tw: 5, td: 9, fx: 1, th: 8, lw: 4, ld: 4, aw: 4, ad: 4, ah: 8, sleeve: 0,
-    pal: { skin: 0xc68642, shirt: 0xdedede, pants: 0x2f3f5f, shoes: 0x1a1a1a },
+    head: 'mohawk', torso: 'tank', tw: 5, td: 9, fx: 1, th: 8, lw: 4, ld: 4, aw: 4, ad: 4, ah: 8, sleeve: 0,
+    pal: { skin: 0xc68642, hair: 0x1c1410, shirt: 0xdedede, pants: 0x2f3f5f, shoes: 0x1a1a1a },
   }),
   bomber: r => humanoid(r, {
     head: 'bomb', torso: 'stripe', sleeve: 3,
