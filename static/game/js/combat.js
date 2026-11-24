@@ -46,11 +46,13 @@ function buildHit(att, d, v) {
   if (!held && att.blade) { mode = 'cut'; sever = 2.2; } // 공격형 볼트의 절단 블레이드
   dmg *= att.power;
   if (d.finisher && att.perk('finisher')) dmg *= 1.4;
+  if (held && att.wpow) dmg *= att.wpow;                       // 무기 숙련
+  if (d.anim === 'dashAtk' && att.dashLv) dmg *= 1 + 0.25 * att.dashLv; // 대쉬 숙련
   if (att.perk('sever')) sever *= 1.6;
   const dir = d.aoe ? (sign(v.x - att.x) || att.facing) : att.facing;
   return {
     attacker: att, dmg, knock, dir, zone, knockdown: !!d.knockdown, sever, mode, fling, bisect,
-    launch: d.launch, hitstun: d.hitstun, otg: d.otg, hitstop: d.hitstop ?? .05, shake: d.shake ?? (d.knockdown ? .12 : .04),
+    launch: d.launch, hitstun: d.hitstun, otg: d.otg || att.otgAll, otgWeak: !d.otg && att.otgAll, hitstop: d.hitstop ?? .05, shake: d.shake ?? (d.knockdown ? .12 : .04),
   };
 }
 
@@ -69,6 +71,7 @@ export function tryHits(game, att, a) {
       att.onHitLanded?.(v, d, hit);
     }
   }
+  if (att.team === 'hero' && d.anim === 'golf') game.gibs.golfShot(att, a, r0, reach, d.depth);
   if (att.team === 'hero') {
     for (const p of game.props) {
       if (p.broken || a.hit.has(p)) continue;
@@ -84,7 +87,8 @@ export function applyHit(game, v, h) {
   if ((v.state === 'down' || v.state === 'getup' || v.state === 'ko') && !h.explosion && !(h.otg && v.state === 'down')) return false;
   let dmg = h.dmg;
   let back = false;
-  if (h.attacker && !h.explosion && v.facing === h.dir) { dmg *= 1.5; back = true; }
+  if (h.attacker && !h.explosion && v.facing === h.dir && v.state !== 'down') { dmg *= h.attacker.backMul ?? 1.5; back = true; }
+  if (v.state === 'down' && h.otgWeak) dmg *= 0.6;          // 쓰러진 적 공격 (업그레이드)
   if (h.explosion && v.perk('blast')) dmg *= 0.4;
   dmg *= v.dmgTakenMul ?? 1;
   dmg = Math.max(1, Math.round(dmg));

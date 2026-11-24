@@ -70,7 +70,7 @@ export class Game {
     this.player.x = 3; this.player.z = 0;
     this.bot.x = 1.6; this.bot.z = 0.9;
     if (i > 0) {
-      this.player.hp = Math.min(this.player.maxHp, this.player.hp + Math.round(this.player.maxHp * 0.25));
+      this.player.hp = Math.min(this.player.maxHp, this.player.hp + Math.round(this.player.maxHp * (0.25 + this.stats.player.regen)));
       if (this.bot.state === 'ko') { this.bot.setState('idle'); this.bot.hp = Math.round(this.bot.maxHp * 0.5); }
     }
     this.actors = [this.player, this.bot];
@@ -538,7 +538,8 @@ export class Game {
       } else {
         if (p.carry) this.dropCarry(p);
         if (p.weapon) this.dropWeapon(p);
-        const dur = best.dur * (this.run.perks.has('durable') && best.dur === WEAPONS[best.type].dur ? 1.6 : 1);
+        const fresh = best.dur === WEAPONS[best.type].dur;
+        const dur = best.dur * (fresh && this.run.perks.has('durable') ? 1.6 : 1) * (fresh ? this.stats.player.durMul : 1);
         p.weapon = { type: best.type, dur: Math.round(dur) };
         this.texts.add(p.x, 2.3, p.z, WEAPONS[best.type].name, 'item');
       }
@@ -620,7 +621,7 @@ export class Game {
   }
 
   collectScrap(v) {
-    this.run.scrap += v * (this.run.perks.has('scrapper') ? 1.5 : 1);
+    this.run.scrap += v * (this.run.perks.has('scrapper') ? 1.5 : 1) * this.stats.player.scrapMul;
     this.sfx?.('coin');
   }
 
@@ -628,6 +629,7 @@ export class Game {
   spawnProjectile(o) {
     let dmg = o.dmg;
     if (o.team === 'hero' && this.run.perks.has('thrower')) dmg *= 1.8;
+    if (o.owner === this.player) dmg *= this.stats.player.throwMul;
     this.projectiles.push({
       ...o, dmg,
       vx: o.dir * (o.kind === 'weapon' ? 11 : o.kind === 'barrel' ? 9 : 7.5), vy: o.kind === 'brick' ? 2.5 : o.kind === 'barrel' ? 1.5 : 1.2,
@@ -674,7 +676,7 @@ export class Game {
     pr.dead = true;
     if (pr.kind === 'barrel') {
       // 던진 드럼통: 닿는 순간 폭발 (조금 더 강력)
-      this.explode(pr.x, pr.z, TRAPS.barrel.radius * 1.1, TRAPS.barrel.dmg * 1.2, null, pr.team); // 던진 쪽 편은 피해 없음
+      this.explode(pr.x, pr.z, TRAPS.barrel.radius * 1.1, TRAPS.barrel.dmg * 1.2 * (pr.owner === this.player ? this.stats.player.throwMul : 1), null, pr.team); // 던진 쪽 편은 피해 없음
       return;
     }
     if (pr.kind === 'weapon' && pr.dur > 1) {

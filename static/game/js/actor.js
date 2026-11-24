@@ -119,6 +119,7 @@ export class Actor {
     let spd = this.atkSpeed;
     const hd = d.weapon ? this.heldDef() : null;
     if (hd?.slow) spd /= hd.slow;
+    if (hd && this.wspd) spd *= this.wspd;
     a.t += dt * spd;
     const s = d.startup, e = s + d.active;
     if (a.t >= s && (a.t < e || !a.activated)) {

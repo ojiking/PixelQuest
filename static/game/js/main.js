@@ -64,7 +64,7 @@ function showTitle() {
       <div class="sub">블록 청소반 — 벨트스크롤 로그라이트 프로토타입 v0.1</div>
       ${IS_MOBILE ? `<div class="controls">
         <div><b>왼쪽 아래 드래그</b> 이동 (위아래 = 라인 이동)</div>
-        <div><b>공격</b> 연타 콤보 · 전기톱은 누르고 있기 · 점프 중 = 날아차기 · 점프 중 아래+공격 = 내려찍기</div>
+        <div><b>공격</b> 연타 콤보 · 전기톱은 누르고 있기 · 날아차기·내려찍기는 정비소에서 해금</div>
         <div><b>대쉬</b> 대쉬 중 공격 = 몸통 박치기 (적이 날아가 다른 적과 충돌) · 대쉬 중 점프 = 멀리뛰기</div>
         <div><b>점프</b> 낭떠러지와 벽을 넘기 · <b>줍기/던지기</b> 팔·다리·머리는 들고 공격으로 휘두르기 · 폭탄 드럼통도 던질 수 있음</div>
         <div><b>전술</b> 볼트 전술 변경 · <b>❚❚</b> 일시정지</div>
@@ -72,13 +72,13 @@ function showTitle() {
       </div>` : `<div class="controls">
         <div><b>WASD / 방향키</b> 이동 (위아래 = 라인 이동)</div>
         <div><b>J</b> 공격 (연타 콤보, 전기톱은 누르고 있기)</div>
-        <div><b>K</b> 점프 · 점프 중 <b>J</b> 날아차기 · 점프 중 <b>S+J</b> 내려찍기 (쓰러진 적도 짓밟음)</div>
+        <div><b>K</b> 점프 · 날아차기·내려찍기·더블 점프는 정비소에서 해금</div>
         <div><b>Shift</b> 또는 좌우 두 번: 대쉬 · 대쉬 중 <b>J</b> 몸통 박치기 · 대쉬 중 <b>K</b> 멀리뛰기</div>
         <div><b>L</b> 줍기/던지기 · 팔·다리·머리를 들면 <b>J</b>로 휘두르기 · 폭탄 드럼통도 들어서 던지기</div>
         <div><b>T</b> 볼트 전술 · <b>M</b> 효과음 · <b>Esc</b> 일시정지</div>
         <div class="dim"><b>P</b> 픽셀 크기 · <b>B</b> (테스트) 적 소환</div>
       </div>`}
-      <button class="btn primary" data-act="hub">시작 (Enter)</button>
+      <button class="btn primary" data-act="start">시작 (Enter)</button>
     </div>`);
 }
 
@@ -121,7 +121,20 @@ function startRun() {
   mode = 'run';
   setScreen('');
   hud.classList.remove('hidden');
+  helpT = meta.runs < 3 ? 75 : 0; // 처음 세 판은 75초 동안 조작법 표시
 }
+
+// 화면 아래 조작법 안내
+const HELP_DESKTOP = `<div><b>이동</b> WASD/방향키 · <b>공격</b> J 연타 · <b>점프</b> K · <b>대쉬</b> Shift(좌우 두 번) · <b>줍기/던지기</b> L · <b>볼트 전술</b> T · <b>일시정지</b> Esc · <b>도움말</b> H</div>
+  <div class="dim">대쉬 중 J = 몸통 박치기 · 무기·팔다리·머리는 L로 줍고 J로 휘두르기 · 드럼통은 L로 들고 던지기 · 날아차기·내려찍기·더블 점프는 정비소에서 해금</div>`;
+const HELP_MOBILE = `<div><b>조이스틱</b> 이동 · <b>공격</b> 연타(전기톱은 누르기) · <b>점프</b> · <b>대쉬</b> · <b>줍기</b> 줍기/던지기</div>
+  <div class="dim">대쉬 중 공격 = 몸통 박치기 · 날아차기 등은 정비소에서 해금</div>`;
+let helpT = 0;
+const helpBar = document.createElement('div');
+helpBar.id = 'helpbar';
+helpBar.className = 'hidden';
+helpBar.innerHTML = IS_MOBILE ? HELP_MOBILE : HELP_DESKTOP;
+$('stage').appendChild(helpBar);
 
 function showPerks() {
   mode = 'perk';
@@ -181,6 +194,7 @@ function togglePause() {
     mode = 'pause';
     setScreen(`<div class="panel"><h1>일시정지</h1>
       <p class="dim">볼트 전술: <b>${game.bot.tacticDef.name}</b> — ${game.bot.tacticDef.desc}</p>
+      <div class="controls">${IS_MOBILE ? HELP_MOBILE : HELP_DESKTOP}</div>
       <button class="btn small" data-act="mute">효과음: ${isMuted() ? '꺼짐' : '켜짐'} (M)</button>
       <div class="row"><button class="btn primary" data-act="resume">계속 (Esc)</button>
       <button class="btn ghost" data-act="giveup">포기하고 정비소로</button></div></div>`);
@@ -231,9 +245,11 @@ addEventListener('keydown', e => {
     showBanner(`픽셀 크기 x${renderer.pixelScale}`, 1);
   }
   if (e.code === 'Escape') togglePause();
+  if (e.code === 'KeyH' && mode === 'run') helpT = helpT > 0 ? 0 : 9999;
   if (e.code === 'KeyM') { setMuted(!isMuted()); showBanner(isMuted() ? '효과음 꺼짐' : '효과음 켜짐', 1); }
   if (e.code === 'Enter') {
-    if (mode === 'title' || mode === 'result') showHub();
+    if (mode === 'title') startRun();
+    else if (mode === 'result') showHub();
     else if (mode === 'hub') startRun();
   }
   if (mode === 'perk' && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) choosePerk(+e.code.slice(5) - 1);
@@ -249,6 +265,9 @@ function setWidth(id, ratio) {
 }
 
 function updateHud(dt) {
+  if (mode === 'run' && helpT > 0) helpT -= dt;
+  helpBar.classList.toggle('hidden', !((mode === 'run' || mode === 'pause') && helpT > 0));
+  helpBar.style.opacity = String(Math.min(1, helpT / 2));
   if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) $('banner').classList.add('hidden'); }
   if (touch) {
     touch.show(mode === 'run');
@@ -305,5 +324,5 @@ function frame(now) {
 }
 
 preview();
-showTitle();
+showTitle(); // 타이틀 → 바로 게임 (정비소는 런이 끝난 뒤에)
 requestAnimationFrame(frame);

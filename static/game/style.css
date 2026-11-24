@@ -164,3 +164,12 @@ h3 small { color: var(--bot); }
 .cls.on { border-color: var(--bot); background: rgba(255,138,31,.15); }
 .cls.on b { color: var(--bot); }
 @media (max-height: 520px) { .cls { padding: 5px 8px; } .cls span { font-size: 10px; } }
+
+/* 조작법 안내 바 (처음 몇 판 동안 화면 아래) */
+#helpbar { position: absolute; left: 50%; bottom: 1.2cqh; transform: translateX(-50%); width: min(96%, 980px); background: rgba(10, 12, 18, .72);
+  border-top: 3px solid var(--accent); padding: 6px 12px; font-size: 13px; line-height: 1.6; text-align: center; pointer-events: none; z-index: 4; }
+#helpbar b { color: var(--accent); }
+#helpbar .dim { font-size: 11px; }
+.mobile #helpbar { left: 61%; width: 30cqw; bottom: 3cqh; font-size: 10px; padding: 4px 6px; }
+.mobile #helpbar .dim { font-size: 9px; }
+.mobile #stage-info { bottom: auto; top: 13cqh; left: 50%; }

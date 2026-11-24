@@ -43,7 +43,13 @@ export function computeStats(meta) {
   const C = BOT.classes[cls];
   const tank = cls === 'tank';
   return {
-    player: { maxHp: PLAYER.hp + 15 * L('p_hp'), power: 1 + 0.08 * L('p_pow') },
+    player: {
+      maxHp: PLAYER.hp + 15 * L('p_hp'), power: 1 + 0.08 * L('p_pow'),
+      speedMul: 1 + 0.05 * L('p_speed'), regen: 0.1 * L('p_regen'), scrapMul: 1 + 0.1 * L('p_scrap'),
+      wpow: 1 + 0.1 * L('p_wpow'), wspd: 1 + 0.06 * L('p_wspd'), durMul: 1 + 0.15 * L('p_dur'), throwMul: 1 + 0.2 * L('p_throw'),
+      flykick: L('p_flykick') > 0, djump: L('p_djump') > 0, stomp: L('p_stomp') > 0, otg: L('p_otg') > 0,
+      combo4: L('p_combo') > 0, dashLv: L('p_dash'), backMul: 1.5 + 0.25 * L('p_back'),
+    },
     bot: {
       cls, model: C.model, scale: C.scale,
       maxHp: C.hp + (tank ? 30 * L('t_hp') : 0),

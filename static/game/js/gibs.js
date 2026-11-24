@@ -43,6 +43,23 @@ export class Gibs {
     if (this.list.length > MAX_GIBS) this.list.shift();
   }
 
+  // 골프채로 바닥의 머리통을 쳐서 날림 → 적에게 맞으면 큰 피해
+  golfShot(att, a, r0, reach, depth) {
+    for (const g of this.list) {
+      if (!g.rest || g.part !== 'head' || a.hit.has(g)) continue;
+      const dx = (g.pos[0] - att.x) * att.facing;
+      if (dx < r0 - 0.4 || dx > reach + 0.4 || Math.abs(g.pos[2] - att.z) > depth + 0.25) continue;
+      a.hit.add(g);
+      g.rest = false;
+      g.vel = [att.facing * 15, 4.2, 0];
+      g.wx = rand(-25, 25); g.wz = rand(-25, 25);
+      g.thrown = { owner: att, team: att.team, golf: true };
+      this.game.texts.add(g.pos[0], g.pos[1] + 0.8, g.pos[2], '나이스 샷!', 'sever');
+      this.game.bleed(g.pos[0], g.pos[1], g.pos[2], att.facing, 10);
+      this.game.sfx?.('heavy');
+    }
+  }
+
   // 바닥에 놓인 조각 중 (x, z)에서 가장 가까운 것
   nearest(x, z) {
     let best = null, bd = 1e9;
@@ -130,8 +147,15 @@ export class Gibs {
       if (Math.abs(a.x - g.pos[0]) > 0.35 + a.radius || Math.abs(a.z - g.pos[2]) > 0.5) continue;
       if (g.pos[1] < a.y - 0.1 || g.pos[1] > a.y + 1.9 * a.scale) continue;
       const dir = g.vel[0] >= 0 ? 1 : -1;
-      applyHit(game, a, {
-        attacker: th.owner, dmg: GIB_THROW.dmg * (th.owner.power ?? 1), knock: GIB_THROW.knock, dir, zone: 'high',
+      if (th.golf) {
+        // 골프 샷: 머리통 직격
+        applyHit(game, a, {
+          attacker: th.owner, dmg: 20 * (th.owner.power ?? 1) * (th.owner.wpow ?? 1), knock: 6.5, dir, zone: 'head',
+          knockdown: true, sever: 1.2, mode: 'knock', fling: 2, hitstop: .1, shake: .15,
+        });
+        game.texts.add(a.x, a.y + 2.4 * a.scale, a.z, '헤드샷!', 'sever big');
+      } else applyHit(game, a, {
+        attacker: th.owner, dmg: GIB_THROW.dmg * (th.owner.power ?? 1) * (th.owner.st8?.throwMul ?? 1), knock: GIB_THROW.knock, dir, zone: 'high',
         knockdown: false, sever: 0.3, hitstop: .04, shake: .05, hitstun: GIB_THROW.hitstun,
       });
       g.vel[0] *= -0.3; g.vel[1] = 2.5;

@@ -2,11 +2,17 @@ import { Actor } from './actor.js';
 import { PLAYER, WEAPONS, LIMB_WEAPONS } from './config.js';
 
 const FIST_COMBO = ['jab', 'cross', 'kick'];
+const FIST_COMBO4 = ['jab', 'cross', 'elbow', 'kick'];
 
 export class Player extends Actor {
   constructor(game, stats) {
     super(game, 'player', { hp: stats.maxHp, team: 'hero', x: 3, z: 0 });
     this.power = stats.power;
+    this.st8 = stats;                        // 정비소 업그레이드
+    this.spd = PLAYER.speed * stats.speedMul;
+    this.zspd = PLAYER.zSpeed * stats.speedMul;
+    this.wpow = stats.wpow; this.wspd = stats.wspd; this.backMul = stats.backMul;
+    this.otgAll = stats.otg; this.dashLv = stats.dashLv;
     this.comboIdx = 0;
     this.comboWindow = 0;
     this.buffer = 0;
@@ -35,8 +41,8 @@ export class Player extends Actor {
     this.dashDir = dir || this.facing;
     this.facing = this.dashDir;
     this.setState('dash');
-    this.dashCd = PLAYER.dashCooldown;
-    this.invuln = Math.max(this.invuln, 0.14);
+    this.dashCd = PLAYER.dashCooldown * (1 - 0.2 * this.dashLv);
+    this.invuln = Math.max(this.invuln, 0.14 + 0.05 * this.dashLv);
     if (!this.grounded) { this.airDashed = true; this.vy = Math.max(this.vy, 1.8); }
     this.game.debris.puff(this.x - this.dashDir * .3, this.y + .15, this.z, [0xd8d0c0, 0xb8b0a0], 6, 1.2, .12, .3, -0.3);
     this.game.sfx?.('dash');
@@ -50,7 +56,7 @@ export class Player extends Actor {
   }
 
   perk(id) { return this.game.run.perks.has(id); }
-  get combo() { return this.heldDef()?.combo ?? FIST_COMBO; }
+  get combo() { return this.heldDef()?.combo ?? (this.st8.combo4 ? FIST_COMBO4 : FIST_COMBO); }
 
   update(dt) {
     const g = this.game, inp = g.input;
@@ -73,15 +79,15 @@ export class Player extends Actor {
       case 'idle':
       case 'walk': {
         const slow = this.carry?.kind === 'barrel' ? 0.78 : 1;
-        this.vx = mx * PLAYER.speed * slow;
-        this.vz = mz * PLAYER.zSpeed * slow;
+        this.vx = mx * this.spd * slow;
+        this.vz = mz * this.zspd * slow;
         if (mx) this.facing = mx > 0 ? 1 : -1;
         if (mx || mz) { this.state = 'walk'; this.walkPhase += dt * 11; } else this.state = 'idle';
         if (wantDash && this.dashCd <= 0) {
           this.startDash(tap || (mx ? Math.sign(mx) : this.facing));
         } else if (this.jumpBuf > 0) {
           this.jumpBuf = 0;
-          this.setState('jump'); this.vy = PLAYER.jump; this.grounded = false; this.airAttacked = false; this.airDashed = false;
+          this.setState('jump'); this.vy = PLAYER.jump; this.grounded = false; this.airAttacked = false; this.airDashed = false; this.doubleJumped = false;
           this.game.sfx?.('jump');
         } else if (inp.pressed('KeyL')) {
           g.interact(this);
@@ -97,36 +103,44 @@ export class Player extends Actor {
       }
       case 'jump': {
         // 대쉬 점프 관성은 유지, 그 외엔 공중 조작
-        if (Math.abs(this.vx) <= PLAYER.speed + 0.1 || (mx && Math.sign(mx) !== Math.sign(this.vx))) this.vx = mx * PLAYER.speed;
-        this.vz = mz * PLAYER.zSpeed * 0.6;
+        if (Math.abs(this.vx) <= this.spd + 0.1 || (mx && Math.sign(mx) !== Math.sign(this.vx))) this.vx = mx * this.spd;
+        this.vz = mz * this.zspd * 0.6;
         if (mx) this.facing = mx > 0 ? 1 : -1;
         if (wantDash && !this.airDashed) { this.startDash(tap || (mx ? Math.sign(mx) : this.facing)); break; }
+        if (this.jumpBuf > 0 && this.st8.djump && !this.doubleJumped && this.st > 0.08) {
+          this.jumpBuf = 0; this.doubleJumped = true; this.vy = PLAYER.jump * 0.9;
+          this.game.debris.puff(this.x, this.y, this.z, [0xffffff, 0xd8e8ff], 8, 1.5, .12, .3, -0.2);
+          this.game.sfx?.('jump');
+        }
         if (this.buffer > 0 && !this.airAttacked) {
           this.buffer = 0; this.airAttacked = true;
           const vx = this.vx, vz = this.vz;
-          if (mz > 0.5) {
+          if (mz > 0.5 && this.st8.stomp) {
             // 아래 + 공격: 내려찍기
             this.startAttack('stomp');
             this.attack.air = true; this.vx = vx * 0.3; this.vz = 0; this.vy = -15;
           } else if (this.heldDef() && !this.heldDef().combo.includes('saw')) {
             this.startAttack('airSlash');
             this.attack.air = true; this.vx = vx; this.vz = vz;
-          } else {
+          } else if (this.st8.flykick) {
             // 날아차기: 앞으로 쭉 뻗어나감
             this.startAttack('flykick');
             this.attack.air = true; this.vx = this.facing * Math.max(Math.abs(vx), 6.5); this.vz = vz;
+          } else {
+            this.startAttack('airPunch'); // 해금 전: 약한 공중 펀치
+            this.attack.air = true; this.vx = vx; this.vz = vz;
           }
         }
         break;
       }
       case 'dash': {
-        this.vx = this.dashDir * PLAYER.dashSpeed * (1 - this.st / PLAYER.dashTime * 0.35);
+        this.vx = this.dashDir * (PLAYER.dashSpeed * this.st8.speedMul) * (1 - this.st / PLAYER.dashTime * 0.35);
         this.vz = mz * 2.5;
         if (this.buffer > 0) { this.buffer = 0; this.dashAttack(); break; }
         if (inp.pressed('KeyK') && this.grounded) {
           // 대쉬 점프: 멀리 뛰기
           this.setState('jump'); this.vy = PLAYER.jump; this.grounded = false; this.airAttacked = false;
-          this.vx = this.dashDir * PLAYER.dashSpeed * 0.75;
+          this.vx = this.dashDir * (PLAYER.dashSpeed * this.st8.speedMul) * 0.75;
           this.game.sfx?.('jump');
           break;
         }
@@ -139,7 +153,7 @@ export class Player extends Actor {
           // 전기톱: J를 누르는 동안 계속, 천천히 이동 가능
           const endT = a.def.startup + a.def.active;
           if ((!inp.held('KeyJ') || !this.weapon) && a.t < endT) a.t = Math.max(a.t, endT);
-          this.vx = mx * PLAYER.speed * 0.35; this.vz = mz * PLAYER.zSpeed * 0.35;
+          this.vx = mx * this.spd * 0.35; this.vz = mz * this.zspd * 0.35;
           this.updateAttack(dt);
           break;
         }
@@ -149,8 +163,8 @@ export class Player extends Actor {
           if (wantDash && this.dashCd <= 0) { this.interrupt(); this.startDash(tap || (mx ? Math.sign(mx) : this.facing)); break; }
           if (this.jumpBuf > 0) {
             this.interrupt(); this.jumpBuf = 0;
-            this.setState('jump'); this.vy = PLAYER.jump; this.grounded = false; this.airAttacked = false; this.airDashed = false;
-            this.vx = mx * PLAYER.speed; this.game.sfx?.('jump');
+            this.setState('jump'); this.vy = PLAYER.jump; this.grounded = false; this.airAttacked = false; this.airDashed = false; this.doubleJumped = false;
+            this.vx = mx * this.spd; this.game.sfx?.('jump');
             break;
           }
         }
@@ -158,7 +172,7 @@ export class Player extends Actor {
           this.vx *= Math.pow(0.12, dt);
           this.vz = 0;
         } else if (recovering && !a.air) {
-          this.vx = mx * PLAYER.speed * 0.4; this.vz = mz * PLAYER.zSpeed * 0.4;
+          this.vx = mx * this.spd * 0.4; this.vz = mz * this.zspd * 0.4;
           if (mx && this.buffer > 0) this.facing = mx > 0 ? 1 : -1; // 다음 타 방향 전환
         } else if (!a.air) {
           this.vx *= Math.pow(0.001, dt);
