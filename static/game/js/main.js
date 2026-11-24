@@ -26,6 +26,7 @@ let mode = 'title';
 let pausedFrom = null;
 let perkChoices = [];
 let bannerT = 0;
+let resetArmed = false;
 
 const game = new Game(renderer, input, texts, {
   banner: (text, dur) => showBanner(text, dur),
@@ -186,13 +187,15 @@ screen.addEventListener('click', e => {
 });
 
 function act(a) {
+  if (a !== 'reset') resetArmed = false;
   switch (a) {
     case 'hub': showHub(); break;
     case 'start': startRun(); break;
     case 'resume': togglePause(); break;
     case 'giveup': game.running = false; finishRun(false); break;
     case 'reset':
-      if (confirm('부품과 업그레이드 기록을 모두 지울까요?')) { meta = resetMeta(); showHub('초기화했습니다.'); }
+      if (resetArmed) { resetArmed = false; meta = resetMeta(); showHub('기록을 초기화했습니다.'); }
+      else { resetArmed = true; showHub('한 번 더 누르면 부품과 업그레이드 기록이 모두 지워집니다.'); }
       break;
   }
 }
