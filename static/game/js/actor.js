@@ -143,6 +143,14 @@ export class Actor {
       tryHits(g, this, a);
       return;
     }
+    if (d.projectile === 'barrel') {
+      if (!a.spawned) {
+        a.spawned = true;
+        if (this.carry?.kind === 'barrel') g.spawnProjectile({ kind: 'barrel', x: this.x + this.facing * 0.5, y: 1.7 * this.scale, z: this.z, dir: this.facing, team: this.team, dmg: 0, owner: this });
+        this.carry = null;
+      }
+      return;
+    }
     if (d.projectile === 'gib') {
       if (!a.spawned) {
         a.spawned = true;
@@ -301,6 +309,10 @@ export class Actor {
       case 'repair': T.armF = 1.3 + Math.sin(t * 20) * .3; T.armB = 1.3 - Math.sin(t * 20) * .3; T.handF = .8; T.handB = .8; T.torso = -.4; break;
       case 'attack': this.attackPose(T); rate = 35; break;
     }
+    // 드럼통을 머리 위로 들고 있음
+    if (this.carry?.kind === 'barrel' && (this.state === 'idle' || this.state === 'walk' || this.state === 'jump')) {
+      T.armF = T.armB = 2.9; T.handF = T.handB = 0.2;
+    }
     const k = Math.min(1, dt * rate);
     for (const n of PART_ORDER) if (P[n].alive && T[n] !== undefined) P[n].rz += (T[n] - P[n].rz) * k;
     this.grip += (T.grip - this.grip) * k;
@@ -435,7 +447,11 @@ export class Actor {
         mat4.rotateZ(WM, this.grip);
         r.drawMesh(getModel(r, WEAPON_MODEL[this.weapon.type]).mesh, WM, tint);
       }
-      if (k === 'handF' && this.carry) {
+      if (k === 'handF' && this.carry?.kind === 'barrel') {
+        mat4.copy(WM, root);
+        mat4.translate(WM, 0.05, this.model.height + 0.02, 0);
+        r.drawMesh(getModel(r, 'barrel').mesh, WM, tint);
+      } else if (k === 'handF' && this.carry) {
         const c = this.carry;
         mat4.copy(WM, PM);
         if (c.limb) {

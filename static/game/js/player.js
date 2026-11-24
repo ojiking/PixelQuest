@@ -72,8 +72,9 @@ export class Player extends Actor {
     switch (this.state) {
       case 'idle':
       case 'walk': {
-        this.vx = mx * PLAYER.speed;
-        this.vz = mz * PLAYER.zSpeed;
+        const slow = this.carry?.kind === 'barrel' ? 0.78 : 1;
+        this.vx = mx * PLAYER.speed * slow;
+        this.vz = mz * PLAYER.zSpeed * slow;
         if (mx) this.facing = mx > 0 ? 1 : -1;
         if (mx || mz) { this.state = 'walk'; this.walkPhase += dt * 11; } else this.state = 'idle';
         if (wantDash && this.dashCd <= 0) {
@@ -87,6 +88,7 @@ export class Player extends Actor {
         } else if (this.buffer > 0) {
           this.buffer = 0;
           if (this.dashAtkWindow > 0) { this.dashAttack(); break; }
+          if (this.carry?.kind === 'barrel') { this.startAttack('pThrowBarrel'); break; }
           if (this.carry && !this.carry.limb) { this.startAttack('pThrowGib'); break; }
           const idx = this.comboWindow > 0 ? (this.comboIdx + 1) % this.combo.length : 0;
           this.doCombo(idx);

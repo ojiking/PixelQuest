@@ -66,7 +66,7 @@ function showTitle() {
         <div><b>왼쪽 아래 드래그</b> 이동 (위아래 = 라인 이동)</div>
         <div><b>공격</b> 연타 콤보 · 전기톱은 누르고 있기 · 점프 중 = 날아차기 · 점프 중 아래+공격 = 내려찍기</div>
         <div><b>대쉬</b> 대쉬 중 공격 = 몸통 박치기 (적이 날아가 다른 적과 충돌) · 대쉬 중 점프 = 멀리뛰기</div>
-        <div><b>점프</b> 낭떠러지와 벽을 넘기 · <b>줍기/던지기</b> 팔·다리·머리는 들고 공격으로 휘두르기</div>
+        <div><b>점프</b> 낭떠러지와 벽을 넘기 · <b>줍기/던지기</b> 팔·다리·머리는 들고 공격으로 휘두르기 · 폭탄 드럼통도 던질 수 있음</div>
         <div><b>전술</b> 볼트 전술 변경 · <b>❚❚</b> 일시정지</div>
         <div class="dim">가로 화면으로 플레이하세요</div>
       </div>` : `<div class="controls">
@@ -74,7 +74,7 @@ function showTitle() {
         <div><b>J</b> 공격 (연타 콤보, 전기톱은 누르고 있기)</div>
         <div><b>K</b> 점프 · 점프 중 <b>J</b> 날아차기 · 점프 중 <b>S+J</b> 내려찍기 (쓰러진 적도 짓밟음)</div>
         <div><b>Shift</b> 또는 좌우 두 번: 대쉬 · 대쉬 중 <b>J</b> 몸통 박치기 · 대쉬 중 <b>K</b> 멀리뛰기</div>
-        <div><b>L</b> 줍기/던지기 · 팔·다리·머리를 들면 <b>J</b>로 휘두르기</div>
+        <div><b>L</b> 줍기/던지기 · 팔·다리·머리를 들면 <b>J</b>로 휘두르기 · 폭탄 드럼통도 들어서 던지기</div>
         <div><b>T</b> 볼트 전술 · <b>M</b> 효과음 · <b>Esc</b> 일시정지</div>
         <div class="dim"><b>P</b> 픽셀 크기 · <b>B</b> (테스트) 적 소환</div>
       </div>`}
@@ -262,7 +262,7 @@ function updateHud(dt) {
   setWidth('hp-player', p.hp / p.maxHp);
   setWidth('hp-bot', b.hp / b.maxHp);
   setText('hp-player-t', `${Math.max(0, Math.ceil(p.hp))} / ${p.maxHp}`);
-  setText('weapon', p.carry ? (p.carry.limb ? `${CARRY_NAME[p.carry.part] ?? '조각'} (${p.carry.dur}) J 휘두르기 · L 던지기` : `${CARRY_NAME[p.carry.part] ?? '조각'} 들고 있음 (J/L 던지기)`) : p.weapon ? `${WEAPONS[p.weapon.type].name} (${p.weapon.dur})` : '맨손');
+  setText('weapon', p.carry?.kind === 'barrel' ? '폭탄 드럼통 (J/L 던지기)' : p.carry ? (p.carry.limb ? `${CARRY_NAME[p.carry.part] ?? '조각'} (${p.carry.dur}) J 휘두르기 · L 던지기` : `${CARRY_NAME[p.carry.part] ?? '조각'} 들고 있음 (J/L 던지기)`) : p.weapon ? `${WEAPONS[p.weapon.type].name} (${p.weapon.dur})` : '맨손');
   setText('bot-lv', `${botLevel(meta)} ${BOT.classes[game.stats.bot.cls].name}`);
   setText('tactic', b.state === 'ko' ? `수리 중 ${Math.ceil(b.koT)}s` : game.rescuePending ? '구조 중!' : b.tacticDef.name);
   setText('scrap-n', String(Math.floor(game.run.scrap)));

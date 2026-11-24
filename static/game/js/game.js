@@ -1,6 +1,6 @@
 // 게임 월드: 스테이지 진행, 카메라, 웨이브, 투사체, 폭발, 렌더링
 import { mat4, clamp, rand, randi, sign, shuffle, pick, weightedPick } from './math.js';
-import { BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind } from './config.js';
+import { BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
 import { Debris } from './fx.js';
 import { Gibs, bleed } from './gibs.js';
 import { getModel, WEAPON_MODEL } from './models.js';
@@ -8,7 +8,7 @@ import { Player } from './player.js';
 import { Companion } from './companion.js';
 import { Enemy } from './enemy.js';
 import { Stage, STAGE_COUNT, PIT, SEG_HINTS } from './level.js';
-import { Item } from './props.js';
+import { Item, Prop } from './props.js';
 import { applyHit } from './combat.js';
 
 export const PART_NAME = { head: '머리', armF: '팔', armB: '팔', handF: '아래팔', handB: '아래팔', legF: '다리', legB: '다리', shinF: '정강이', shinB: '정강이', torso: '몸통', upper: '상반신', lower: '하반신' };
@@ -328,7 +328,7 @@ export class Game {
     v.setState('ko');
     v.vx = (h.dir || 1) * 4; v.vy = 5; v.y = Math.max(v.y, 0.01); v.facing = -(h.dir || 1);
     v.weapon && v === this.player && this.dropWeapon(v);
-    if (v.carry) { this.gibs.drop(v.carry, v.x, v.z); v.carry = null; }
+    if (v.carry) this.dropCarry(v);
     if (v === this.bot) {
       v.koT = BOT.koTime;
       this.say(v, '볼트 다운… 자가 수리 중');
@@ -441,7 +441,7 @@ export class Game {
     this.texts.add(a.x, 0.5, a.z, '추락!!', 'hurt big');
     a.hp = 0; a.interrupt(); a.setState('ko');
     if (a.weapon) a.weapon = null;
-    if (a.carry) a.carry = null;
+    if (a.carry) a.carry = null; // 낭떠러지로 같이 떨어짐
     if (this.stats.bot.rescue && !this.run.rescueUsed && this.bot.alive) {
       this.run.rescueUsed = true;
       this.rescuePending = true;
@@ -468,7 +468,7 @@ export class Game {
     }
   }
 
-  explode(x, z, radius, dmg, source) {
+  explode(x, z, radius, dmg, source, spareTeam = null) {
     if (source && source.type === 'bomber') {
       source.exploded = true;
       source.dead = true;
@@ -480,7 +480,7 @@ export class Game {
     this.shake(0.45);
     this.hitstop(0.07);
     for (const a of this.actors) {
-      if (a === source || a.dead) continue;
+      if (a === source || a.dead || a.team === spareTeam) continue;
       const d = Math.hypot(a.x - x, (a.z - z) * 1.2);
       if (d > radius) continue;
       applyHit(this, a, { attacker: null, explosion: true, dmg: dmg * (1 - d / radius * 0.5), knock: 6, dir: sign(a.x - x) || 1, zone: 'all', knockdown: true, sever: 2, hitstop: 0, shake: 0 });
@@ -506,7 +506,7 @@ export class Game {
         p.hp = Math.min(p.maxHp, p.hp + 30);
         this.texts.add(p.x, 2.2, p.z, '+30', 'heal');
       } else {
-        if (p.carry) { this.gibs.drop(p.carry, p.x, p.z); p.carry = null; }
+        if (p.carry) this.dropCarry(p);
         if (p.weapon) this.dropWeapon(p);
         const dur = best.dur * (this.run.perks.has('durable') && best.dur === WEAPONS[best.type].dur ? 1.6 : 1);
         p.weapon = { type: best.type, dur: Math.round(dur) };
@@ -514,7 +514,18 @@ export class Game {
       }
       return;
     }
-    if (p.carry) { p.startAttack('pThrowGib'); return; }
+    if (p.carry) { p.startAttack(p.carry.kind === 'barrel' ? 'pThrowBarrel' : 'pThrowGib'); return; }
+    // 맨손이면 폭탄 드럼통을 들어 올림
+    if (!p.weapon) {
+      const bar = this.props.find(b => b.kind === 'barrel' && !b.broken && b.fuse < 0 && Math.abs(b.x - p.x) < 1.0 && Math.abs(b.z - p.z) < 0.65);
+      if (bar) {
+        bar.broken = true; // 바닥에서 치움
+        p.carry = { kind: 'barrel' };
+        this.texts.add(p.x, 2.6, p.z, '폭탄 드럼통 — 던져라!', 'item');
+        this.sfx?.('pickup');
+        return;
+      }
+    }
     if (p.weapon) { p.startAttack('pThrow'); return; }
     // 맨손이면 떨어진 부위/시체 조각을 집음
     const gib = this.gibs.nearest(p.x, p.z);
@@ -541,6 +552,20 @@ export class Game {
     this.texts.add(a.x, 2.3, a.z, '무기 파손!', 'hurt');
     this.sfx?.('crush');
     a.weapon = null;
+  }
+
+  // 들고 있던 것을 발밑에 내려놓음 (드럼통은 다시 오브젝트로)
+  dropCarry(a) {
+    const c = a.carry;
+    a.carry = null;
+    if (!c) return;
+    if (c.kind === 'barrel') {
+      const s = this.stage.safeSpot(a.x + a.facing * 0.5, a.z);
+      const b = new Prop('barrel', s.x, s.z);
+      this.props.push(b);
+      return;
+    }
+    this.gibs.drop(c, a.x, a.z);
   }
 
   // 휘두르던 신체 부위가 박살남
@@ -575,7 +600,7 @@ export class Game {
     if (o.team === 'hero' && this.run.perks.has('thrower')) dmg *= 1.8;
     this.projectiles.push({
       ...o, dmg,
-      vx: o.dir * (o.kind === 'weapon' ? 11 : 7.5), vy: o.kind === 'brick' ? 2.5 : 1.2,
+      vx: o.dir * (o.kind === 'weapon' ? 11 : o.kind === 'barrel' ? 9 : 7.5), vy: o.kind === 'brick' ? 2.5 : o.kind === 'barrel' ? 1.5 : 1.2,
       spin: 0, life: 2.5, dead: false,
     });
   }
@@ -583,14 +608,16 @@ export class Game {
   updateProjectiles(dt) {
     for (const pr of this.projectiles) {
       pr.life -= dt;
-      pr.vy -= 7 * dt;
+      pr.vy -= (pr.kind === 'barrel' ? 14 : 7) * dt;
       pr.x += pr.vx * dt; pr.y += pr.vy * dt;
       pr.spin += dt * 16;
       if (pr.life <= 0) { pr.dead = true; continue; }
       for (const a of this.actors) {
         if (a.team === pr.team || !a.alive || a.state === 'down') continue;
-        if (Math.abs(a.x - pr.x) > 0.3 + a.radius || Math.abs(a.z - pr.z) > 0.45) continue;
+        const big = pr.kind === 'barrel' ? 0.25 : 0;
+        if (Math.abs(a.x - pr.x) > 0.3 + big + a.radius || Math.abs(a.z - pr.z) > 0.45 + big) continue;
         if (pr.y < a.y - 0.1 || pr.y > a.y + 1.9 * a.scale) continue;
+        if (pr.kind === 'barrel') { this.projectileEnd(pr); break; }
         const isW = pr.kind === 'weapon';
         applyHit(this, a, {
           attacker: pr.owner, dmg: pr.dmg * (pr.owner?.power ?? 1), knock: isW ? 5 : 2.5, dir: sign(pr.vx), zone: 'high',
@@ -602,7 +629,7 @@ export class Game {
       if (!pr.dead && pr.team === 'hero') {
         for (const p of this.props) {
           if (p.broken || Math.abs(p.x - pr.x) > 0.5 || Math.abs(p.z - pr.z) > 0.6 || pr.y > 1.2) continue;
-          p.hit(this, pr.dmg, sign(pr.vx));
+          if (pr.kind !== 'barrel') p.hit(this, pr.dmg, sign(pr.vx));
           this.projectileEnd(pr);
           break;
         }
@@ -615,10 +642,15 @@ export class Game {
 
   projectileEnd(pr) {
     pr.dead = true;
+    if (pr.kind === 'barrel') {
+      // 던진 드럼통: 닿는 순간 폭발 (조금 더 강력)
+      this.explode(pr.x, pr.z, TRAPS.barrel.radius * 1.1, TRAPS.barrel.dmg * 1.2, null, pr.team); // 던진 쪽 편은 피해 없음
+      return;
+    }
     if (pr.kind === 'weapon' && pr.dur > 1) {
       this.items.push(new Item('weapon', pr.weaponType, pr.x, pr.z, { y: Math.max(0.2, pr.y), vy: 3, vx: -sign(pr.vx) * 1.5, dur: pr.dur - 1 }));
     } else {
-      const key = pr.kind === 'weapon' ? WEAPON_MODEL[pr.weaponType] : 'brick';
+      const key = pr.kind === 'weapon' ? WEAPON_MODEL[pr.weaponType] : pr.kind === 'barrel' ? 'barrel' : 'brick';
       mat4.identity(M); mat4.translate(M, pr.x, Math.max(0.1, pr.y), pr.z);
       this.debris.burst(getModel(this.r, key).voxels, M, { frac: 0.9, size: 0.1, spread: 2 });
     }
@@ -655,7 +687,7 @@ export class Game {
     for (const a of this.actors) a.draw(r);
     for (const pr of this.projectiles) {
       mat4.identity(M); mat4.translate(M, pr.x, pr.y, pr.z); mat4.rotateZ(M, -pr.spin * sign(pr.vx));
-      const key = pr.kind === 'weapon' ? WEAPON_MODEL[pr.weaponType] : 'brick';
+      const key = pr.kind === 'weapon' ? WEAPON_MODEL[pr.weaponType] : pr.kind === 'barrel' ? 'barrel' : 'brick';
       r.drawMesh(getModel(r, key).mesh, M);
     }
     this.gibs.draw(r);

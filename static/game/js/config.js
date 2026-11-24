@@ -79,6 +79,7 @@ export const ATTACKS = {
              shock: { radius: 1.9, dmg: .35, zone: 'low' } },
   saw:     { startup: .12, active: 999, recovery: .15, range: [.1, .95], depth: .55, dmg: 1.0, knock: .3,  zone: 'all',  hitstop: 0, anim: 'saw', weapon: true, hold: true, tick: .09, hitstun: .22 },
   pThrow:  { startup: .10, active: .05, recovery: .22, anim: 'throw', projectile: 'weapon' },
+  pThrowBarrel: { startup: .14, active: .05, recovery: .22, anim: 'throw', projectile: 'barrel' },
   pThrowGib: { startup: .10, active: .05, recovery: .20, anim: 'throw', projectile: 'gib' },
   smash:   { startup: .18, active: .10, recovery: .34, range: [.1, 1.0], depth: .65, dmg: 1.5, knock: 6,   zone: 'high', hitstop: .12, anim: 'swing', weapon: true, knockdown: true, finisher: true },
   // 동료

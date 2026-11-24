@@ -120,6 +120,7 @@ export function applyHit(game, v, h) {
   if (armored) return true;
 
   v.interrupt();
+  if (v.carry?.kind === 'barrel') game.dropCarry(v);
   v.facing = -h.dir;
   if (knockdown) {
     v.setState('down');
