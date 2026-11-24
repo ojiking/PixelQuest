@@ -7,6 +7,7 @@ import { PERKS, UPGRADES, WEAPONS } from './config.js';
 import { STAGE_COUNT } from './level.js';
 import { loadMeta, saveMeta, resetMeta, computeStats, upgradeCost, buyUpgrade, level, botLevel } from './meta.js';
 import { shuffle } from './math.js';
+import { setupTouch, IS_MOBILE } from './touch.js';
 
 const $ = id => document.getElementById(id);
 import { PART_NAME as CARRY_NAME } from './game.js';
@@ -21,6 +22,7 @@ try {
   throw e;
 }
 const input = new Input();
+const touch = setupTouch($('stage'), input);
 const texts = new Texts($('texts'));
 let meta = loadMeta();
 let mode = 'title';
@@ -45,6 +47,7 @@ function preview() {
 
 // ------------------------------------------------------------ 화면들
 function setScreen(html, cls = '') {
+  if (IS_MOBILE) html = html.replace(/ \((Enter|Esc|1·2·3)\)/g, ''); // 모바일에선 키보드 안내 숨김
   screen.className = 'overlay ' + cls;
   screen.innerHTML = html;
   screen.classList.toggle('hidden', !html);
@@ -57,13 +60,19 @@ function showTitle() {
     <div class="panel title">
       <div class="logo">PIXEL<span>QUEST</span></div>
       <div class="sub">블록 청소반 — 벨트스크롤 로그라이트 프로토타입 v0.1</div>
-      <div class="controls">
+      ${IS_MOBILE ? `<div class="controls">
+        <div><b>왼쪽 아래 드래그</b> 이동 (위아래 = 라인 이동)</div>
+        <div><b>공격</b> 연타 콤보 · 점프 중 공격 = 날아차기 · 전기톱은 누르고 있기</div>
+        <div><b>점프</b> · <b>줍기/던지기</b> 무기·음식·떨어진 부위</div>
+        <div><b>전술</b> 볼트 전술 변경 · <b>❚❚</b> 일시정지</div>
+        <div class="dim">가로 화면으로 플레이하세요</div>
+      </div>` : `<div class="controls">
         <div><b>WASD / 방향키</b> 이동 (위아래 = 라인 이동)</div>
         <div><b>J</b> 공격 (연타 콤보, 전기톱은 누르고 있기) · 점프 중 J = 날아차기</div>
         <div><b>K</b> 점프 · <b>L</b> 줍기 / 던지기 (떨어진 부위·시체도 가능)</div>
         <div><b>T</b> 볼트 전술 변경 · <b>Esc</b> 일시정지</div>
         <div class="dim"><b>P</b> 픽셀 크기 · <b>B</b> (테스트) 적 소환</div>
-      </div>
+      </div>`}
       <button class="btn primary" data-act="hub">시작 (Enter)</button>
     </div>`);
 }
@@ -227,6 +236,13 @@ function setWidth(id, ratio) {
 
 function updateHud(dt) {
   if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) $('banner').classList.add('hidden'); }
+  if (touch) {
+    touch.show(mode === 'run');
+    if (mode === 'run') {
+      const p = game.player;
+      touch.setGrabLabel(p.carry || p.weapon ? '던지기' : '줍기');
+    }
+  }
   if (mode !== 'run' && mode !== 'pause') return;
   const p = game.player, b = game.bot;
   setWidth('hp-player', p.hp / p.maxHp);

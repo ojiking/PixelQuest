@@ -6,6 +6,7 @@ export class Input {
   constructor() {
     this.down = new Set();
     this.just = new Set();
+    this.touchX = 0; this.touchZ = 0; // 모바일 조이스틱 (-1..1)
     addEventListener('keydown', e => {
       if (BLOCK.has(e.code)) e.preventDefault();
       const c = ALIAS[e.code] || e.code;
@@ -13,15 +14,17 @@ export class Input {
       this.down.add(c);
     });
     addEventListener('keyup', e => this.down.delete(ALIAS[e.code] || e.code));
-    addEventListener('blur', () => { this.down.clear(); this.just.clear(); });
+    addEventListener('blur', () => { this.down.clear(); this.just.clear(); this.touchX = this.touchZ = 0; });
   }
   pressed(c) { return this.just.has(c); }
   held(c) { return this.down.has(c); }
   axisX() {
-    return (this.held('KeyD') || this.held('ArrowRight') ? 1 : 0) - (this.held('KeyA') || this.held('ArrowLeft') ? 1 : 0);
+    const k = (this.held('KeyD') || this.held('ArrowRight') ? 1 : 0) - (this.held('KeyA') || this.held('ArrowLeft') ? 1 : 0);
+    return k || this.touchX;
   }
   axisZ() {
-    return (this.held('KeyS') || this.held('ArrowDown') ? 1 : 0) - (this.held('KeyW') || this.held('ArrowUp') ? 1 : 0);
+    const k = (this.held('KeyS') || this.held('ArrowDown') ? 1 : 0) - (this.held('KeyW') || this.held('ArrowUp') ? 1 : 0);
+    return k || this.touchZ;
   }
   endFrame() { this.just.clear(); }
 }
