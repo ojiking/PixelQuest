@@ -342,11 +342,16 @@ export class Actor {
     const ax = RP[12], ay = RP[13], az = RP[14];
     let dx = RP[0], dy = RP[1], dz = RP[2];
     const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
-    const L = f.seg * this.scale;
+    const segL = i => (f.segLens ? f.segLens[i - 1] : f.seg) * this.scale; // i번째 마디 길이
+    if (!this.cum || this.cumType !== type) { // 손잡이부터 각 점까지 누적 거리
+      this.cum = [0]; this.cumType = type;
+      for (let i = 1; i <= f.segs; i++) this.cum.push(this.cum[i - 1] + segL(i));
+    }
+    const cum = this.cum;
     if (!this.rope || this.rope.type !== type) {
       this.rope = { type, p: [] };
       for (let i = 0; i <= f.segs; i++) {
-        const x = ax + dx * L * i, y = ay + dy * L * i, z = az + dz * L * i;
+        const x = ax + dx * cum[i], y = ay + dy * cum[i], z = az + dz * cum[i];
         this.rope.p.push([x, y, z, x, y, z]);
       }
     }
@@ -361,16 +366,16 @@ export class Actor {
       q[3] = q[0]; q[4] = q[1]; q[5] = q[2];
       q[0] += vx; q[1] += vy - gstep; q[2] += vz;
       // 손잡이 방향으로 곧게 뻗으려는 힘 (휘두를 때 강해짐 → 휘어지며 펴짐)
-      q[0] += (ax + dx * L * i - q[0]) * stiff;
-      q[1] += (ay + dy * L * i - q[1]) * stiff;
-      q[2] += (az + dz * L * i - q[2]) * stiff;
+      q[0] += (ax + dx * cum[i] - q[0]) * stiff;
+      q[1] += (ay + dy * cum[i] - q[1]) * stiff;
+      q[2] += (az + dz * cum[i] - q[2]) * stiff;
     }
     for (let it = 0; it < 4; it++) {
       for (let i = 1; i < P.length; i++) {
         const a = P[i - 1], b = P[i];
         const ex = b[0] - a[0], ey = b[1] - a[1], ez = b[2] - a[2];
         const d = Math.hypot(ex, ey, ez) || 1e-6;
-        const k = L / d;
+        const k = segL(i) / d;
         b[0] = a[0] + ex * k; b[1] = a[1] + ey * k; b[2] = a[2] + ez * k;
       }
     }
@@ -400,6 +405,15 @@ export class Actor {
       const a = P[i - 1], b = P[i], u = i / (P.length - 1);
       const size = (f.size[0] + (f.size[1] - f.size[0]) * u) * s;
       const c = i >= P.length - 2 ? T : C[i % C.length];
+      if (f.stick && i - 1 >= f.stick.from) {
+        // 단단한 막대: 마디를 따라 큐브를 촘촘히 (양 끝은 검은 띠)
+        const SC = hexToRgb(f.stick.color), BC = hexToRgb(f.stick.band), m = 7;
+        for (let k = 0; k <= m; k++) {
+          const u2 = k / m;
+          put(a[0] + (b[0] - a[0]) * u2, a[1] + (b[1] - a[1]) * u2, a[2] + (b[2] - a[2]) * u2, f.stick.size * s, k === 0 || k === m ? BC : SC);
+        }
+        continue;
+      }
       if (f.ball) {
         put(b[0], b[1], b[2], size, c);                                                     // 고리
         put((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2, size * 0.55, C[1]);    // 연결부

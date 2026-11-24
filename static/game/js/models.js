@@ -346,6 +346,12 @@ const BUILDERS = {
     }
     g.fill(21, 0, 0, 23, 2, 2, 0x3e4349);
   }),
+  w_nunchaku_handle: r => single(r, 4, 2, 2, [0, 1, 1], g => { g.fill(0, 0, 0, 3, 1, 1, 0x8a5a2b); g.fill(0, 0, 0, 0, 1, 1, 0x1a1a1a); g.fill(3, 0, 0, 3, 1, 1, 0x1a1a1a); }),
+  w_nunchaku: r => single(r, 10, 2, 5, [0, 1, 1], g => { // 쌍절곤: 막대 두 개 + 짧은 사슬
+    g.fill(0, 0, 0, 3, 1, 1, 0x8a5a2b); g.fill(0, 0, 3, 3, 1, 4, 0x8a5a2b);
+    g.fill(3, 0, 0, 3, 1, 1, 0x1a1a1a); g.fill(3, 0, 3, 3, 1, 4, 0x1a1a1a);
+    g.set(4, 1, 1, 0x9aa2ab); g.set(5, 1, 2, 0x5d636b); g.set(4, 1, 3, 0x9aa2ab);
+  }),
   w_flail_handle: r => single(r, 5, 2, 2, [1.5, 1, 1], g => { g.fill(0, 0, 0, 4, 1, 1, 0x6b4a2b); g.fill(4, 0, 0, 4, 1, 1, 0x4a4e55); }),
   w_flail: r => single(r, 17, 5, 5, [1.5, 2.5, 2.5], g => { // 철퇴: 손잡이 + 짧은 사슬 + 가시 쇠공
     g.fill(0, 2, 2, 4, 2, 2, 0x6b4a2b);
@@ -396,5 +402,5 @@ const BUILDERS = {
 
 export const WEAPON_MODEL = {
   pipe: 'w_pipe', machete: 'w_machete', block: 'w_block', golf: 'w_golf', chainsaw: 'w_chainsaw',
-  axe: 'w_axe', bat: 'w_bat', sledge: 'w_sledge', chain: 'w_chain', pickaxe: 'w_pickaxe', whip: 'w_whip', flail: 'w_flail',
+  axe: 'w_axe', bat: 'w_bat', sledge: 'w_sledge', chain: 'w_chain', pickaxe: 'w_pickaxe', whip: 'w_whip', flail: 'w_flail', nunchaku: 'w_nunchaku',
 };
