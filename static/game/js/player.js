@@ -54,8 +54,10 @@ export class Player extends Actor {
 
   update(dt) {
     const g = this.game, inp = g.input;
-    if (inp.pressed('KeyJ')) this.buffer = 0.22;
+    if (inp.pressed('KeyJ')) this.buffer = 0.3;
     else this.buffer = Math.max(0, this.buffer - dt);
+    if (inp.pressed('KeyK')) this.jumpBuf = 0.2;
+    else this.jumpBuf = Math.max(0, (this.jumpBuf || 0) - dt);
     this.comboWindow = Math.max(0, this.comboWindow - dt);
     this.lastTargetT -= dt;
     this.dashCd -= dt; this.dashAtkWindow -= dt;
@@ -76,7 +78,8 @@ export class Player extends Actor {
         if (mx || mz) { this.state = 'walk'; this.walkPhase += dt * 11; } else this.state = 'idle';
         if (wantDash && this.dashCd <= 0) {
           this.startDash(tap || (mx ? Math.sign(mx) : this.facing));
-        } else if (inp.pressed('KeyK')) {
+        } else if (this.jumpBuf > 0) {
+          this.jumpBuf = 0;
           this.setState('jump'); this.vy = PLAYER.jump; this.grounded = false; this.airAttacked = false; this.airDashed = false;
           this.game.sfx?.('jump');
         } else if (inp.pressed('KeyL')) {
@@ -138,9 +141,23 @@ export class Player extends Actor {
           this.updateAttack(dt);
           break;
         }
+        // 후딜레이(판정이 끝난 뒤)는 대쉬/점프로 취소 가능, 살짝 움직일 수 있음
+        const recovering = a.activated && a.t >= a.def.startup + a.def.active;
+        if (recovering && !a.air && this.grounded) {
+          if (wantDash && this.dashCd <= 0) { this.interrupt(); this.startDash(tap || (mx ? Math.sign(mx) : this.facing)); break; }
+          if (this.jumpBuf > 0) {
+            this.interrupt(); this.jumpBuf = 0;
+            this.setState('jump'); this.vy = PLAYER.jump; this.grounded = false; this.airAttacked = false; this.airDashed = false;
+            this.vx = mx * PLAYER.speed; this.game.sfx?.('jump');
+            break;
+          }
+        }
         if (a.def.momentum) {
           this.vx *= Math.pow(0.12, dt);
           this.vz = 0;
+        } else if (recovering && !a.air) {
+          this.vx = mx * PLAYER.speed * 0.4; this.vz = mz * PLAYER.zSpeed * 0.4;
+          if (mx && this.buffer > 0) this.facing = mx > 0 ? 1 : -1; // 다음 타 방향 전환
         } else if (!a.air) {
           this.vx *= Math.pow(0.001, dt);
           this.vz = 0;
@@ -164,7 +181,7 @@ export class Player extends Actor {
   }
 
   onAttackEnd(interrupted) {
-    this.comboWindow = interrupted ? 0 : 0.28;
+    this.comboWindow = interrupted ? 0 : 0.35;
   }
 
   onHitLanded(v, d) {

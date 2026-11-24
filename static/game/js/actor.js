@@ -372,6 +372,12 @@ export class Actor {
         T.legF = 1.4; T.shinF = 0; T.armF = 1.5; T.armB = 1.5; T.handF = T.handB = 0;
         if (A) this.spin = ((a.t - d.startup) / d.active) * Math.PI * 4;
         break;
+      case 'wspin': // 무기를 수평으로 뻗고 제자리 회전 (강철 체인)
+        T.armF = 1.45; T.handF = 0; T.grip = -1.57; T.armB = .4; T.handB = .8;
+        T.legF = .35; T.legB = -.3; T.shinB = -.3; T.torso = -.1;
+        if (S) T.twist = 1.0;
+        if (A) this.spin = ((a.t - d.startup) / d.active) * Math.PI * 2;
+        break;
     }
   }
 

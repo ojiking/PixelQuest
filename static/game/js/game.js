@@ -302,6 +302,8 @@ export class Game {
     v.vx = h.dir * Math.max(3, h.knock) * 1.1; v.vy = 6; v.y = Math.max(v.y, 0.01); v.grounded = false;
     if (h.knock >= 7.5) v.flung = { owner: h.attacker, hit: new Set() };
     v.facing = -h.dir;
+    if (v.weapon) this.dropWeapon(v);
+    if (v.goItem) { v.goItem.claimed = null; v.goItem = null; }
     this.releaseToken(v);
     this.run.kills++;
     if (this.run.perks.has('ration')) this.player.hp = Math.min(this.player.maxHp, this.player.hp + 3);

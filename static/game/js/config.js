@@ -9,8 +9,8 @@ export const LANE = { zMin: -3.2, zMax: 4.7 }; // 걸어다닐 수 있는 깊이
 // ---------------- 플레이어 ----------------
 export const PLAYER = {
   hp: 100,
-  speed: 4.2,      // 좌우 이동 속도
-  zSpeed: 3.0,     // 앞뒤 라인 이동 속도
+  speed: 5.0,      // 좌우 이동 속도
+  zSpeed: 3.8,     // 앞뒤 라인 이동 속도
   jump: 8.7,
   dashSpeed: 12,     // 대쉬 속도
   dashTime: 0.26,
@@ -45,9 +45,9 @@ export const BOT = {
 // zone: 노리는 부위 (high=머리·팔, mid=팔·몸, low=다리)
 export const ATTACKS = {
   // 플레이어 맨손 콤보
-  jab:     { startup: .05, active: .08, recovery: .14, range: [.1, 1.2], depth: .5,  dmg: 6,  knock: 1.0, zone: 'high', hitstop: .045, anim: 'punchF' },
-  cross:   { startup: .06, active: .08, recovery: .16, range: [.1, 1.3], depth: .5,  dmg: 8,  knock: 1.4, zone: 'high', hitstop: .055, anim: 'punchB' },
-  kick:    { startup: .10, active: .10, recovery: .30, range: [.1, 1.5], depth: .55, dmg: 14, knock: 5.5, zone: 'mid',  hitstop: .10, anim: 'kick', knockdown: true, finisher: true },
+  jab:     { startup: .05, active: .08, recovery: .10, range: [.1, 1.2], depth: .5,  dmg: 6,  knock: 1.0, zone: 'high', hitstop: .045, anim: 'punchF' },
+  cross:   { startup: .06, active: .08, recovery: .12, range: [.1, 1.3], depth: .5,  dmg: 8,  knock: 1.4, zone: 'high', hitstop: .055, anim: 'punchB' },
+  kick:    { startup: .09, active: .10, recovery: .22, range: [.1, 1.5], depth: .55, dmg: 14, knock: 5.5, zone: 'mid',  hitstop: .10, anim: 'kick', knockdown: true, finisher: true },
   flykick: { startup: .04, active: .40, recovery: .10, range: [0, 1.3],  depth: .55, dmg: 13, knock: 8,   zone: 'high', hitstop: .09, anim: 'flykick', knockdown: true },
   // 대쉬 어택: 몸통 박치기. 맞은 적이 멀리 날아가 다른 적과 부딪힘
   dashAtk: { startup: .03, active: .22, recovery: .28, range: [0, 1.25], depth: .6,  dmg: 12, knock: 12,  zone: 'mid',  hitstop: .12, anim: 'dashAtk', knockdown: true, launch: 3.2, momentum: true, shake: .18 },
@@ -67,6 +67,14 @@ export const ATTACKS = {
   bashF:   { startup: .20, active: .10, recovery: .36, range: [.1, 1.0], depth: .7,  dmg: 1.5, knock: 8,   zone: 'high', hitstop: .13, anim: 'hswing', weapon: true, knockdown: true, finisher: true, shake: .2 },
   whip:    { startup: .10, active: .12, recovery: .20, range: [.2, 1.0], depth: .85, dmg: 1.0, knock: 1.5, zone: 'low',  hitstop: .05, anim: 'hswing', weapon: true },
   whipF:   { startup: .14, active: .14, recovery: .30, range: [.2, 1.0], depth: .9,  dmg: 1.4, knock: 2.5, zone: 'low',  hitstop: .08, anim: 'hswing', weapon: true, knockdown: true, finisher: true },
+  // 채찍: 빠른 채찍질, 마무리는 적을 끌어당김 (knock 음수)
+  lash:     { startup: .08, active: .08, recovery: .15, range: [.2, 1.0], depth: .45, dmg: 1.0, knock: .8, zone: 'arms', hitstop: .04, anim: 'swing', weapon: true },
+  lashPull: { startup: .12, active: .10, recovery: .28, range: [.3, 1.0], depth: .5,  dmg: 1.3, knock: -11, zone: 'head', hitstop: .08, anim: 'hslash', weapon: true, hitstun: .5, finisher: true, pull: true },
+  // 강철 체인 마무리: 제자리에서 돌며 주변을 휩쓸기
+  chainSpin: { startup: .16, active: .42, recovery: .35, range: [0, 1.0], depth: 1.1, dmg: 1.4, knock: 8, zone: 'mid', hitstop: .1, anim: 'wspin', weapon: true, aoe: true, knockdown: true, finisher: true, shake: .2 },
+  // 적이 무기를 휘두를 때 (예고 동작이 더 김)
+  eWeapon:  { startup: .42, active: .10, recovery: .50, range: [.1, 1.0], depth: .5,  dmg: .7, knock: 2.5, zone: 'high', hitstop: .07, anim: 'swing',  weapon: true, needArms: true },
+  eWeaponH: { startup: .42, active: .12, recovery: .50, range: [.1, 1.0], depth: .55, dmg: .7, knock: 3,   zone: 'mid',  hitstop: .07, anim: 'hswing', weapon: true, needArms: true },
   sledge:  { startup: .42, active: .10, recovery: .50, range: [.1, 1.0], depth: .7,  dmg: 1.0, knock: 5,   zone: 'high', hitstop: .15, anim: 'slam', weapon: true, knockdown: true, finisher: true, shake: .38,
              shock: { radius: 1.9, dmg: .35, zone: 'low' } },
   saw:     { startup: .12, active: 999, recovery: .15, range: [.1, .95], depth: .55, dmg: 1.0, knock: .3,  zone: 'all',  hitstop: 0, anim: 'saw', weapon: true, hold: true, tick: .09, hitstun: .22 },
@@ -90,10 +98,10 @@ export const ATTACKS = {
 // ---------------- 적 ----------------
 // 생김새 = 행동 원칙: 모델(외형)마다 고유 AI와 공격을 가집니다.
 export const ENEMIES = {
-  grunt:   { name: '골목 깡패',    model: 'grunt',   hp: 38,  speed: 2.3,  scale: 1,    ai: 'brawler', attacks: ['ePunch'],                    scrap: [1, 2] },
+  grunt:   { name: '골목 깡패',    model: 'grunt',   hp: 38,  speed: 2.3,  scale: 1,    ai: 'brawler', attacks: ['ePunch'],                    scrap: [1, 2], pickup: true, armed: { chance: .22, types: ['pipe', 'bat', 'machete', 'whip'] } },
   charger: { name: '돌격 헬멧',    model: 'charger', hp: 60,  speed: 1.7,  scale: 1.08, ai: 'charger', attacks: ['eCharge'],                   scrap: [2, 3] },
   thrower: { name: '벽돌 배달부',  model: 'thrower', hp: 32,  speed: 2.0,  scale: 1,    ai: 'kiter',   attacks: ['eThrow'],                    scrap: [1, 3] },
-  brute:   { name: '철거 덩치',    model: 'brute',   hp: 130, speed: 1.35, scale: 1.3,  ai: 'brawler', attacks: ['eSlam', 'ePunch'],           scrap: [3, 5], poise: 14 },
+  brute:   { name: '철거 덩치',    model: 'brute',   hp: 130, speed: 1.35, scale: 1.3,  ai: 'brawler', attacks: ['eSlam', 'ePunch'],           scrap: [3, 5], poise: 14, pickup: true, armed: { chance: .35, types: ['sledge', 'pipe', 'axe', 'chain'] } },
   bomber:  { name: '폭죽 꼬마',    model: 'bomber',  hp: 14,  speed: 3.7,  scale: .72,  ai: 'rusher',  attacks: ['eFuse'],                     scrap: [1, 1] },
   boss:    { name: '철거반장 굴삭', model: 'boss',    hp: 520, speed: 1.6,  scale: 1.55, ai: 'boss',    attacks: ['eSlam', 'eCharge', 'eThrow'], scrap: [30, 30], poise: 30, boss: true },
 };
@@ -118,7 +126,8 @@ export const WEAPONS = {
   axe:      { name: '소방 도끼',     dmg: 18, reach: .55, dur: 12, sever: 2.8, knock: 1,   throwDmg: 24, mode: 'cut',   bisect: .5, slow: 1.15, weight: 2, combo: ['chop', 'chopF'] },
   bat:      { name: '못 박힌 배트',  dmg: 14, reach: .6,  dur: 14, sever: 1.1, knock: 1.3, throwDmg: 16, mode: 'knock', fling: 1.8, weight: 2.5, combo: ['bash', 'bashF'] },
   sledge:   { name: '오함마',        dmg: 30, reach: .5,  dur: 8,  sever: 1.6, knock: 1.2, throwDmg: 28, mode: 'crush', weight: 1.2, combo: ['sledge'] },
-  chain:    { name: '쇠사슬',        dmg: 9,  reach: 1.3, dur: 18, sever: .9,  knock: 1,   throwDmg: 10, mode: 'knock', fling: 1.4, weight: 2, combo: ['whip', 'whip', 'whipF'] },
+  chain:    { name: '강철 체인',     dmg: 13, reach: 1.35, dur: 16, sever: 1.0, knock: 1.2, throwDmg: 14, mode: 'knock', fling: 1.8, slow: 1.1, weight: 1.8, combo: ['whip', 'whip', 'chainSpin'] },
+  whip:     { name: '채찍',          dmg: 7,  reach: 1.75, dur: 18, sever: 1.3, knock: .6,  throwDmg: 6,  mode: 'cut',   zone: 'arms', weight: 2, combo: ['lash', 'lash', 'lashPull'] },
   pickaxe:  { name: '곡괭이',        dmg: 17, reach: .55, dur: 12, sever: 2.2, knock: 1,   throwDmg: 20, mode: 'crush', zone: 'head', weight: 2, combo: ['swing', 'smash'] },
 };
 export const FIST_SEVER = .55;

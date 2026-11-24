@@ -1,6 +1,6 @@
 // 적 — 외형(타입)마다 고유 AI. 부위가 파괴되면 행동이 바뀜 (팔 없음 → 발차기, 다리 없음 → 돌진 불가)
 import { Actor } from './actor.js';
-import { ENEMIES, ATTACKS, LANE } from './config.js';
+import { ENEMIES, ATTACKS, LANE, WEAPONS } from './config.js';
 import { clamp, rand } from './math.js';
 
 export class Enemy extends Actor {
@@ -18,6 +18,49 @@ export class Enemy extends Actor {
     this.getupInvuln = 0.3;
     this.phase2 = false;
     this.facing = x > game.player.x ? -1 : 1;
+    this.goItem = null;
+    // 처음부터 무기를 들고 나오는 적
+    if (def.armed && Math.random() < def.armed.chance) {
+      const t = def.armed.types[Math.floor(Math.random() * def.armed.types.length)];
+      this.weapon = { type: t, dur: Math.ceil(WEAPONS[t].dur * 0.6) };
+    }
+  }
+
+  // 근처에 떨어진 무기를 찾아 주우러 감 (전기톱 제외)
+  seekWeapon() {
+    if (!this.def.pickup || this.weapon || !this.hasArms() || this.goItem) return;
+    const g = this.game;
+    let best = null, bd = 4.5;
+    for (const it of g.items) {
+      if (it.kind !== 'weapon' || it.type === 'chainsaw' || it.claimed || it.remove || it.vy !== 0) continue;
+      const d = Math.hypot(it.x - this.x, (it.z - this.z) * 1.3);
+      if (d < bd) { best = it; bd = d; }
+    }
+    if (best) { best.claimed = this; this.goItem = best; }
+  }
+
+  updatePickup() {
+    const it = this.goItem;
+    if (!it) return false;
+    if (it.remove || this.weapon || !this.hasArms()) { if (it.claimed === this) it.claimed = null; this.goItem = null; return false; }
+    if (Math.hypot(it.x - this.x, it.z - this.z) < 0.6) {
+      it.remove = true;
+      this.weapon = { type: it.type, dur: it.dur };
+      this.goItem = null;
+      this.game.texts.add(this.x, 2.3 * this.scale, this.z, `${WEAPONS[it.type].name} 획득!`, 'hurt');
+      this.game.sfx?.('pickup');
+      return false;
+    }
+    this.moveToward(it.x, it.z, this.def.speed * 1.2);
+    this.facing = it.x > this.x ? 1 : -1;
+    return true;
+  }
+
+  onHitLanded(v, d) {
+    if (d.weapon && this.weapon) {
+      this.weapon.dur -= 1;
+      if (this.weapon.dur <= 0) this.game.breakWeapon(this);
+    }
   }
 
   update(dt) {
@@ -39,6 +82,13 @@ export class Enemy extends Actor {
     const t = this.target;
     if (!t || !t.alive) { this.vx = this.vz = 0; this.state = 'idle'; this.pose(dt); return; }
 
+    // 무기 줍기가 우선
+    if (this.think > 0.55) this.seekWeapon();
+    if (this.updatePickup()) {
+      this.state = !this.grounded ? 'jump' : 'walk';
+      this.walkPhase += dt * 10 * this.legFactor();
+      this.pose(dt); return;
+    }
     let ai = this.def.ai;
     // 부위 파괴에 따른 행동 변화
     if (ai === 'kiter' && !this.hasArms()) ai = 'brawler';
@@ -70,6 +120,11 @@ export class Enemy extends Actor {
 
   // 팔/다리가 없으면 쓸 수 있는 공격으로 대체
   doAttack(key) {
+    // 무기를 들고 있으면 무기로 휘두름 (덩치의 내려찍기는 유지)
+    if (this.weapon && this.hasArms() && key !== 'eSlam' && key !== 'eCharge' && key !== 'eFuse') {
+      const horiz = ['bat', 'chain', 'machete', 'whip'].includes(this.weapon.type);
+      key = horiz ? 'eWeaponH' : 'eWeapon';
+    }
     const d = ATTACKS[key];
     if (d.needArms && !this.hasArms()) key = 'eKick';
     if (d.needLegs && this.legCount() < 2) key = this.hasArms() ? 'ePunch' : 'eKick';

@@ -108,6 +108,7 @@ export function applyHit(game, v, h) {
   if (v.destructible && (h.mode === 'cut' || h.mode === 'saw')) game.bleed(v.x - h.dir * 0.1, v.y + 1.1 * v.scale, v.z + 0.2, h.dir, h.mode === 'saw' ? 5 : 8);
   if (v.dead) return true;
   if (v.hp <= 0) { game.kill(v, h); return true; }
+  if (h.knock < 0 && !v.isBoss) game.texts.add(v.x, v.y + 2.2 * v.scale, v.z, '끌어당김!', 'back');
 
   let armored = false;
   if (v.poise && v.state === 'attack') {
@@ -130,7 +131,7 @@ export function applyHit(game, v, h) {
     v.y = Math.max(v.y, 0.01);
   } else {
     v.setState('hurt');
-    v.hitstun = h.hitstun ?? (v.isBoss ? 0.18 : 0.32);
+    v.hitstun = h.hitstun ?? (v.isBoss ? 0.18 : v.team === 'hero' ? 0.24 : 0.32);
     v.vx = h.dir * h.knock;
     if (!v.grounded) { v.vy = Math.max(v.vy, 2); }
   }

@@ -337,10 +337,18 @@ const BUILDERS = {
     g.fill(11, 0, 0, 14, 5, 2, 0x4a4e55);
     g.fill(11, 0, 0, 14, 0, 2, 0x6a6f77); g.fill(11, 5, 0, 14, 5, 2, 0x6a6f77);
   }),
-  w_chain: r => single(r, 22, 2, 1, [1.5, 1, 0.5], g => {
-    g.fill(0, 0, 0, 2, 1, 0, 0x2a2a2a);
-    for (let x = 3; x < 22; x++) g.set(x, Math.floor(x / 2) % 2, 0, x % 2 ? 0x9aa0a8 : 0x6f757c);
-    g.fill(20, 0, 0, 21, 1, 0, 0x4a4e55);
+  w_chain: r => single(r, 24, 3, 3, [1.5, 1.5, 1.5], g => { // 강철 체인: 굵은 고리 + 끝 쇳덩이
+    g.fill(0, 1, 1, 2, 1, 1, 0x2a2a2a);
+    for (let x = 3; x < 21; x++) {
+      const c = Math.floor(x / 2) % 2 ? 0x9aa2ab : 0x5d636b;
+      if (x % 4 < 2) { g.set(x, 1, 0, c); g.set(x, 1, 2, c); g.set(x, 0, 1, c); g.set(x, 2, 1, c); }
+      else g.set(x, 1, 1, c);
+    }
+    g.fill(21, 0, 0, 23, 2, 2, 0x3e4349);
+  }),
+  w_whip: r => single(r, 27, 2, 1, [1.5, 1, 0.5], g => { // 채찍: 가는 가죽 끈
+    g.fill(0, 0, 0, 3, 1, 0, 0x3a2414);
+    for (let x = 4; x < 27; x++) g.set(x, x < 16 ? 1 : 0, 0, x > 23 ? 0xb07a48 : x % 3 ? 0x6b4226 : 0x5a361e);
   }),
   w_pickaxe: r => single(r, 14, 9, 1, [1.5, 4.5, 0.5], g => {
     g.fill(0, 4, 0, 11, 4, 0, 0x7a5232);
@@ -379,5 +387,5 @@ const BUILDERS = {
 
 export const WEAPON_MODEL = {
   pipe: 'w_pipe', machete: 'w_machete', block: 'w_block', golf: 'w_golf', chainsaw: 'w_chainsaw',
-  axe: 'w_axe', bat: 'w_bat', sledge: 'w_sledge', chain: 'w_chain', pickaxe: 'w_pickaxe',
+  axe: 'w_axe', bat: 'w_bat', sledge: 'w_sledge', chain: 'w_chain', pickaxe: 'w_pickaxe', whip: 'w_whip',
 };
