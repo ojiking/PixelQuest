@@ -106,7 +106,7 @@ export const ENEMIES = {
   grunt:   { name: '골목 깡패',    model: 'grunt',   hp: 38,  speed: 2.3,  scale: 1,    ai: 'brawler', attacks: ['ePunch'],                    scrap: [1, 2], pickup: true, armed: { chance: .22, types: ['pipe', 'bat', 'machete', 'whip'] } },
   charger: { name: '돌격 헬멧',    model: 'charger', hp: 60,  speed: 1.7,  scale: 1.08, ai: 'charger', attacks: ['eCharge'],                   scrap: [2, 3] },
   thrower: { name: '벽돌 배달부',  model: 'thrower', hp: 32,  speed: 2.0,  scale: 1,    ai: 'kiter',   attacks: ['eThrow'],                    scrap: [1, 3] },
-  brute:   { name: '철거 덩치',    model: 'brute',   hp: 130, speed: 1.35, scale: 1.3,  ai: 'brawler', attacks: ['eSlam', 'ePunch'],           scrap: [3, 5], poise: 14, pickup: true, armed: { chance: .35, types: ['sledge', 'pipe', 'axe', 'chain'] } },
+  brute:   { name: '철거 덩치',    model: 'brute',   hp: 130, speed: 1.35, scale: 1.3,  ai: 'brawler', attacks: ['eSlam', 'ePunch'],           scrap: [3, 5], poise: 14, pickup: true, armed: { chance: .35, types: ['sledge', 'pipe', 'axe', 'chain', 'flail'] } },
   bomber:  { name: '폭죽 꼬마',    model: 'bomber',  hp: 14,  speed: 3.7,  scale: .72,  ai: 'rusher',  attacks: ['eFuse'],                     scrap: [1, 1] },
   boss:    { name: '철거반장 굴삭', model: 'boss',    hp: 520, speed: 1.6,  scale: 1.55, ai: 'boss',    attacks: ['eSlam', 'eCharge', 'eThrow'], scrap: [30, 30], poise: 30, boss: true },
 };
@@ -132,6 +132,7 @@ export const WEAPONS = {
   bat:      { name: '못 박힌 배트',  dmg: 14, reach: .6,  dur: 14, sever: 1.1, knock: 1.3, throwDmg: 16, mode: 'knock', fling: 1.8, weight: 2.5, combo: ['bash', 'bashF'] },
   sledge:   { name: '오함마',        dmg: 30, reach: .5,  dur: 8,  sever: 1.6, knock: 1.2, throwDmg: 28, mode: 'crush', weight: 1.2, combo: ['sledge'] },
   chain:    { name: '강철 체인',     dmg: 13, reach: 1.35, dur: 16, sever: 1.0, knock: 1.2, throwDmg: 14, mode: 'knock', fling: 1.8, slow: 1.1, weight: 1.8, combo: ['whip', 'whip', 'chainSpin'] },
+  flail:    { name: '철퇴',          dmg: 21, reach: .95, dur: 12, sever: 1.8, knock: 1.3, throwDmg: 22, mode: 'crush', slow: 1.2, weight: 1.5, combo: ['swing', 'swing', 'smash'] },
   whip:     { name: '채찍',          dmg: 7,  reach: 1.75, dur: 18, sever: 1.3, knock: .6,  throwDmg: 6,  mode: 'cut',   zone: 'arms', weight: 2, combo: ['lash', 'lash', 'lashPull'] },
   pickaxe:  { name: '곡괭이',        dmg: 17, reach: .55, dur: 12, sever: 2.2, knock: 1,   throwDmg: 20, mode: 'crush', zone: 'head', weight: 2, combo: ['swing', 'smash'] },
 };
@@ -141,6 +142,8 @@ export const FIST_SEVER = .55;
 export const FLEX = {
   whip:  { handleModel: 'w_whip_handle',  handle: .30, segs: 14, seg: .13,  stiffIdle: .03, stiffAtk: .5, grav: 16, damp: .90,
            colors: [0x7a4a28, 0x5a361e], tip: 0xc08a50, size: [.09, .05], crack: true },
+  flail: { handleModel: 'w_flail_handle', handle: .34, segs: 5,  seg: .14,  stiffIdle: .02, stiffAtk: .38, grav: 24, damp: .88,
+           colors: [0x9aa2ab, 0x5d636b], tip: 0x3a3e44, size: [.08, .08], ball: .3, spikes: 0xc8cdd2 },
   chain: { handleModel: 'w_chain_handle', handle: .22, segs: 9,  seg: .155, stiffIdle: .015, stiffAtk: .26, grav: 22, damp: .88,
            colors: [0x9aa2ab, 0x5d636b], tip: 0x3e4349, size: [.095, .095], ball: .24 },
 };

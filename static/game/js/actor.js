@@ -408,7 +408,14 @@ export class Actor {
         put(b[0], b[1], b[2], size * 0.95, c);
       }
     }
-    if (f.ball) { const t = P[P.length - 1]; put(t[0], t[1], t[2], f.ball * s, T); }
+    if (f.ball) {
+      const t = P[P.length - 1], b = f.ball * s;
+      put(t[0], t[1], t[2], b, T);
+      if (f.spikes) { // 가시: 쇠공 둘레 6방향
+        const SC = hexToRgb(f.spikes), o = b * 0.62, ss = b * 0.32;
+        for (const [ox, oy, oz] of [[o, 0, 0], [-o, 0, 0], [0, o, 0], [0, -o, 0], [0, 0, o], [0, 0, -o]]) put(t[0] + ox, t[1] + oy, t[2] + oz, ss, SC);
+      }
+    }
     return n;
   }
 
