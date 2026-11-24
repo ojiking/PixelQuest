@@ -168,8 +168,9 @@ export class Renderer {
   }
 
   resize() {
-    const w = Math.max(1, Math.floor(window.innerWidth / this.pixelScale));
-    const h = Math.max(1, Math.floor(window.innerHeight / this.pixelScale));
+    // 캔버스는 CSS로 16:9 고정된 #stage를 채움
+    const w = Math.max(1, Math.floor((this.canvas.clientWidth || window.innerWidth) / this.pixelScale));
+    const h = Math.max(1, Math.floor((this.canvas.clientHeight || window.innerHeight) / this.pixelScale));
     if (this.canvas.width !== w || this.canvas.height !== h) {
       this.canvas.width = w;
       this.canvas.height = h;

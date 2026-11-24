@@ -110,7 +110,7 @@ export class Texts {
   }
   clear() { this.list.forEach(t => t.el.remove()); this.list = []; }
   update(dt, vp) {
-    const W = window.innerWidth, H = window.innerHeight;
+    const W = this.root.clientWidth || window.innerWidth, H = this.root.clientHeight || window.innerHeight;
     for (let i = this.list.length - 1; i >= 0; i--) {
       const t = this.list[i];
       t.t += dt;
