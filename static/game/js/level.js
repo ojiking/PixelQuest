@@ -224,7 +224,7 @@ export class Stage {
     triggers.forEach((t, zi) => {
       const [a0, a1] = arenaSpan(t);
       if (a0 - cursor >= 5) this.addSeg(this.pickSeg(PATH_TYPES), cursor, a0);
-      const boss = this.final && zi === triggers.length - 1;
+      const boss = zi === triggers.length - 1;
       this.addSeg(boss ? 'open' : this.pickSeg(ARENA_TYPES), Math.max(cursor, a0), a1);
       cursor = a1;
     });
@@ -243,8 +243,12 @@ export class Stage {
 
     triggers.forEach((tx, zi) => {
       const waves = [];
-      const isBoss = this.final && zi === triggers.length - 1;
-      if (isBoss) {
+      // 스테이지마다 마지막 구역은 보스: 1스테이지 철거반장, 도심(마지막) 사이보그 폭주왕
+      const isBoss = zi === triggers.length - 1;
+      if (isBoss && this.biome.city) {
+        waves.push(['grunt', 'biker', 'thrower', 'grunt']);
+        waves.push(['cyborg']);
+      } else if (isBoss) {
         waves.push(['grunt', 'thrower', 'grunt']);
         waves.push(['boss', 'grunt']);
       } else {

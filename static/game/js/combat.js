@@ -43,7 +43,8 @@ function buildHit(att, d, v) {
     zone = w.zone ?? zone; mode = w.mode; fling = w.fling ?? 1;
     if (d.finisher || d.hold) bisect = w.bisect ?? 0;
   }
-  if (!held && att.blade) { mode = 'cut'; sever = 2.2; } // 공격형 볼트의 절단 블레이드
+  if (!held && att.blade) { mode = 'cut'; sever = 2.2; }
+  if (d.sever) sever = d.sever; // 공격형 볼트의 절단 블레이드
   dmg *= att.power;
   if (d.finisher && att.perk('finisher')) dmg *= 1.4;
   if (held && att.wpow) dmg *= att.wpow;                       // 무기 숙련
@@ -153,6 +154,7 @@ export function applyHit(game, v, h) {
   if (v.isBoss && knockdown && dmg < 20 && !h.explosion) knockdown = false;
   if (armored) return true;
 
+  if (v.mounted && v.isBoss) return true;   // 보스 오토바이: 슈퍼아머 (체력이 깎이면 스스로 내림)
   if (v.mounted && (knockdown || dmg >= 14 || h.explosion)) game.dismount(v, h.dir);
   else if (v.mounted) { v.bikePhase = 'line'; v.bikeT = 0; v.revving = false; }
   v.interrupt();

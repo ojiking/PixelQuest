@@ -23,6 +23,7 @@ export class Enemy extends Actor {
     this.guardBroken = 0; this.turnT = 0; this.dodgeCd = 1; this.flip = 0; this.flipping = false;
     this.mounted = !!def.bike;       // 폭주족: 오토바이에 탄 채 등장
     if (def.katana) this.weapon = { type: 'katana', dur: 999 };
+    if (def.saw) this.weapon = { type: 'chainsaw', dur: 9999 }; // 팔에 달린 전기톱 (팔을 자르면 떨어짐)
     // 처음부터 무기를 들고 나오는 적
     if (def.armed && Math.random() < def.armed.chance) {
       const t = def.armed.types[Math.floor(Math.random() * def.armed.types.length)];
@@ -90,7 +91,8 @@ export class Enemy extends Actor {
       }
     }
     if (this.state === 'attack') {
-      if (this.attack.def.dash && this.attackPhase() === 'startup') this.vx = 0;
+      if ((this.attack.def.dash || this.attack.def.rush) && this.attackPhase() === 'startup') this.vx = 0;
+      if (this.attack.def.rush && this.attackPhase() === 'active' && Math.random() < .5) { g.debris.sparks(this.x + this.facing * 1.6 * this.scale, 1.1 * this.scale, this.z + .2, 0xffd27a, 2, 3); }
       this.updateAttack(dt);
       this.x = clamp(this.x, g.camX - g.viewHalf - 3, g.camX + g.viewHalf + 3);
       this.pose(dt); return;
@@ -145,7 +147,7 @@ export class Enemy extends Actor {
   // 팔/다리가 없으면 쓸 수 있는 공격으로 대체
   doAttack(key) {
     // 무기를 들고 있으면 무기로 휘두름 (덩치의 내려찍기는 유지)
-    if (this.weapon && this.hasArms() && !['eSlam', 'eCharge', 'eFuse', 'eShuriken', 'eSlash', 'eBash'].includes(key)) {
+    if (this.weapon && this.hasArms() && !['eSlam', 'eCharge', 'eFuse', 'eShuriken', 'eSlash', 'eBash', 'eSawRush', 'eSawSweep'].includes(key)) {
       const horiz = ['bat', 'chain', 'machete', 'whip'].includes(this.weapon.type);
       key = horiz ? 'eWeaponH' : 'eWeapon';
     }
@@ -218,21 +220,23 @@ export class Enemy extends Actor {
     } else if (ph === 'rev') {
       this.vx = this.vz = 0; this.revving = true; this.face(t);
       if (Math.random() < 0.4) g.debris.puff(this.x - this.facing * 1.0, 0.3, this.z, [0x777777, 0x999999], 1, 1, .1, .5, -0.1);
-      if (this.bikeT > 0.65) { go('charge'); this.chargeHit = new Set(); this.revving = false; }
+      if (this.bikeT > (this.isBoss ? 0.85 : 0.65)) { go('charge'); this.chargeHit = new Set(); this.revving = false; }
     } else if (ph === 'charge') {
-      this.vx = this.facing * 9.5; this.vz = 0; this.wantMove = true;
+      this.vx = this.facing * (this.isBoss ? 11 : 9.5); this.vz = 0; this.wantMove = true;
       if (Math.random() < 0.5) g.debris.puff(this.x - this.facing * 1.0, 0.3, this.z, [0x666666, 0x888888], 1, 1.5, .12, .5, -0.1);
       // 경로 위의 모두를 들이받음 (같은 편도 예외 없음)
       for (const a of g.actors) {
         if (a === this || !a.alive || this.chargeHit.has(a) || a.state === 'down' || a.y > this.y + 1.0) continue;
-        if (Math.abs(a.x - this.x) > 0.75 + a.radius || Math.abs(a.z - this.z) > 0.45) continue;
+        if (Math.abs(a.x - this.x) > 0.75 * this.scale + a.radius || Math.abs(a.z - this.z) > 0.45 * Math.sqrt(this.scale)) continue;
         this.chargeHit.add(a);
         g.bikeHit(this, a);
       }
       const ax = this.x + this.facing * 1.0;
       const car = g.carAt(ax, this.z, 0, this.y);
       const fl = g.floorAt(ax, this.z);
-      if (car || fl > this.y + 0.5) {          // 차·벽에 정면충돌 → 낙차
+      if (this.isBoss && car) { g.hitCar(car, 999, this.facing); g.explodeCar(car); }  // 보스는 차를 들이받아 그대로 폭파하며 관통
+      else if (this.isBoss && fl > this.y + 0.5) { this.vx = 0; go('turn'); return; }
+      else if (car || fl > this.y + 0.5) {          // 차·벽에 정면충돌 → 낙차
         if (car) g.hitCar(car, 35, this.facing);
         g.shake(0.3); g.sfx?.('crush');
         const dir = -this.facing;
@@ -248,6 +252,53 @@ export class Enemy extends Actor {
       this.vx *= Math.pow(0.02, dt); this.vz = 0;
       if (this.bikeT > 0.45) { this.facing = t.x > this.x ? 1 : -1; this.cool = rand(1.0, 2.0); go('line'); }
     }
+  }
+
+  // 보스: 사이보그 폭주왕 쇠톱
+  //  1페이즈(오토바이): 슈퍼아머 돌진 + 전기톱 드라이브바이, 차를 관통 폭파
+  //  2페이즈(체력 65%↓): 오토바이를 걷어차 던지고(폭발) 부하 호출 → 전기톱 돌진/가로베기/내려찍기
+  //  3페이즈(체력 30%↓): 폭주 모드 — 공격 속도 상승, 몸에서 불꽃
+  cyborg(dt, t) {
+    const g = this.game;
+    if (this.mounted) {
+      if (this.hp < this.maxHp * 0.65) return this.bossDismount(t);
+      return this.biker(dt, t);
+    }
+    if (!this.phase2 && this.hp < this.maxHp * 0.3) {
+      this.phase2 = true; this.atkSpeed = 1.3;
+      g.banner('쇠톱 폭주 모드!', 1.8); g.sfx?.('engine');
+      g.spawnEnemy('biker', -1);
+    }
+    if (this.phase2 && Math.random() < dt * 6) g.debris.sparks(this.x + rand(-.4, .4), rand(1, 2.4) * this.scale * .7, this.z + .2, 0xffa04a, 2, 2);
+    const side = this.x < t.x ? -1 : 1;
+    const dx = Math.abs(t.x - this.x), dz = Math.abs(t.z - this.z);
+    this.face(t);
+    const cd = this.phase2 ? 0.7 : 1;
+    const saw = this.weapon?.type === 'chainsaw';
+    if (this.cool <= 0 && dz < 0.55 && dx < 2.2 * this.scale * 0.75) {
+      this.doAttack(saw ? (Math.random() < 0.55 ? 'eSawSweep' : 'eSawRush') : 'eSlam');
+      this.cool = rand(1.0, 1.7) * cd;
+      if (saw) g.sfx?.('engine');
+    } else if (this.cool <= 0 && dz < 0.45 && dx > 3 && dx < 7.5 && this.onScreen(1.0)) {
+      this.doAttack(saw && Math.random() < 0.5 ? 'eSawRush' : 'eCharge');
+      this.cool = rand(1.3, 2.0) * cd;
+      if (saw) g.sfx?.('engine');
+    } else {
+      this.moveToward(t.x + side * 1.5 * this.scale, t.z, this.def.speed * (this.phase2 ? 1.3 : 1));
+    }
+  }
+
+  bossDismount(t) {
+    const g = this.game;
+    this.mounted = false; this.revving = false; this.bikePhase = null;
+    this.face(t);
+    // 오토바이를 걷어차서 굴려 보냄 → 닿으면 폭발
+    g.spawnProjectile({ kind: 'moto', x: this.x + this.facing * 0.8, y: 1.0, z: this.z, dir: this.facing, team: this.team, dmg: 0, owner: this });
+    this.vy = 7; this.grounded = false; this.vx = -this.facing * 2;
+    this.cool = 1.4;
+    g.banner('쇠톱: "내 애마를 받아라!"', 1.8);
+    g.sfx?.('engine'); g.shake(0.3);
+    g.spawnEnemy('biker', 1); g.spawnEnemy('biker', -1);
   }
 
   rusher(dt, t) {

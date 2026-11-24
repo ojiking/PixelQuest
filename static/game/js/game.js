@@ -143,7 +143,7 @@ export class Game {
         this.say(this.bot, `전술: ${this.bot.tacticDef.name}`);
       } else this.say(this.bot, '전술 칩 미장착 (정비소)');
     }
-    if (inp.pressed('KeyB')) this.spawnEnemy(pick(Object.keys(ENEMIES).filter(k => k !== 'boss')), Math.random() < .5 ? -1 : 1);
+    if (inp.pressed('KeyB')) this.spawnEnemy(pick(Object.keys(ENEMIES).filter(k => !ENEMIES[k].boss)), Math.random() < .5 ? -1 : 1);
   }
 
   separate() {
@@ -204,7 +204,7 @@ export class Game {
       if (L.spawnT <= 0) {
         L.spawnT = 0.45;
         const type = L.queue.shift();
-        this.spawnEnemy(type, type === 'boss' ? 1 : (Math.random() < 0.5 ? -1 : 1));
+        this.spawnEnemy(type, ENEMIES[type].boss ? 1 : (Math.random() < 0.5 ? -1 : 1));
       }
       return;
     }
@@ -216,7 +216,8 @@ export class Game {
     if (L.wave < L.zone.waves.length) {
       L.queue = [...L.zone.waves[L.wave]];
       L.nextT = 0.8;
-      if (L.queue.includes('boss')) this.banner('⚠ 철거반장 등장 ⚠', 2);
+      const bt = L.queue.find(k => ENEMIES[k].boss);
+      if (bt) this.banner(`⚠ ${ENEMIES[bt].name} 등장 ⚠`, 2.2);
     } else {
       this.lock = null;
       this.zoneIdx++;
@@ -718,7 +719,9 @@ export class Game {
 
   // 오토바이 돌진에 치임
   bikeHit(b, a) {
-    applyHit(this, a, { attacker: b, dmg: a.team === 'enemy' ? 14 : 16, knock: 8, dir: b.facing, zone: 'low', knockdown: true, sever: 1.3, mode: 'knock', launch: 6.5, hitstop: .06, shake: .2 });
+    const saw = b.isBoss && b.weapon?.type === 'chainsaw';   // 보스: 전기톱 팔을 내밀고 지나감
+    applyHit(this, a, { attacker: b, dmg: (a.team === 'enemy' ? 14 : 16) * (b.isBoss ? 1.4 : 1), knock: b.isBoss ? 9 : 8, dir: b.facing, zone: saw ? 'mid' : 'low', knockdown: true, sever: saw ? 2.4 : 1.3, mode: saw ? 'saw' : 'knock', launch: 6.5, hitstop: .06, shake: .2 });
+    if (saw) this.bleed(a.x, a.y + 1.1 * a.scale, a.z + .2, b.facing, 14);
     this.texts.add(a.x, a.y + 2.2 * a.scale, a.z, '치였다!', 'back');
   }
 

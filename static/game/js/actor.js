@@ -132,7 +132,7 @@ export class Actor {
       this.activeFrame(a, dt);
     } else if (a.t >= e && !a.ended) {
       a.ended = true;
-      if (d.dash) this.vx = 0;
+      if (d.dash || d.rush) this.vx = 0;
     }
     if (this.attack === a && a.t >= e + d.recovery) this.endAttack();
   }
@@ -157,6 +157,7 @@ export class Actor {
     }
     if (d.tick) {
       // 전기톱: 일정 간격마다 판정을 새로 해서 계속 갈아냄
+      if (d.rush) this.vx = this.facing * d.rush * this.legFactor(); // 톱을 내밀고 밀고 들어옴
       a.tickT = (a.tickT ?? 0) - dt;
       if (a.tickT > 0) return;
       a.tickT = d.tick;

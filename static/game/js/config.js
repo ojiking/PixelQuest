@@ -107,6 +107,9 @@ export const ATTACKS = {
   eKick:   { startup: .45, active: .10, recovery: .50, range: [.1, 1.3],  depth: .45, dmg: 8,  knock: 3,   zone: 'mid',  hitstop: .06, anim: 'kick' },
   eSlam:   { startup: .65, active: .12, recovery: .75, range: [-.2, 1.7], depth: .8,  dmg: 18, knock: 6,   zone: 'high', hitstop: .12, anim: 'slam', knockdown: true, telegraph: true, shake: .25, needArms: true },
   eCharge: { startup: .70, active: .85, recovery: .90, range: [-.2, .9],  depth: .55, dmg: 14, knock: 7,   zone: 'mid',  hitstop: .10, anim: 'charge', knockdown: true, telegraph: true, dash: 9.5, needLegs: true },
+  // 사이보그 폭주왕: 전기톱 팔
+  eSawRush:  { startup: .60, active: 1.1, recovery: .75, range: [.1, 1.25], depth: .6, dmg: 4, knock: .6, zone: 'all', mode: 'saw', sever: 2.6, tick: .1, hitstun: .26, hitstop: 0, anim: 'saw', telegraph: true, rush: 3.4 },
+  eSawSweep: { startup: .55, active: .14, recovery: .65, range: [-.3, 1.95], depth: .85, dmg: 20, knock: 6.5, zone: 'mid', mode: 'saw', sever: 2.2, anim: 'hslash', knockdown: true, telegraph: true, hitstop: .1, shake: .2 },
   eThrow:  { startup: .50, active: .05, recovery: .60, anim: 'throw', projectile: 'brick', dmg: 8, needArms: true },
   eFuse:   { startup: .80, active: .05, recovery: 0, anim: 'fuse', telegraph: true, explode: { radius: 1.9, dmg: 24 } },
 };
@@ -122,6 +125,7 @@ export const ENEMIES = {
   ninja:   { name: '그림자 닌자',  model: 'ninja',    hp: 26,  speed: 3.6,  scale: .95,  ai: 'ninja',   attacks: ['eSlash', 'eShuriken'],      scrap: [2, 3], katana: true },
   biker:   { name: '폭주족',       model: 'biker',    hp: 55,  speed: 2.4,  scale: 1,    ai: 'biker',   attacks: ['ePunch'],                    scrap: [2, 4], pickup: true, bike: true },
   bomber:  { name: '폭죽 꼬마',    model: 'bomber',  hp: 14,  speed: 3.7,  scale: .72,  ai: 'rusher',  attacks: ['eFuse'],                     scrap: [1, 1] },
+  cyborg:  { name: '사이보그 폭주왕 쇠톱', model: 'cyborg', hp: 700, speed: 1.9, scale: 1.7, ai: 'cyborg', attacks: ['eSawRush', 'eSawSweep', 'eSlam', 'eCharge'], scrap: [45, 45], poise: 34, boss: true, bike: true, saw: true },
   boss:    { name: '철거반장 굴삭', model: 'boss',    hp: 520, speed: 1.6,  scale: 1.55, ai: 'boss',    attacks: ['eSlam', 'eCharge', 'eThrow'], scrap: [30, 30], poise: 30, boss: true },
 };
 

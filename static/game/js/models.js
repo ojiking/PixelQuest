@@ -64,6 +64,16 @@ const HEADS = {
     for (let z = 1; z <= s; z++) { g.set(0, 4, z, p.band); g.set(s - 1, 4, z, p.band); }
     g.set(0, 3, 0, p.band); g.set(0, 2, 0, p.band); // 뒤로 늘어진 띠
   },
+  // 사이보그: 붉은 모히칸 + 얼굴 절반이 금속판, 빨간 의안
+  cyborg(g, s, p) {
+    HEADS.mohawk(g, s, p);
+    const h = Math.ceil(s / 2) + 1;
+    g.fill(0, 0, h, s - 1, s - 2, s, p.metal);
+    g.fill(s - 1, 1, h, s - 1, 1, s, p.joint);
+    g.fill(s - 1, 3, s - 1, s - 1, 3, s - 1, p.accent);
+    g.set(s - 1, 3, s - 2, 0xffd0d0);
+    g.fill(2, 2, s, 3, 3, s, p.joint);
+  },
   // 풀페이스 헬멧 (검은 바이저 + 불꽃 줄무늬)
   fullhelm(g, s, p) {
     g.fill(0, 0, 1, s - 1, s - 1, s, p.helm);
@@ -207,6 +217,18 @@ function humanoid(r, o) {
     if (p.glove) arm.fill(0, 0, 0, aw - 1, 1, ad - 1, p.glove);
   }
 
+  // 사이보그 팔 (앞팔만 기계: 전기톱 장착)
+  let armR = null;
+  if (o.cyborgF) {
+    armR = new VoxGrid(aw, ah, ad);
+    armR.fill(0, 0, 0, aw - 1, ah - 1, ad - 1, p.metal);
+    armR.fill(0, ah - 2, 0, aw - 1, ah - 1, ad - 1, p.joint);
+    armR.fill(0, Math.floor(ah / 2), 0, aw - 1, Math.floor(ah / 2), ad - 1, p.joint);
+    armR.fill(0, 0, 0, aw - 1, 1, ad - 1, p.joint);
+    armR.fill(aw - 1, Math.floor(ah / 2) + 2, 1, aw - 1, Math.floor(ah / 2) + 2, ad - 2, p.accent);
+    armR.fill(aw - 1, 2, 1, aw - 1, 2, ad - 2, p.accent);
+  }
+
   const leg = new VoxGrid(lw, lh, ld);
   leg.fill(0, 0, 0, lw - 1, lh - 1, ld - 1, p.pants);
   leg.fill(0, 0, 0, lw - 1, 0, ld - 1, p.shoes);
@@ -245,6 +267,8 @@ function humanoid(r, o) {
   const torsoM = mk(torso, [bx + tw / 2, 0, td / 2], th - 1, 0);
   const armUM = mk(slice(arm, ahL, ah - 1), [aw / 2, ahU, ad / 2], ahU - 1, 0);
   const armLM = mk(slice(arm, 0, ahL - 1), [aw / 2, ahL, ad / 2], ahL - 1);
+  const armRUM = armR ? mk(slice(armR, ahL, ah - 1), [aw / 2, ahU, ad / 2], ahU - 1, 0) : armUM;
+  const armRLM = armR ? mk(slice(armR, 0, ahL - 1), [aw / 2, ahL, ad / 2], ahL - 1) : armLM;
   const legUM = mk(slice(leg, lhL, lh - 1), [lw / 2, lhU, ld / 2], lhU - 1, 0);
   const legLM = mk(slice(leg, 0, lhL - 1), [lw / 2, lhL, ld / 2], lhL - 1);
   const hipZ = (td / 2 - ld / 2) * V;
@@ -266,8 +290,8 @@ function humanoid(r, o) {
       head:  { ...headM, pivot: [0, LH + TH, 0] },
       legF:  { ...legUM, pivot: [0, LH, hipZ] },
       shinF: { ...legLM, pivot: [0, -lhU * V, 0], parent: 'legF' },
-      armF:  { ...armUM, pivot: [0, LH + TH, shZ] },
-      handF: { ...armLM, pivot: [0, -ahU * V, 0], parent: 'armF' },
+      armF:  { ...armRUM, pivot: [0, LH + TH, shZ] },
+      handF: { ...armRLM, pivot: [0, -ahU * V, 0], parent: 'armF' },
     },
   };
 }
@@ -323,6 +347,10 @@ const BUILDERS = {
   biker: r => humanoid(r, {
     head: 'fullhelm', torso: 'leather', tw: 4, sleeve: 7,
     pal: { skin: 0xd8a070, helm: 0xc0392b, metal: 0xb6bcc4, shirt: 0x1c1c1e, sleeve: 0x1c1c1e, pants: 0x2f3f5f, shoes: 0x111111, glove: 0x111111 },
+  }),
+  cyborg: r => humanoid(r, {
+    head: 'cyborg', headS: 7, torso: 'leather', tw: 5, td: 9, fx: 1, th: 8, lw: 4, ld: 4, aw: 4, ad: 4, ah: 8, sleeve: 0, cyborgF: true,
+    pal: { skin: 0xc68642, hair: 0xe0301e, metal: 0x8a9099, joint: 0x3a3f46, accent: 0xff2a2a, shirt: 0x1c1c1e, pants: 0x2a2a30, shoes: 0x111111, glove: 0x111111 },
   }),
   bomber: r => humanoid(r, {
     head: 'bomb', torso: 'stripe', sleeve: 3,
