@@ -415,6 +415,17 @@ const BUILDERS = {
   shuriken: r => single(r, 5, 1, 5, [2.5, 0.5, 2.5], g => {
     g.fill(2, 0, 0, 2, 0, 4, 0xb8bcc2); g.fill(0, 0, 2, 4, 0, 2, 0xb8bcc2); g.set(2, 0, 2, 0x4a4e55);
   }),
+  dumpster: r => single(r, 20, 13, 10, [0, 0, 0], g => {
+    g.fill(0, 1, 0, 19, 11, 9, 0x2e6b3a); g.fill(0, 12, 0, 19, 12, 9, 0x1f4a28);
+    g.fill(1, 0, 1, 2, 0, 2, 0x1a1a1a); g.fill(17, 0, 7, 18, 0, 8, 0x1a1a1a);
+    g.fill(3, 6, 9, 16, 7, 9, 0xd8d8d8);
+  }),
+  pole: r => single(r, 4, 72, 16, [2, 0, 8], g => {
+    g.fill(0, 0, 6, 3, 71, 9, 0x9a9a96);
+    g.fill(1, 65, 0, 2, 66, 15, 0x6a6a68);
+    g.fill(0, 54, 10, 3, 60, 13, 0x6a6f74);
+    for (let y = 20; y < 50; y += 6) g.fill(0, y, 6, 3, y, 9, 0xf2d21a); // 노란 경고 띠
+  }),
   w_nunchaku_handle: r => single(r, 4, 2, 2, [0, 1, 1], g => { g.fill(0, 0, 0, 3, 1, 1, 0x8a5a2b); g.fill(0, 0, 0, 0, 1, 1, 0x1a1a1a); g.fill(3, 0, 0, 3, 1, 1, 0x1a1a1a); }),
   w_nunchaku: r => single(r, 10, 2, 5, [0, 1, 1], g => { // 쌍절곤: 막대 두 개 + 짧은 사슬
     g.fill(0, 0, 0, 3, 1, 1, 0x8a5a2b); g.fill(0, 0, 3, 3, 1, 4, 0x8a5a2b);
@@ -468,6 +479,24 @@ const BUILDERS = {
     for (let x = 1; x < 22; x += 4) for (let z = 1; z < 22; z += 4) { g.fill(x, 0, z, x, 4, z, 0xb8bcc2); g.set(x, 5, z, 0xf0f0f0); }
   }),
 };
+
+// 주차된 승용차 (색만 다름)
+for (let i = 0; i < 7; i++) {
+  BUILDERS['car' + i] = r => {
+    const col = [0xf2f2f2, 0x1c1c1e, 0xb8bcc2, 0xc0392b, 0x1f5aa8, 0x2e6b3a, 0xd8c8a0][i];
+    const glass = 0x22334a;
+    return single(r, 44, 15, 20, [0, 0, 0], g => {
+      for (const wx of [8, 35]) for (const z0 of [0, 17]) g.fill(wx - 3, 0, z0, wx + 3, 5, z0 + 2, 0x1a1a1a);
+      g.fill(0, 3, 1, 43, 8, 18, col);
+      g.fill(11, 9, 2, 33, 14, 17, col);
+      g.fill(12, 10, 2, 32, 13, 2, glass); g.fill(12, 10, 17, 32, 13, 17, glass);
+      g.fill(33, 10, 3, 33, 13, 16, glass); g.fill(11, 10, 3, 11, 13, 16, glass);
+      g.fill(43, 5, 2, 43, 6, 5, 0xfff3a0); g.fill(43, 5, 14, 43, 6, 17, 0xfff3a0);
+      g.fill(0, 5, 2, 0, 6, 5, 0xd02020); g.fill(0, 5, 14, 0, 6, 17, 0xd02020);
+      g.fill(0, 3, 1, 0, 3, 18, 0x333333); g.fill(43, 3, 1, 43, 3, 18, 0x333333);
+    });
+  };
+}
 
 export const WEAPON_MODEL = {
   pipe: 'w_pipe', machete: 'w_machete', block: 'w_block', golf: 'w_golf', chainsaw: 'w_chainsaw',

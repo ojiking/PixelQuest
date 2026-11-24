@@ -197,6 +197,12 @@ export const TRAPS = {
 // ---------------- 바이옴 ----------------
 // 블록 색만 바꿔도 분위기가 크게 달라지는지 검증하기 위한 3종
 export const BIOMES = {
+  city: {
+    name: '뒷골목 도심', sky: [0.62, 0.66, 0.74], fog: [0.6, 0.63, 0.7], city: true,
+    grass: 0xa8a8a2, dirt: 0x6e6e70, lane: 0x3a3a3e, stone: 0x5a5a5e,
+    wall: 0x8a5040, wall2: 0x5e3a30, glass: 0x2a3a50, wood: 0x5a4030, leaves: 0x3f7a35, flora: 'none',
+    trim: 0x4a4a50, far: 0x6a7280, build: [0xc8beb0, 0x9aa0a6, 0xb5654a, 0xd8d0c0, 0x8a8070, 0x6f7a86, 0xa89a7a],
+  },
   plains: {
     name: '폐허 초원', sky: [0.56, 0.76, 0.96], fog: [0.66, 0.80, 0.95],
     grass: 0x5da130, dirt: 0x7a5532, lane: 0x9c8d73, stone: 0x7d7d7d,

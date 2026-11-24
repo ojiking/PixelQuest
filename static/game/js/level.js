@@ -4,8 +4,10 @@ import { hash3, hexToRgb, FACES, MeshBuilder } from './voxel.js';
 import { rand, randi, weightedPick } from './math.js';
 import { Prop, SpikeTrap, Item } from './props.js';
 import { rollWeapon } from './game.js';
+import { buildCityBlocks, makeSigns, buildRoadMarks, buildPoles } from './city.js';
 
 const AIR = 0, GRASS = 1, DIRT = 2, LANEB = 3, STONE = 4, WALL = 5, WALL2 = 6, GLASS = 7, WOOD = 8, LEAVES = 9, VOID = 10;
+const SIDE = 11, TRIM = 12, FAR = 13, BUILD0 = 20; // 도시용 블록 (BUILD0~ 건물 외벽 색)
 export const PIT = -100;           // 낭떠러지 (떨어지면 사망)
 const DEPTH = -12;                 // 낭떠러지 바닥 깊이
 const LANE_Z0 = -4, LANE_Z1 = 4;   // 걸을 수 있는 블록 줄 (z 셀)
@@ -36,8 +38,9 @@ class World {
 function buildTerrain(r, L, biome, seed, hmap) {
   const w = new World(-14, L + 16, -32, 8, DEPTH, 18);
   const heights = new Map();
+  const city = !!biome.city;
   const groundH = (x, z) => {
-    if (z >= -5) return 0;
+    if (z >= -5 || (city && z >= -30)) return 0;
     let h = (-z - 5) * 0.3 + noise2(x * 0.07, z * 0.09, seed) * 3 - 0.6;
     if (z < -17) h += (-z - 17) * 0.55 + noise2(x * 0.05, z * 0.05, seed + 7) * 6;
     return Math.max(0, Math.floor(h));
@@ -50,7 +53,8 @@ function buildTerrain(r, L, biome, seed, hmap) {
       if (hm === PIT) { w.set(x, DEPTH, z, VOID); continue; } // 낭떠러지: 바닥만 어둡게
       for (let y = w.y0; y < h; y++) {
         let b = y === h - 1 ? GRASS : y >= h - 3 ? DIRT : STONE;
-        if (y === -1 && z >= LANE_Z0 && z <= LANE_Z1) {
+        if (city && y === h - 1) b = z >= -2 && z <= LANE_Z1 ? LANEB : SIDE; // 도시: 차도 + 인도
+        else if (y === -1 && z >= LANE_Z0 && z <= LANE_Z1) {
           const edge = (z === LANE_Z0 || z === LANE_Z1) && hash3(x, 3, z) > 0.45;
           b = edge ? GRASS : LANEB;
         }
@@ -59,10 +63,14 @@ function buildTerrain(r, L, biome, seed, hmap) {
       // 올라설 수 있는 블록 / 벽
       if (hm > 0) for (let y = 0; y < hm; y++) w.set(x, y, z, y === hm - 1 ? WALL : WALL2);
       // 차도 경계석(낮은 담장, 군데군데 무너짐)
-      if (z === -5 && hm !== PIT && hash3(x, 9, z) > 0.25) w.set(x, 0, z, hash3(x, 10, z) > 0.8 ? WALL2 : WALL);
+      if (!city && z === -5 && hm !== PIT && hash3(x, 9, z) > 0.25) w.set(x, 0, z, hash3(x, 10, z) > 0.8 ? WALL2 : WALL);
     }
   }
   const occupied = new Set();
+  let signSpecs = [];
+  if (city) {
+    signSpecs = buildCityBlocks(w, L, { build: biome.build.map((_, i) => BUILD0 + i), glass: GLASS, trim: TRIM, far: FAR });
+  } else {
   // 무너진 건물
   for (let bx = 4 + randi(0, 6); bx < L + 6; bx += randi(13, 21)) {
     const bw = randi(5, 9), bd = randi(4, 6), bh = randi(4, 8);
@@ -117,6 +125,8 @@ function buildTerrain(r, L, biome, seed, hmap) {
     occupied.add(x + ',' + z);
   }
 
+  } // (도시가 아닐 때만 건물·식물)
+
   // 블록 → 색
   const snowy = biome.flora === 'spruce';
   const C = k => hexToRgb(biome[k]);
@@ -130,6 +140,9 @@ function buildTerrain(r, L, biome, seed, hmap) {
     [GLASS]: { top: C('glass'), side: C('glass') },
     [WOOD]: { top: C('wood'), side: C('wood') },
     [VOID]: { top: [0.05, 0.04, 0.06], side: [0.05, 0.04, 0.06] },
+    [SIDE]: { top: C('grass'), side: C('stone') },
+    ...(city ? { [TRIM]: { top: C('trim'), side: C('trim') }, [FAR]: { top: C('far'), side: C('far') } } : {}),
+    ...(city ? Object.fromEntries(biome.build.map((c, i) => [BUILD0 + i, { top: hexToRgb(c), side: hexToRgb(c) }])) : {}),
     [LEAVES]: snowy ? { top: C('grass'), side: C('leaves'), strip: 1, stripC: C('grass') } : { top: C('leaves'), side: C('leaves') },
   };
   const mb = new MeshBuilder();
@@ -148,7 +161,7 @@ function buildTerrain(r, L, biome, seed, hmap) {
       }
     }
   }
-  return mb.build(r);
+  return { mesh: mb.build(r), signSpecs };
 }
 
 export const STAGE_COUNT = 2;
@@ -180,6 +193,8 @@ function fill(h, x0, x1, z0, z1, v) {
 // 전투 구역은 대부분 평지. 낭떠러지 구간은 스테이지당 최대 MAX_PIT_SEGS개
 const ARENA_TYPES = { open: 5, platforms: 2, walls: 1.2, cliffFront: 0.8, cliffBack: 0.5 };
 const PATH_TYPES = { barrier: 2.5, platforms: 2, open: 1.5, walls: 1.2, gaps: 1.3, bridge: 0.6, cliffFront: 0.5 };
+const CITY_ARENA = { open: 4, walls: 1.5, platforms: 1, cliffFront: .4 };
+const CITY_PATH = { walls: 2.5, open: 2, barrier: 1.5, platforms: 1, gaps: .6 };
 const PIT_TYPES = new Set(['cliffFront', 'cliffBack', 'bridge', 'gaps']);
 const MAX_PIT_SEGS = 2;
 export const SEG_HINTS = { cliffFront: '절벽길 — 앞쪽은 낭떠러지', cliffBack: '벼랑 끝 — 뒤쪽은 낭떠러지', bridge: '외나무 다리 — 떨어지면 끝', gaps: '끊어진 길 — 점프로 건너라', barrier: '바리케이드 — 뛰어넘어라', walls: '좁은 골목', platforms: '잔해 더미 — 올라설 수 있다' };
@@ -215,7 +230,16 @@ export class Stage {
     });
     if (this.L - 6 - cursor >= 5) this.addSeg(this.pickSeg(PATH_TYPES), cursor, this.L - 6);
 
-    this.terrain = buildTerrain(game.r, this.L, this.biome, randi(1, 9999), this.hmap);
+    this.solid = new Map();   // 주차된 차·쓰레기통 (올라설 수 있는 장애물 높이)
+    this.solids = [];
+    if (this.biome.city) this.placeCityProps();
+    const built = buildTerrain(game.r, this.L, this.biome, randi(1, 9999), this.hmap);
+    this.terrain = built.mesh;
+    if (this.biome.city) {
+      this.signs = makeSigns(game.r, built.signSpecs);
+      this.roadMarks = buildRoadMarks(game.r, this.L, (x, z) => this.heightAt(x, z) === PIT);
+      Object.assign(this, buildPoles(this.L));
+    }
 
     triggers.forEach((tx, zi) => {
       const waves = [];
@@ -264,6 +288,7 @@ export class Stage {
 
   // 낭떠러지 구간이 이미 많으면 평지 계열로 다시 뽑음
   pickSeg(table) {
+    if (this.biome.city) table = table === ARENA_TYPES ? CITY_ARENA : CITY_PATH;
     let type = weightedPick(table);
     const pits = this.segments.filter(sg => PIT_TYPES.has(sg.type)).length;
     const prev = this.segments[this.segments.length - 1];
@@ -282,8 +307,36 @@ export class Stage {
 
   // 셀 높이: PIT / 0 / 1 / 2
   heightAt(x, z) {
-    const v = this.hmap.get(Math.floor(x) + ',' + Math.floor(z));
-    return v === undefined ? 0 : v;
+    const k = Math.floor(x) + ',' + Math.floor(z);
+    const v = this.hmap.get(k);
+    if (v === PIT) return PIT;
+    const s = this.solid.get(k);
+    return Math.max(v === undefined ? 0 : v, s === undefined ? 0 : s);
+  }
+
+  // 도시: 길가에 주차된 차, 골목 쓰레기통 (올라설 수 있는 장애물)
+  placeCityProps() {
+    const free = (x0, x1, z0, z1) => {
+      for (let x = x0; x < x1; x++) for (let z = z0; z <= z1; z++) if ((this.hmap.get(x + ',' + z) ?? 0) !== 0 || this.solid.has(x + ',' + z)) return false;
+      return true;
+    };
+    const put = (model, x0, len, z0, depth, h) => {
+      for (let x = x0; x < x0 + len; x++) for (let z = z0; z < z0 + depth; z++) this.solid.set(x + ',' + z, h);
+      this.solids.push({ model, x: x0, z: z0 });
+    };
+    let cars = 0;
+    for (let tries = 0; tries < 40 && cars < 6; tries++) {
+      const x0 = randi(12, this.L - 16);
+      const front = Math.random() < 0.55;
+      const z0 = front ? 3 : -2;   // 앞쪽 갓길 / 뒤쪽 갓길
+      if (!free(x0 - 1, x0 + 5, z0, z0 + 1)) continue;
+      put('car' + randi(0, 6), x0, 4, z0, 2, 1.3);
+      cars++;
+    }
+    for (const sg of this.segments) {
+      if (sg.type !== 'walls') continue;  // 뒷골목: 쓰레기통
+      for (let x = sg.a + 2; x < sg.b - 2; x += randi(4, 7)) if (free(x, x + 2, -1, -1)) put('dumpster', x, 2, -1, 1, 1.15);
+    }
   }
 
   // 평지(높이 0) 중 (x, z)에서 가까운 곳
@@ -306,5 +359,9 @@ export class Stage {
     this.props.push(new Prop(kind, p.x, p.z));
   }
 
-  dispose(r) { r.deleteMesh(this.terrain); }
+  dispose(r) {
+    r.deleteMesh(this.terrain);
+    if (this.roadMarks) r.deleteMesh(this.roadMarks);
+    for (const s of this.signs ?? []) r.deleteMesh(s.mesh);
+  }
 }

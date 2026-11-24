@@ -48,7 +48,7 @@ export class Game {
     this.stats = stats;
     this.run = {
       stage: 0, scrap: 0, kills: 0, severs: 0, maxCombo: 0, time: 0,
-      perks: new Set(), biomes: shuffle(Object.keys(BIOMES)).slice(0, STAGE_COUNT), rescueUsed: false,
+      perks: new Set(), biomes: [pick(Object.keys(BIOMES).filter(k => k !== 'city')), 'city'], rescueUsed: false, // 두 번째 스테이지는 도심
     };
     this.player = new Player(this, stats.player);
     this.bot = new Companion(this, stats.bot);
@@ -756,6 +756,30 @@ export class Game {
     this.run.maxCombo = Math.max(this.run.maxCombo, this.combo);
   }
 
+  // 도시 요소: 도로 표시, 주차된 차·쓰레기통, 전봇대·전선, 간판 (화면 근처만)
+  drawCity(r) {
+    const st = this.stage;
+    if (!st.biome.city) return;
+    const near = x => Math.abs(x - this.camX) < this.viewHalf + 8;
+    r.drawMesh(st.roadMarks, IDENT, null, 0);
+    for (const s of st.solids) {
+      if (!near(s.x)) continue;
+      mat4.identity(M); mat4.translate(M, s.x + 0.02, 0, s.z + 0.1);
+      r.drawMesh(getModel(r, s.model).mesh, M);
+    }
+    for (const p of st.poles) {
+      if (!near(p.x)) continue;
+      mat4.identity(M); mat4.translate(M, p.x, 0, p.z);
+      r.drawMesh(getModel(r, 'pole').mesh, M);
+    }
+    for (const s of st.signs) {
+      if (!near(s.x)) continue;
+      mat4.identity(M); mat4.translate(M, s.x, s.y, s.z);
+      r.drawMesh(s.mesh, M);
+    }
+    if (st.wireCount) r.drawInstances(st.wires, st.wireCount);
+  }
+
   // ------------------------------------------------ 렌더링
   render() {
     const r = this.r;
@@ -768,6 +792,7 @@ export class Game {
     const b = this.stage.biome;
     r.begin(this.vp, eye, { sky: b.sky, fog: b.fog, fogNear: 34, fogFar: 80 });
     r.drawMesh(this.stage.terrain, IDENT, null, 8);
+    this.drawCity(r);
     for (const t of this.traps) t.draw(r, this);
     for (const p of this.props) p.draw(r, this);
     for (const it of this.items) it.draw(r, this);
