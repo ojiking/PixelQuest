@@ -2,6 +2,7 @@
 import { mat4, clamp, rand, randi, sign, shuffle, pick } from './math.js';
 import { BIOMES, BOT, LANE, WEAPONS, ENEMIES } from './config.js';
 import { Debris } from './fx.js';
+import { Gibs, bleed } from './gibs.js';
 import { getModel, WEAPON_MODEL } from './models.js';
 import { Player } from './player.js';
 import { Companion } from './companion.js';
@@ -17,6 +18,7 @@ export class Game {
   constructor(renderer, input, texts, hooks) {
     this.r = renderer; this.input = input; this.texts = texts; this.hooks = hooks;
     this.debris = new Debris();
+    this.gibs = new Gibs(this);
     this.time = 0;
     this.proj = mat4.create(); this.view = mat4.create(); this.vp = mat4.create();
     this.actors = []; this.enemies = []; this.props = []; this.traps = []; this.items = []; this.projectiles = [];
@@ -50,7 +52,7 @@ export class Game {
     this.stage = new Stage(this, i, this.run.biomes[i]);
     this.props = this.stage.props; this.traps = this.stage.traps; this.items = this.stage.items;
     this.projectiles = []; this.enemies = []; this.tokens.clear();
-    this.debris.clear(); this.texts.clear();
+    this.debris.clear(); this.gibs.clear(); this.texts.clear();
     for (const h of [this.player, this.bot]) {
       h.vx = h.vy = h.vz = 0; h.y = 0; h.facing = 1; h.attack = null; h.weapon = h === this.player ? h.weapon : null;
       if (h.state !== 'ko') h.setState('idle');
@@ -85,6 +87,7 @@ export class Game {
     for (const p of this.props) p.update(dt, this);
     for (const t of this.traps) t.update(dt, this);
     this.debris.update(dt);
+    this.gibs.update(dt);
 
     for (const a of this.actors) if (a.remove) this.releaseToken(a);
     this.actors = this.actors.filter(a => !a.remove || a.team === 'hero');
@@ -431,6 +434,8 @@ export class Game {
     }
   }
 
+  bleed(x, y, z, dir, n) { bleed(this.debris, x, y, z, dir, n); }
+
   // ------------------------------------------------ 연출
   hitstop(t) { this.hitstopT = Math.max(this.hitstopT, t); }
   shake(m) { this.shakeMag = Math.max(this.shakeMag, m); }
@@ -463,6 +468,7 @@ export class Game {
       const key = pr.kind === 'weapon' ? WEAPON_MODEL[pr.weaponType] : 'brick';
       r.drawMesh(getModel(r, key).mesh, M);
     }
+    this.gibs.draw(r);
     r.drawInstances(this.debris.inst, this.debris.fill());
 
     // 발밑 그림자 (라인 깊이를 읽게 해주는 핵심 장치)
@@ -476,6 +482,7 @@ export class Game {
     };
     for (const a of this.actors) if (!a.remove) add(a.x, a.z, (a.fall > 0.5 ? 1.0 : 0.62) * a.scale * Math.max(0.4, 1 - a.y / 4));
     for (const it of this.items) add(it.x, it.z, 0.3);
+    for (const gb of this.gibs.list) add(gb.pos[0], gb.pos[2], 0.35 * Math.max(0.3, 1 - gb.pos[1] / 3));
     for (const pr of this.projectiles) add(pr.x, pr.z, 0.25);
     r.drawInstances(sb, n, 0.3, true);
   }

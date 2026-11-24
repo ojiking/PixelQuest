@@ -12,6 +12,7 @@ export function getModel(r, key) {
   return cache.get(key);
 }
 
+export const WOUND = [0xc81e24, 0x9e1219, 0xe0382c, 0xb3161d];
 const darken = (c, f = 0.75) =>
   (Math.floor(((c >> 16) & 255) * f) << 16) | (Math.floor(((c >> 8) & 255) * f) << 8) | Math.floor((c & 255) * f);
 
@@ -179,11 +180,22 @@ function humanoid(r, o) {
   if (robot) leg.fill(0, Math.floor(lh / 2), 0, lw - 1, Math.floor(lh / 2), ld - 1, p.joint);
 
   const LH = lh * V, TH = th * V;
-  const mk = (grid, origin) => meshGrid(r, grid, V, origin);
-  const headM = mk(head, [s / 2, 0, (s + 2) / 2]);
-  const torsoM = mk(torso, [bx + tw / 2, 0, td / 2]);
-  const armM = mk(arm, [aw / 2, ah, ad / 2]);
-  const legM = mk(leg, [lw / 2, lh, ld / 2]);
+  // 부위 메시 + 잘린 면이 붉은 변형(cut, 떨어져 나간 덩어리) + 몸에 남는 붉은 단면(stump)
+  const mk = (grid, origin, jy) => {
+    const cut = new VoxGrid(grid.w, grid.h, grid.d);
+    cut.data.set(grid.data);
+    const stump = new VoxGrid(grid.w, grid.h, grid.d);
+    for (let z = 0; z < grid.d; z++) for (let x = 0; x < grid.w; x++) {
+      if (grid.get(x, jy, z) < 0) continue;
+      const c = WOUND[(x * 7 + z * 3) % WOUND.length];
+      cut.set(x, jy, z, c); stump.set(x, jy, z, c);
+    }
+    return { ...meshGrid(r, grid, V, origin), cut: meshGrid(r, cut, V, origin), stump: meshGrid(r, stump, V, origin).mesh };
+  };
+  const headM = mk(head, [s / 2, 0, (s + 2) / 2], 0);
+  const torsoM = mk(torso, [bx + tw / 2, 0, td / 2], th - 1);
+  const armM = mk(arm, [aw / 2, ah, ad / 2], ah - 1);
+  const legM = mk(leg, [lw / 2, lh, ld / 2], lh - 1);
   const hipZ = (td / 2 - ld / 2) * V;
   const shZ = (td / 2 + ad / 2) * V;
 

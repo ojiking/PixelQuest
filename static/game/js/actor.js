@@ -24,7 +24,7 @@ export class Actor {
     this.radius = 0.32 * this.scale;
     this.state = 'idle'; this.st = 0;
     this.walkPhase = 0; this.flash = 0; this.invuln = 0; this.hitstun = 0; this.downT = 0;
-    this.fall = 0; this.spin = 0; this.lowered = 0;
+    this.fall = 0; this.spin = 0; this.lowered = 0; this.hopLift = 0; this.lean = 0;
     this.dead = false; this.remove = false;
     this.destructible = !!o.destructible;
     this.poise = o.poise ?? 0; this.armorAcc = 0;
@@ -42,14 +42,17 @@ export class Actor {
   get alive() { return !this.dead && this.state !== 'ko'; }
   hasArms() { return this.parts.armF.alive || this.parts.armB.alive; }
   legCount() { return (this.parts.legF.alive ? 1 : 0) + (this.parts.legB.alive ? 1 : 0); }
-  legFactor() { const n = this.legCount(); return n === 2 ? 1 : n === 1 ? 0.55 : 0.3; }
+  legFactor() { const n = this.legCount(); return n === 2 ? 1 : n === 1 ? 0.75 : 0.3; }
+  // 한 다리: 깡충 뛰는 순간에만 앞으로 나감 (절뚝거림)
+  hopPulse() { return Math.max(0, Math.sin(this.walkPhase)); }
   perk() { return false; }
 
   moveToward(tx, tz, speed) {
     const dx = tx - this.x, dz = tz - this.z;
     const d = Math.hypot(dx, dz * 1.3);
     if (d < 0.1) { this.vx = 0; this.vz = 0; return true; }
-    const sp = speed * this.legFactor();
+    let sp = speed * this.legFactor();
+    if (this.legCount() === 1) sp *= 0.15 + 1.25 * this.hopPulse();
     this.vx = dx / d * sp;
     this.vz = dz / d * sp * 0.8;
     return false;
@@ -181,12 +184,27 @@ export class Actor {
   pose(dt) {
     const P = this.parts, t = this.game.time;
     const T = { legF: 0, legB: 0, armF: .12, armB: .12, torso: 0, head: 0 };
-    let fallT = 0, rate = 18;
+    let fallT = 0, rate = 18, lift = 0, spread = 0;
     switch (this.state) {
       case 'idle': T.armF = .15 + Math.sin(t * 2.2) * .05; T.armB = .1 - Math.sin(t * 2.2) * .05; break;
       case 'walk': {
-        const w = Math.sin(this.walkPhase);
-        T.legF = w * .7; T.legB = -w * .7; T.armF = -w * .55; T.armB = w * .55;
+        const legs = this.legCount();
+        if (legs === 1) {
+          // 남은 다리로 깡충, 팔은 벌려서 균형
+          const pulse = this.hopPulse();
+          const leg = this.parts.legF.alive ? 'legF' : 'legB';
+          T[leg] = -0.25 + pulse * 0.55;
+          T.armF = -0.2 + pulse * 0.3; T.armB = 0.2 - pulse * 0.3;
+          T.torso = -0.12 - pulse * 0.1;
+          lift = pulse * 0.13; spread = 0.7;
+        } else if (legs === 0) {
+          // 다리 없음: 팔로 기어감
+          const w = Math.sin(this.walkPhase);
+          T.armF = 1.7 + w * 0.6; T.armB = 1.7 - w * 0.6; T.torso = -0.35;
+        } else {
+          const w = Math.sin(this.walkPhase);
+          T.legF = w * .7; T.legB = -w * .7; T.armF = -w * .55; T.armB = w * .55;
+        }
         break;
       }
       case 'jump': T.legF = .9; T.legB = -.3; T.armF = 2.3; T.armB = -.5; break;
@@ -197,7 +215,14 @@ export class Actor {
       case 'attack': this.attackPose(T); rate = 35; break;
     }
     const k = Math.min(1, dt * rate);
-    for (const n in T) P[n].rz += (T[n] - P[n].rz) * k;
+    for (const n in T) if (P[n].alive) P[n].rz += (T[n] - P[n].rz) * k;
+    if (this.legCount() === 1 && this.fall < 0.3 && spread === 0 && this.state !== 'attack') spread = 0.35;
+    P.armF.rx += (-spread - P.armF.rx) * k;
+    P.armB.rx += (spread - P.armB.rx) * k;
+    this.hopLift = lift;
+    // 한 다리면 남은 다리 쪽으로 몸이 기움
+    const leanT = this.legCount() === 1 && this.fall < 0.3 ? (this.parts.legF.alive ? 0.14 : -0.14) : 0;
+    this.lean += (leanT - this.lean) * Math.min(1, dt * 10);
     this.fall += (fallT - this.fall) * Math.min(1, dt * 12);
   }
 
@@ -242,6 +267,7 @@ export class Actor {
     mat4.translate(m, this.x, this.y, this.z);
     mat4.rotateY(m, -0.42 * this.facing + this.spin);
     mat4.scale(m, this.facing, 1, 1);
+    if (this.hopLift || this.lean) { mat4.translate(m, 0, this.hopLift * this.scale, 0); mat4.rotateX(m, this.lean); }
     const ff = this.fall / (Math.PI / 2);
     mat4.translate(m, 0, 0.22 * this.scale * ff - this.lowered * this.scale, 0);
     mat4.rotateZ(m, this.fall);
@@ -270,7 +296,12 @@ export class Actor {
     const root = this.rootMatrix(M);
     const tint = this.tint();
     for (const k of PART_ORDER) {
-      if (!this.parts[k].alive) continue;
+      if (!this.parts[k].alive) {
+        // 몸에 남은 붉은 단면
+        this.partMatrix(k, root, PM);
+        r.drawMesh(this.model.parts[k].stump, PM, tint);
+        continue;
+      }
       this.partMatrix(k, root, PM);
       r.drawMesh(this.model.parts[k].mesh, PM, tint);
       if (k === 'armF' && this.weapon) {
@@ -282,27 +313,45 @@ export class Actor {
     }
   }
 
-  // 부위 하나를 복셀 파편으로 날림
+  // 부위 하나를 덩어리째 떼어냄 (잘린 면 붉게) + 관절에서 붉은 블록 분출
   severPart(k, dir) {
     const p = this.parts[k];
     if (!p.alive) return;
     p.alive = false;
+    p.rz = 0; p.rx = 0;
     const root = this.rootMatrix(M);
     this.partMatrix(k, root, PM);
-    this.game.debris.burst(this.model.parts[k].voxels, PM, { frac: .7, impulse: [dir * 3.5, 2.5, 0], size: .12 });
-    if (k === 'armF' && this.weapon) this.game.dropWeapon(this);
+    const g = this.game;
+    g.gibs.spawn(PM, this.model.parts[k].cut, gibVelocity(k, dir, this.vx), this.scale);
+    g.gibs.spurt(this, k, 0.5);
+    g.bleed(PM[12], PM[13], PM[14], dir, 26);
+    if (k === 'armF' && this.weapon) g.dropWeapon(this);
   }
 
-  // 몸 전체를 복셀 파편으로
+  // 죽을 때: 남은 부위가 각각 떨어져 나감
   shatter() {
     if (this.remove) return;
     this.remove = true;
     const root = this.rootMatrix(M);
+    const g = this.game;
+    const dir = this.vx >= 0 ? 1 : -1;
     for (const k of PART_ORDER) {
       if (!this.parts[k].alive) continue;
       this.partMatrix(k, root, PM);
-      this.game.debris.burst(this.model.parts[k].voxels, PM, { frac: .4, impulse: [this.vx * .3, 1.5, 0], size: .14 * this.scale, spread: 2.2 });
+      g.gibs.spawn(PM, this.model.parts[k].cut, gibVelocity(k, dir * 0.6, this.vx * 0.3, true), this.scale);
+      if (k !== 'torso') g.bleed(PM[12], PM[13], PM[14], dir, 12);
     }
-    this.game.onShatter(this);
+    g.onShatter(this);
+  }
+}
+
+function gibVelocity(k, dir, base = 0, burst = false) {
+  const up = burst ? 1.2 : 1;
+  const side = k.endsWith('F') ? 1 : k.endsWith('B') ? -1 : 0;
+  switch (k) {
+    case 'head': return [base + dir * (1.5 + Math.random() * 1.5), (5 + Math.random() * 2) * up, (Math.random() - .5)];
+    case 'armF': case 'armB': return [base + dir * (2 + Math.random() * 2), (3 + Math.random() * 2) * up, side * (0.6 + Math.random())];
+    case 'legF': case 'legB': return [base + dir * (1 + Math.random() * 1.5), (2 + Math.random() * 1.5) * up, side * (0.4 + Math.random() * 0.6)];
+    default: return [base + dir * 0.8, 2.2 * up, 0];
   }
 }
