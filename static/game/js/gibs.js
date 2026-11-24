@@ -91,7 +91,7 @@ export class Gibs {
       if (!g.rest) {
         g.vel[1] -= 22 * dt;
         g.pos[0] += g.vel[0] * dt; g.pos[1] += g.vel[1] * dt; g.pos[2] += g.vel[2] * dt;
-        g.pos[2] = Math.max(-4, Math.min(3.5, g.pos[2]));
+        g.pos[2] = Math.max(-4, Math.min(5.5, g.pos[2]));
         g.ax += g.wx * dt; g.az += g.wz * dt;
         if (g.thrown) this.hitCheck(g);
         const fl = this.game.floorAt(g.pos[0], g.pos[2]);

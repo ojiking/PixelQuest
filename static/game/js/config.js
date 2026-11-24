@@ -4,7 +4,7 @@
 
 export const V = 0.09;            // 캐릭터 복셀 1칸 크기(미터). 블록 1칸 = 1m
 export const GRAVITY = 24;
-export const LANE = { zMin: -3.2, zMax: 2.6 }; // 걸어다닐 수 있는 깊이(앞뒤) 범위
+export const LANE = { zMin: -3.2, zMax: 4.7 }; // 걸어다닐 수 있는 깊이(앞뒤) 범위 — 화면 아래쪽까지
 
 // ---------------- 플레이어 ----------------
 export const PLAYER = {

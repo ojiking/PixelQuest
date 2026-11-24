@@ -8,7 +8,7 @@ import { rollWeapon } from './game.js';
 const AIR = 0, GRASS = 1, DIRT = 2, LANEB = 3, STONE = 4, WALL = 5, WALL2 = 6, GLASS = 7, WOOD = 8, LEAVES = 9, VOID = 10;
 export const PIT = -100;           // 낭떠러지 (떨어지면 사망)
 const DEPTH = -12;                 // 낭떠러지 바닥 깊이
-const LANE_Z0 = -4, LANE_Z1 = 2;   // 걸을 수 있는 블록 줄 (z 셀)
+const LANE_Z0 = -4, LANE_Z1 = 4;   // 걸을 수 있는 블록 줄 (z 셀)
 const PIT_Z0 = -5, PIT_Z1 = 7;     // 낭떠러지가 파일 수 있는 범위 (앞쪽은 화면 밖까지 열림)
 
 function noise2(x, z, seed) {
@@ -50,8 +50,8 @@ function buildTerrain(r, L, biome, seed, hmap) {
       if (hm === PIT) { w.set(x, DEPTH, z, VOID); continue; } // 낭떠러지: 바닥만 어둡게
       for (let y = w.y0; y < h; y++) {
         let b = y === h - 1 ? GRASS : y >= h - 3 ? DIRT : STONE;
-        if (y === -1 && z >= -4 && z <= 2) {
-          const edge = (z === -4 || z === 2) && hash3(x, 3, z) > 0.45;
+        if (y === -1 && z >= LANE_Z0 && z <= LANE_Z1) {
+          const edge = (z === LANE_Z0 || z === LANE_Z1) && hash3(x, 3, z) > 0.45;
           b = edge ? GRASS : LANEB;
         }
         w.set(x, y, z, b);
@@ -157,9 +157,9 @@ export const STAGE_COUNT = 2;
 // 구간 종류: 걸을 수 있는 높이 맵(hmap)을 칠함. 값: PIT=낭떠러지, 1=올라설 블록, 2=넘을 수 없는 벽
 const SEG = {
   open() {},
-  cliffFront(h, a, b) { fill(h, a, b, 2, PIT_Z1, PIT); },                 // 앞쪽 한 줄이 낭떠러지
+  cliffFront(h, a, b) { fill(h, a, b, 3, PIT_Z1, PIT); },                 // 앞쪽 두 줄이 낭떠러지 (길이 넓어져 6칸 남음)
   cliffBack(h, a, b) { fill(h, a, b, PIT_Z0, -4, PIT); },                 // 뒤쪽 한 줄이 낭떠러지
-  bridge(h, a, b) { fill(h, a, b, PIT_Z0, -4, PIT); fill(h, a, b, 2, PIT_Z1, PIT); }, // 다리 (5칸 폭: 피할 공간 확보)
+  bridge(h, a, b) { fill(h, a, b, PIT_Z0, -4, PIT); fill(h, a, b, 3, PIT_Z1, PIT); }, // 다리 (6칸 폭: 피할 공간 확보)
   gaps(h, a, b) {                                                           // 점프로 건너야 하는 틈
     for (let x = a + 2; x + 2 <= b - 2; x += randi(4, 6)) fill(h, x, x + 2, PIT_Z0, PIT_Z1, PIT);
   },
@@ -243,7 +243,7 @@ export class Stage {
     for (let k = 0; k < triggers.length - 1; k++) {
       for (let tries = 0; tries < 12; tries++) {
         const x0 = Math.floor((triggers[k] + triggers[k + 1]) / 2 + rand(-6, 6));
-        const z0 = randi(-3, 1);
+        const z0 = randi(-3, 3);
         if ([0, 1].every(dx => [0, 1].every(dz => this.heightAt(x0 + dx + .5, z0 + dz + .5) === 0))) {
           this.traps.push(new SpikeTrap(x0 + 1, z0 + 1, rand(0, 3)));
           break;
