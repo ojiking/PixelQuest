@@ -95,6 +95,7 @@ export class Enemy extends Actor {
       this.walkPhase += dt * 10 * this.legFactor();
       this.pose(dt); return;
     }
+    this.wantMove = false;
     let ai = this.def.ai;
     // 부위 파괴에 따른 행동 변화
     if (ai === 'kiter' && !this.hasArms()) ai = 'brawler';
@@ -103,9 +104,9 @@ export class Enemy extends Actor {
 
     this.x = clamp(this.x, g.camX - g.viewHalf - 3, g.camX + g.viewHalf + 3);
     if (this.state !== 'attack') {
-      const moving = Math.abs(this.vx) + Math.abs(this.vz) > 0.2;
+      const moving = this.wantMove || Math.abs(this.vx) + Math.abs(this.vz) > 0.2;
       this.state = !this.grounded ? 'jump' : moving ? 'walk' : 'idle';
-      if (moving) this.walkPhase += dt * 10 * this.legFactor();
+      if (moving) this.walkPhase += dt * 10 * Math.max(0.7, this.legFactor());
     }
     this.pose(dt);
   }

@@ -67,6 +67,7 @@ export class Actor {
     const dx = tx - this.x, dz = tz - this.z;
     const d = Math.hypot(dx, dz * 1.3);
     if (d < 0.1) { this.vx = 0; this.vz = 0; return true; }
+    this.wantMove = true; // 절뚝거림 박자는 실제 속도가 아니라 걸으려는 의지로 진행
     let sp = speed * this.legFactor();
     if (this.legCount() === 1) sp *= 0.15 + 1.25 * this.hopPulse();
     let vx = dx / d * sp, vz = dz / d * sp * 0.8;
