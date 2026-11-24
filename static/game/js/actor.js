@@ -262,7 +262,7 @@ export class Actor {
         if (this.st > 0.35) { this.setState('idle'); this.invuln = this.getupInvuln ?? 0.4; }
         return true;
       case 'dying':
-        if (this.grounded && this.st > 0.55) this.shatter();
+        if ((this.grounded && this.st > 0.55) || this.st > 2.5) this.shatter();
         return true;
     }
     return false;

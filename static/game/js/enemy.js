@@ -33,16 +33,22 @@ export class Enemy extends Actor {
     let best = null, bd = 4.5;
     for (const it of g.items) {
       if (it.kind !== 'weapon' || it.type === 'chainsaw' || it.claimed || it.remove || it.vy !== 0) continue;
+      // 올라갈 수 없는 블록 위·낭떠러지 근처 무기는 무시
+      const fl = g.floorAt(it.x, it.z);
+      if (fl < -50 || fl > this.y + 0.4) continue;
       const d = Math.hypot(it.x - this.x, (it.z - this.z) * 1.3);
       if (d < bd) { best = it; bd = d; }
     }
-    if (best) { best.claimed = this; this.goItem = best; }
+    if (best) { best.claimed = this; this.goItem = best; this.goItemT = 0; }
   }
 
-  updatePickup() {
+  updatePickup(dt = 1 / 60) {
     const it = this.goItem;
     if (!it) return false;
     if (it.remove || this.weapon || !this.hasArms()) { if (it.claimed === this) it.claimed = null; this.goItem = null; return false; }
+    // 3초 안에 못 주우면 포기 (그 무기는 다시 노리지 않음)
+    this.goItemT = (this.goItemT || 0) + dt;
+    if (this.goItemT > 3) { it.claimed = 'blocked'; this.goItem = null; return false; }
     if (Math.hypot(it.x - this.x, it.z - this.z) < 0.6) {
       it.remove = true;
       this.weapon = { type: it.type, dur: it.dur };
@@ -84,7 +90,7 @@ export class Enemy extends Actor {
 
     // 무기 줍기가 우선
     if (this.think > 0.55) this.seekWeapon();
-    if (this.updatePickup()) {
+    if (this.updatePickup(dt)) {
       this.state = !this.grounded ? 'jump' : 'walk';
       this.walkPhase += dt * 10 * this.legFactor();
       this.pose(dt); return;

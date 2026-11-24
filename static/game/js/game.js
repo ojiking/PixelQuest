@@ -205,7 +205,8 @@ export class Game {
       }
       return;
     }
-    if (this.enemies.some(e => !e.remove)) return;
+    const alive = this.enemies.filter(e => !e.remove);
+    if (alive.length) { this.unstick(L, alive, dt); return; }
     L.nextT -= dt;
     if (L.nextT > 0) return;
     L.wave++;
@@ -217,6 +218,35 @@ export class Game {
       this.lock = null;
       this.zoneIdx++;
       this.goT = 2.5;
+    }
+  }
+
+  // 진행 막힘 방지: 화면 밖에 오래 있거나 제자리에 묶인 적은 화면 안으로 옮기고,
+  // 그래도 웨이브가 40초간 변화 없으면 남은 적을 정리
+  unstick(L, alive, dt) {
+    if (L.lastCount !== alive.length) { L.lastCount = alive.length; L.idleT = 0; }
+    L.idleT = (L.idleT || 0) + dt;
+    for (const e of alive) {
+      if (e.dead) continue;
+      const off = Math.abs(e.x - L.cx) > this.viewHalf - 0.3;
+      e.offT = off ? (e.offT || 0) + dt : 0;
+      const moved = Math.hypot(e.x - (e.lastPX ?? e.x), e.z - (e.lastPZ ?? e.z));
+      e.lastPX = e.x; e.lastPZ = e.z;
+      const t = e.target;
+      const far = !t || Math.hypot(t.x - e.x, t.z - e.z) > 2.5;
+      e.stuckT = moved < 0.01 && far && e.state !== 'attack' && e.state !== 'down' ? (e.stuckT || 0) + dt : 0;
+      if (e.offT > 3.5 || e.stuckT > 5) {
+        const side = e.x < L.cx ? -1 : 1;
+        const s = this.stage.safeSpot(L.cx + side * (this.viewHalf - 1.5), this.player.z);
+        this.debris.puff(e.x, e.y + 0.5, e.z, [0x9c958a, 0x7a7266], 8, 1.5, .14, .35, -0.3);
+        e.x = s.x; e.z = s.z; e.y = this.floorAt(s.x, s.z); e.vx = e.vy = e.vz = 0;
+        if (e.goItem) { e.goItem.claimed = 'blocked'; e.goItem = null; }
+        e.offT = 0; e.stuckT = 0;
+      }
+    }
+    if (L.idleT > 40) {
+      for (const e of alive) { if (!e.dead) this.run.kills++; e.dead = true; e.remove = true; this.releaseToken(e); }
+      L.idleT = 0;
     }
   }
 
