@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PixelQuest 블록 청소반</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="texts"></div>
+
+  <div id="hud" class="hidden">
+    <div class="bars">
+      <div class="unit">
+        <div class="label">청소반원 · <span id="weapon">맨손</span></div>
+        <div class="bar"><div id="hp-player" class="fill p"></div><span id="hp-player-t" class="bart"></span></div>
+      </div>
+      <div class="unit">
+        <div class="label">볼트 Lv<span id="bot-lv">1</span> · <span id="tactic">돌격</span></div>
+        <div class="bar small"><div id="hp-bot" class="fill b"></div></div>
+      </div>
+      <div id="perks-hud" class="perks-hud"></div>
+    </div>
+    <div id="stage-info"></div>
+    <div id="scrap">⚙ <span id="scrap-n">0</span></div>
+    <div id="boss" class="hidden">
+      <div class="label" id="boss-name"></div>
+      <div class="bar big"><div id="hp-boss" class="fill e"></div></div>
+    </div>
+    <div id="go" class="hidden">GO ▶</div>
+    <div id="combo" class="hidden"></div>
+  </div>
+  <div id="banner" class="hidden"></div>
+
+  <div id="screen" class="overlay"></div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

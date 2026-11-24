@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file, url_for
+from flask import Flask, render_template, request, send_file, url_for, redirect
 from PIL import Image, ImageDraw, ImageOps
 import io
 
@@ -8,6 +8,11 @@ app = Flask(__name__)
 @app.route('/')
 def home():
     return render_template('index.html')  # HTML 파일 연결
+
+# 벨트스크롤 액션 프로토타입
+@app.route('/game')
+def game():
+    return redirect(url_for('static', filename='game/index.html'))
 
 # 색상 조정 함수
 def apply_color_filter(image, filter_type):
