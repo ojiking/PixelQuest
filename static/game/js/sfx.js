@@ -83,6 +83,8 @@ const SOUNDS = {
   clang: t => { tone(t, .25, { wave: 'square', f0: 1300, f1: 900, peak: .12 }); tone(t, .3, { wave: 'triangle', f0: 2600, f1: 2200, peak: .08 }); noise(t, .05, { type: 'highpass', f0: 3000, peak: .3 }); },
   shot: t => { noise(t, .4, { type: 'lowpass', f0: 4000, f1: 150, peak: 1, attack: .002 }); tone(t, .3, { f0: 140, f1: 35, peak: .9 }); noise(t + .28, .03, { f0: 2500, q: 3, peak: .3 }); noise(t + .36, .03, { f0: 1800, q: 3, peak: .3 }); },
   flame: t => noise(t, .14, { f0: 700, f1: 400, q: .6, peak: .2, attack: .01 }),
+  engine: t => { tone(t, .7, { wave: 'sawtooth', f0: 70, f1: 210, peak: .22, attack: .03 }); tone(t, .7, { wave: 'square', f0: 35, f1: 105, peak: .1, attack: .03 }); noise(t, .6, { type: 'lowpass', f0: 400, f1: 1200, peak: .2 }); },
+  alarm: t => { for (let i = 0; i < 4; i++) tone(t + i * .22, .2, { wave: 'square', f0: i % 2 ? 620 : 860, peak: .06 }); },
   hurt: t => { tone(t, .12, { wave: 'square', f0: 300, f1: 120, peak: .12 }); noise(t, .06, { f0: 1200, peak: .25 }); },
 };
 

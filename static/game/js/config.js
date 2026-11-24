@@ -120,6 +120,7 @@ export const ENEMIES = {
   brute:   { name: '철거 덩치',    model: 'brute',   hp: 130, speed: 1.35, scale: 1.3,  ai: 'brawler', attacks: ['eSlam', 'ePunch'],           scrap: [3, 5], poise: 14, pickup: true, armed: { chance: .35, types: ['sledge', 'pipe', 'axe', 'chain', 'flail'] } },
   shield:  { name: '맨홀 방패병',  model: 'shielder', hp: 70,  speed: 1.6,  scale: 1.05, ai: 'shield',  attacks: ['eBash', 'ePunch'],           scrap: [2, 4], shield: true },
   ninja:   { name: '그림자 닌자',  model: 'ninja',    hp: 26,  speed: 3.6,  scale: .95,  ai: 'ninja',   attacks: ['eSlash', 'eShuriken'],      scrap: [2, 3], katana: true },
+  biker:   { name: '폭주족',       model: 'biker',    hp: 55,  speed: 2.4,  scale: 1,    ai: 'biker',   attacks: ['ePunch'],                    scrap: [2, 4], pickup: true, bike: true },
   bomber:  { name: '폭죽 꼬마',    model: 'bomber',  hp: 14,  speed: 3.7,  scale: .72,  ai: 'rusher',  attacks: ['eFuse'],                     scrap: [1, 1] },
   boss:    { name: '철거반장 굴삭', model: 'boss',    hp: 520, speed: 1.6,  scale: 1.55, ai: 'boss',    attacks: ['eSlam', 'eCharge', 'eThrow'], scrap: [30, 30], poise: 30, boss: true },
 };
@@ -127,7 +128,7 @@ export const ENEMIES = {
 // 스테이지별 적 등장 가중치
 export const SPAWN_POOLS = [
   { grunt: 5, thrower: 2, bomber: 1.2, charger: 1, shield: .8, ninja: .7 },
-  { grunt: 4, thrower: 2, bomber: 1.5, charger: 2, brute: 1.5, shield: 1.4, ninja: 1.3 },
+  { grunt: 4, thrower: 2, bomber: 1.5, charger: 2, brute: 1.5, shield: 1.4, ninja: 1.3, biker: 1.6 },
 ];
 
 // ---------------- 무기 ----------------
@@ -192,6 +193,8 @@ export const GIB_THROW = { dmg: 4, knock: 1.6, speed: 10, hitstun: .18 };
 export const TRAPS = {
   spike: { cycle: 3.2, warnAt: 2.0, upAt: 2.5, dmg: 15 },
   barrel: { radius: 2.3, dmg: 30, fuse: .25 },
+  car:    { hp: 70, radius: 3.2, dmg: 42, fuse: .7 },    // 주차된 차 폭발
+  moto:   { hp: 28, radius: 2.6, dmg: 34, fuse: .35, throwRadius: 3.0, throwDmg: 45 }, // 오토바이
 };
 
 // ---------------- 바이옴 ----------------

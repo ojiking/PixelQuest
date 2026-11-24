@@ -9,6 +9,7 @@ import { Companion } from './companion.js';
 import { Enemy } from './enemy.js';
 import { Stage, STAGE_COUNT, PIT, SEG_HINTS } from './level.js';
 import { Item, Prop } from './props.js';
+const CAR_FLASH = [1, 1, 1, .6], CAR_WARN = [1, .5, .1, .5], CAR_ALARM = [1, .85, .3, .18];
 import { applyHit } from './combat.js';
 
 export const PART_NAME = { head: '머리', armF: '팔', armB: '팔', handF: '아래팔', handB: '아래팔', legF: '다리', legB: '다리', shinF: '정강이', shinB: '정강이', torso: '몸통', upper: '상반신', lower: '하반신' };
@@ -107,6 +108,7 @@ export class Game {
     for (const it of this.items) it.update(dt, this);
     for (const p of this.props) p.update(dt, this);
     for (const t of this.traps) t.update(dt, this);
+    this.updateCars(dt);
     this.debris.update(dt, (x, z) => this.floorAt(x, z));
     this.gibs.update(dt);
 
@@ -299,6 +301,7 @@ export class Game {
 
   severPart(v, k, dir, h = {}) {
     v.severPart(k, dir, h);
+    if (v.mounted && /^(leg|shin)/.test(k)) this.dismount(v, dir);
     this.run.severs++;
     this.sfx?.(h.mode === 'crush' ? 'crush' : 'splat');
     const crush = h.mode === 'crush';
@@ -334,6 +337,7 @@ export class Game {
     v.vx = h.dir * Math.max(3, h.knock) * 1.1; v.vy = 6; v.y = Math.max(v.y, 0.01); v.grounded = false;
     if (h.knock >= 7.5) v.flung = { owner: h.attacker, hit: new Set() };
     v.facing = -h.dir;
+    if (v.mounted) this.dismount(v, h.dir, true);
     if (v.weapon) this.dropWeapon(v);
     if (v.blocks) this.dropShield(v);
     if (v.goItem) { v.goItem.claimed = null; v.goItem = null; }
@@ -433,6 +437,8 @@ export class Game {
         f.hit.add(p);
         p.hit(this, 20, dir);
       }
+      const car = this.carAt(a.x, a.z, a.radius, a.y);
+      if (car && !f.hit.has(car)) { f.hit.add(car); this.hitCar(car, 25, dir); }
     }
   }
 
@@ -529,6 +535,68 @@ export class Game {
       if (p.broken) continue;
       if (Math.hypot(p.x - x, (p.z - z) * 1.2) < radius) p.hit(this, 999, sign(p.x - x) || 1);
     }
+    // 근처 차량 유폭 (연쇄 폭발)
+    for (const c of this.cars()) {
+      const nx = Math.max(c.x, Math.min(x, c.x + c.len)), nz = Math.max(c.z, Math.min(z, c.z + c.dep));
+      if (Math.hypot(nx - x, (nz - z) * 1.2) < radius) this.hitCar(c, 999, sign(c.x + c.len / 2 - x) || 1);
+    }
+  }
+
+  // ------------------------------------------------ 주차된 차 (부수면 폭발)
+  cars() { return this.stage.solids.filter(s => s.car && !s.wreck); }
+  // (x, z) 근처(여유 pad)에 있는 차
+  carAt(x, z, pad = 0, y = 0) {
+    if (y > 1.6) return null;
+    for (const c of this.stage.solids) {
+      if (!c.car || c.wreck) continue;
+      if (x > c.x - pad && x < c.x + c.len + pad && z > c.z - pad * 0.6 && z < c.z + c.dep + pad * 0.6) return c;
+    }
+    return null;
+  }
+  hitCar(c, dmg, dir) {
+    if (!c.car || c.wreck) return;
+    const cx = c.x + c.len / 2, cz = c.z + c.dep / 2;
+    const first = c.hp === c.max;
+    c.hp -= dmg; c.flash = 0.1;
+    this.debris.sparks(cx - dir * c.len * 0.4, 0.9, cz + 0.6, 0xfff3a0, 8, 3);
+    this.debris.puff(cx, 1.2, cz + 0.4, [0xbfe6ff, 0x8fc8ee, 0xe8f6ff], 6, 2.5, .07, .5, 0.05); // 유리 파편
+    if (first) { this.sfx?.('alarm'); c.alarmT = 2.5; }
+    if (c.hp <= 0 && c.fuse < 0) { c.fuse = TRAPS.car.fuse; this.texts.add(cx, 2.2, cz, '펑!?', 'back'); }
+  }
+  updateCars(dt) {
+    if (!this.stage.biome.city) return;
+    for (const c of this.stage.solids) {
+      if (!c.car) continue;
+      if (c.flash > 0) c.flash -= dt;
+      if (c.alarmT > 0) c.alarmT -= dt;
+      const cx = c.x + c.len / 2, cz = c.z + c.dep / 2;
+      if (c.wreck) {   // 잔해: 불타며 연기
+        c.smokeT -= dt;
+        if (c.smokeT <= 0 && c.burnT > 0) { c.smokeT = 0.12; this.debris.puff(cx + rand(-1, 1), 1.1, cz, [0xff8a1f, 0xffd24a, 0x444444, 0x666666], 2, 1.2, .14, .9, -0.15); }
+        if (c.burnT > 0) c.burnT -= dt;
+        continue;
+      }
+      if (c.hp < c.max * 0.5) {
+        c.smokeT -= dt;
+        if (c.smokeT <= 0) { c.smokeT = c.fuse >= 0 ? 0.04 : 0.25; this.debris.puff(cx + c.len * 0.3, 1.2, cz, c.fuse >= 0 ? [0xff8a1f, 0x555555] : [0x777777, 0x999999], 2, 1, .12, .8, -0.15); }
+      }
+      if (c.fuse >= 0) {
+        c.fuse -= dt;
+        if (c.fuse < 0) this.explodeCar(c);
+      }
+    }
+  }
+  explodeCar(c) {
+    const cx = c.x + c.len / 2, cz = c.z + c.dep / 2;
+    c.wreck = true; c.burnT = 9; c.fuse = -1;
+    mat4.identity(M); mat4.translate(M, c.x + 0.02, 0, c.z + 0.1);
+    this.debris.burst(getModel(this.r, c.model).voxels, M, { frac: .45, size: .13, spread: 6 });
+    c.model = 'carwreck';
+    for (let x = c.x; x < c.x + c.len; x++) for (let z = c.z; z < c.z + c.dep; z++) this.stage.solid.set(x + ',' + z, 1.0);
+    this.debris.puff(cx, 1.4, cz, [0xffe14a, 0xff8a1f, 0xd94a2a, 0x333333], 60, 7, .3, 1.1, -0.1);
+    this.texts.add(cx, 2.6, cz, '차량 폭발!', 'sever');
+    this.explode(cx, cz, TRAPS.car.radius, TRAPS.car.dmg, null);
+    this.shake(0.7);
   }
 
   // ------------------------------------------------ 아이템 / 무기
@@ -555,7 +623,7 @@ export class Game {
       }
       return;
     }
-    if (p.carry) { p.startAttack(p.carry.kind === 'barrel' ? 'pThrowBarrel' : 'pThrowGib'); return; }
+    if (p.carry) { p.startAttack(p.carry.kind === 'barrel' || p.carry.kind === 'moto' ? 'pThrowBarrel' : 'pThrowGib'); return; }
     // 맨손이면 폭탄 드럼통을 들어 올림
     if (!p.weapon) {
       const bar = this.props.find(b => b.kind === 'barrel' && !b.broken && b.fuse < 0 && Math.abs(b.x - p.x) < 1.0 && Math.abs(b.z - p.z) < 0.65);
@@ -563,6 +631,14 @@ export class Game {
         bar.broken = true; // 바닥에서 치움
         p.carry = { kind: 'barrel' };
         this.texts.add(p.x, 2.6, p.z, '폭탄 드럼통 — 던져라!', 'item');
+        this.sfx?.('pickup');
+        return;
+      }
+      const moto = this.props.find(b => b.kind === 'moto' && !b.broken && b.fuse < 0 && Math.abs(b.x - p.x) < 1.3 && Math.abs(b.z - p.z) < 0.7);
+      if (moto) {
+        moto.broken = true;
+        p.carry = { kind: 'moto' };
+        this.texts.add(p.x, 2.6, p.z, '오토바이 번쩍! — 던져라!', 'item');
         this.sfx?.('pickup');
         return;
       }
@@ -640,14 +716,36 @@ export class Game {
     this.sfx?.('clang');
   }
 
+  // 오토바이 돌진에 치임
+  bikeHit(b, a) {
+    applyHit(this, a, { attacker: b, dmg: a.team === 'enemy' ? 14 : 16, knock: 8, dir: b.facing, zone: 'low', knockdown: true, sever: 1.3, mode: 'knock', launch: 6.5, hitstop: .06, shake: .2 });
+    this.texts.add(a.x, a.y + 2.2 * a.scale, a.z, '치였다!', 'back');
+  }
+
+  // 폭주족이 오토바이에서 떨어짐 → 오토바이는 바닥 오브젝트(주워서 던지기 가능)
+  dismount(v, dir = 1, dying = false) {
+    if (!v.mounted) return;
+    v.mounted = false; v.revving = false; v.bikePhase = null;
+    const s = this.stage.safeSpot(v.x - dir * 0.6, v.z);
+    const m = new Prop('moto', s.x, s.z);
+    m.tilt = dir > 0 ? Math.PI : 0;
+    this.props.push(m);
+    this.debris.sparks(v.x, 0.4, v.z + 0.2, 0xfff3a0, 14, 4);
+    this.sfx?.('clang');
+    if (!dying) {
+      this.texts.add(v.x, v.y + 2.3, v.z, '낙차!', 'back');
+      if (!v.weapon && Math.random() < 0.5) v.weapon = { type: pick(['chain', 'bat', 'pipe']), dur: 6 };
+    }
+  }
+
   // 들고 있던 것을 발밑에 내려놓음 (드럼통은 다시 오브젝트로)
   dropCarry(a) {
     const c = a.carry;
     a.carry = null;
     if (!c) return;
-    if (c.kind === 'barrel') {
+    if (c.kind === 'barrel' || c.kind === 'moto') {
       const s = this.stage.safeSpot(a.x + a.facing * 0.5, a.z);
-      const b = new Prop('barrel', s.x, s.z);
+      const b = new Prop(c.kind, s.x, s.z);
       this.props.push(b);
       return;
     }
@@ -687,7 +785,7 @@ export class Game {
     if (o.owner === this.player) dmg *= this.stats.player.throwMul;
     this.projectiles.push({
       ...o, dmg,
-      vx: o.dir * (o.kind === 'weapon' ? 11 : o.kind === 'barrel' ? 9 : o.kind === 'shuriken' ? 13 : 7.5), vy: o.kind === 'brick' ? 2.5 : o.kind === 'barrel' ? 1.5 : o.kind === 'shuriken' ? 0 : 1.2,
+      vx: o.dir * (o.kind === 'weapon' ? 11 : o.kind === 'barrel' || o.kind === 'moto' ? 9 : o.kind === 'shuriken' ? 13 : 7.5), vy: o.kind === 'brick' ? 2.5 : o.kind === 'barrel' || o.kind === 'moto' ? 1.5 : o.kind === 'shuriken' ? 0 : 1.2,
       spin: 0, life: 2.5, dead: false,
     });
   }
@@ -695,16 +793,16 @@ export class Game {
   updateProjectiles(dt) {
     for (const pr of this.projectiles) {
       pr.life -= dt;
-      pr.vy -= (pr.kind === 'barrel' ? 14 : pr.kind === 'shuriken' ? 0 : 7) * dt;
+      pr.vy -= (pr.kind === 'barrel' || pr.kind === 'moto' ? 14 : pr.kind === 'shuriken' ? 0 : 7) * dt;
       pr.x += pr.vx * dt; pr.y += pr.vy * dt;
-      pr.spin += dt * 16;
+      pr.spin += dt * (pr.kind === 'moto' ? 7 : 16);
       if (pr.life <= 0) { pr.dead = true; continue; }
       for (const a of this.actors) {
         if (a.team === pr.team || !a.alive || a.state === 'down') continue;
-        const big = pr.kind === 'barrel' ? 0.25 : 0;
+        const big = pr.kind === 'barrel' ? 0.25 : pr.kind === 'moto' ? 0.45 : 0;
         if (Math.abs(a.x - pr.x) > 0.3 + big + a.radius || Math.abs(a.z - pr.z) > 0.45 + big) continue;
         if (pr.y < a.y - 0.1 || pr.y > a.y + 1.9 * a.scale) continue;
-        if (pr.kind === 'barrel') { this.projectileEnd(pr); break; }
+        if (pr.kind === 'barrel' || pr.kind === 'moto') { this.projectileEnd(pr); break; }
         const isW = pr.kind === 'weapon';
         applyHit(this, a, {
           attacker: pr.owner, dmg: pr.dmg * (pr.owner?.power ?? 1), knock: isW ? 5 : pr.kind === 'shuriken' ? 1.2 : 2.5, dir: sign(pr.vx), zone: 'high', hitstun: pr.kind === 'shuriken' ? .18 : undefined,
@@ -716,10 +814,14 @@ export class Game {
       if (!pr.dead && pr.team === 'hero') {
         for (const p of this.props) {
           if (p.broken || Math.abs(p.x - pr.x) > 0.5 || Math.abs(p.z - pr.z) > 0.6 || pr.y > 1.2) continue;
-          if (pr.kind !== 'barrel') p.hit(this, pr.dmg, sign(pr.vx));
+          if (pr.kind !== 'barrel' && pr.kind !== 'moto') p.hit(this, pr.dmg, sign(pr.vx));
           this.projectileEnd(pr);
           break;
         }
+      }
+      if (!pr.dead && pr.kind !== 'shuriken') {
+        const car = this.carAt(pr.x, pr.z, 0.1, pr.y);
+        if (car && pr.y < 1.4) { if (pr.kind !== 'barrel' && pr.kind !== 'moto') this.hitCar(car, pr.dmg * 1.5, sign(pr.vx)); this.projectileEnd(pr); }
       }
       if (!pr.dead && pr.y <= this.floorAt(pr.x, pr.z)) this.projectileEnd(pr);
       if (pr.y < -6) pr.dead = true;
@@ -734,10 +836,19 @@ export class Game {
       this.explode(pr.x, pr.z, TRAPS.barrel.radius * 1.1, TRAPS.barrel.dmg * 1.2 * (pr.owner === this.player ? this.stats.player.throwMul : 1), null, pr.team); // 던진 쪽 편은 피해 없음
       return;
     }
+    if (pr.kind === 'moto') {
+      // 던진 오토바이: 충돌 즉시 대폭발 + 부품이 사방으로
+      const T = TRAPS.moto;
+      mat4.identity(M); mat4.translate(M, pr.x, Math.max(0.3, pr.y), pr.z);
+      this.debris.burst(getModel(this.r, 'moto').voxels, M, { frac: .7, size: .12, spread: 5 });
+      this.texts.add(pr.x, 2.4, pr.z, '오토바이 폭탄!', 'sever');
+      this.explode(pr.x, pr.z, T.throwRadius, T.throwDmg * (pr.owner === this.player ? this.stats.player.throwMul : 1), null, pr.team);
+      return;
+    }
     if (pr.kind === 'weapon' && pr.dur > 1) {
       this.items.push(new Item('weapon', pr.weaponType, pr.x, pr.z, { y: Math.max(0.2, pr.y), vy: 3, vx: -sign(pr.vx) * 1.5, dur: pr.dur - 1 }));
     } else {
-      const key = pr.kind === 'weapon' ? WEAPON_MODEL[pr.weaponType] : pr.kind === 'barrel' ? 'barrel' : pr.kind === 'shuriken' ? 'shuriken' : 'brick';
+      const key = pr.kind === 'weapon' ? WEAPON_MODEL[pr.weaponType] : pr.kind === 'barrel' || pr.kind === 'moto' ? pr.kind : pr.kind === 'shuriken' ? 'shuriken' : 'brick';
       mat4.identity(M); mat4.translate(M, pr.x, Math.max(0.1, pr.y), pr.z);
       this.debris.burst(getModel(this.r, key).voxels, M, { frac: 0.9, size: 0.1, spread: 2 });
     }
@@ -765,7 +876,14 @@ export class Game {
     for (const s of st.solids) {
       if (!near(s.x)) continue;
       mat4.identity(M); mat4.translate(M, s.x + 0.02, 0, s.z + 0.1);
-      r.drawMesh(getModel(r, s.model).mesh, M);
+      let tint = null;
+      if (s.car && !s.wreck) {
+        if (s.flash > 0) tint = CAR_FLASH;
+        else if (s.fuse >= 0 && Math.floor(this.time * 20) % 2) tint = CAR_WARN;
+        else if (s.alarmT > 0 && Math.floor(this.time * 6) % 2) tint = CAR_ALARM;
+        if (s.fuse >= 0) mat4.translate(M, (Math.random() - .5) * .08, 0, 0);
+      }
+      r.drawMesh(getModel(r, s.model).mesh, M, tint);
     }
     for (const p of st.poles) {
       if (!near(p.x)) continue;
@@ -799,7 +917,7 @@ export class Game {
     for (const a of this.actors) a.draw(r);
     for (const pr of this.projectiles) {
       mat4.identity(M); mat4.translate(M, pr.x, pr.y, pr.z); mat4.rotateZ(M, -pr.spin * sign(pr.vx));
-      const key = pr.kind === 'weapon' ? WEAPON_MODEL[pr.weaponType] : pr.kind === 'barrel' ? 'barrel' : pr.kind === 'shuriken' ? 'shuriken' : 'brick';
+      const key = pr.kind === 'weapon' ? WEAPON_MODEL[pr.weaponType] : pr.kind === 'barrel' || pr.kind === 'moto' ? pr.kind : pr.kind === 'shuriken' ? 'shuriken' : 'brick';
       r.drawMesh(getModel(r, key).mesh, M);
     }
     this.gibs.draw(r);

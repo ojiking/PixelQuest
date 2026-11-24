@@ -1,5 +1,5 @@
 // 블록 지형 생성 + 스테이지 구성(전투 구역, 오브젝트, 함정 배치)
-import { BIOMES, SPAWN_POOLS, LANE } from './config.js';
+import { BIOMES, SPAWN_POOLS, LANE, TRAPS } from './config.js';
 import { hash3, hexToRgb, FACES, MeshBuilder } from './voxel.js';
 import { rand, randi, weightedPick } from './math.js';
 import { Prop, SpikeTrap, Item } from './props.js';
@@ -322,7 +322,10 @@ export class Stage {
     };
     const put = (model, x0, len, z0, depth, h) => {
       for (let x = x0; x < x0 + len; x++) for (let z = z0; z < z0 + depth; z++) this.solid.set(x + ',' + z, h);
-      this.solids.push({ model, x: x0, z: z0 });
+      const o = { model, x: x0, z: z0, len, dep: depth };
+      if (model.startsWith('car')) Object.assign(o, { car: true, hp: TRAPS.car.hp, max: TRAPS.car.hp, fuse: -1, wreck: false, flash: 0, smokeT: 0 });
+      this.solids.push(o);
+      return o;
     };
     let cars = 0;
     for (let tries = 0; tries < 40 && cars < 6; tries++) {

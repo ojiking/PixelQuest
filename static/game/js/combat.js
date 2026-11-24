@@ -80,6 +80,16 @@ export function tryHits(game, att, a) {
       a.hit.add(p);
       p.hit(game, buildHit(att, d, p).dmg, att.facing);
     }
+    // 주차된 차: 차체에서 공격자에 가장 가까운 지점을 기준으로 판정
+    if (game.stage.biome.city && att.y < 1.6) {
+      for (const c of game.cars()) {
+        if (a.hit.has(c)) continue;
+        const t = { x: Math.max(c.x, Math.min(att.x, c.x + c.len)), z: Math.max(c.z, Math.min(att.z, c.z + c.dep)), radius: 0.1 };
+        if (!inBox(att, t, d, r0, reach, true)) continue;
+        a.hit.add(c);
+        game.hitCar(c, buildHit(att, d, t).dmg, att.facing);
+      }
+    }
   }
 }
 
@@ -143,8 +153,10 @@ export function applyHit(game, v, h) {
   if (v.isBoss && knockdown && dmg < 20 && !h.explosion) knockdown = false;
   if (armored) return true;
 
+  if (v.mounted && (knockdown || dmg >= 14 || h.explosion)) game.dismount(v, h.dir);
+  else if (v.mounted) { v.bikePhase = 'line'; v.bikeT = 0; v.revving = false; }
   v.interrupt();
-  if (v.carry?.kind === 'barrel') game.dropCarry(v);
+  if (v.carry?.kind === 'barrel' || v.carry?.kind === 'moto') game.dropCarry(v);
   if (!v.blocks) v.facing = -h.dir; // 방패병은 맞아도 바로 돌아서지 않음 (뒤잡기 유지)
   if (knockdown) {
     v.setState('down');

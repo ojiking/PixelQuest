@@ -11,8 +11,8 @@ const WARN = [1, .85, .2, .45];
 export class Prop {
   constructor(kind, x, z) {
     this.kind = kind; this.x = x; this.z = z; this.y = 0;
-    this.radius = kind === 'crate' ? 0.45 : 0.4;
-    this.hp = kind === 'crate' ? 18 : 1;
+    this.radius = kind === 'crate' ? 0.45 : kind === 'moto' ? 0.75 : 0.4;
+    this.hp = kind === 'crate' ? 18 : kind === 'moto' ? TRAPS.moto.hp : 1;
     this.broken = false; this.flash = 0; this.fuse = -1;
     this.model = kind;
   }
@@ -20,6 +20,7 @@ export class Prop {
     if (this.broken) return;
     this.hp -= dmg; this.flash = 0.1;
     if (this.kind === 'barrel') { if (this.fuse < 0) this.fuse = TRAPS.barrel.fuse; }
+    else if (this.kind === 'moto') { game.debris.sparks(this.x, .5, this.z, 0xfff3a0, 5, 2); if (this.hp <= 0 && this.fuse < 0) this.fuse = TRAPS.moto.fuse; }
     else if (this.hp <= 0) game.breakProp(this, dir);
   }
   update(dt, game) {
@@ -28,13 +29,16 @@ export class Prop {
       this.fuse -= dt;
       if (this.fuse < 0 && !this.broken) {
         this.broken = true;
-        game.explode(this.x, this.z, TRAPS.barrel.radius, TRAPS.barrel.dmg, null);
+        const T = this.kind === 'moto' ? TRAPS.moto : TRAPS.barrel;
+        game.explode(this.x, this.z, T.radius, T.dmg, null);
+        if (this.kind === 'moto') { mat4.identity(M); mat4.translate(M, this.x, .3, this.z); game.debris.burst(getModel(game.r, 'moto').voxels, M, { frac: .6, size: .12, spread: 4 }); }
       }
     }
   }
   draw(r, game) {
     if (this.broken) return;
     mat4.identity(M); mat4.translate(M, this.x, 0, this.z);
+    if (this.kind === 'moto') { mat4.translate(M, 0, 0.28, 0); mat4.rotateX(M, Math.PI / 2); mat4.rotateY(M, this.tilt ?? 0); } // 옆으로 쓰러진 오토바이
     let tint = this.flash > 0 ? FLASH : null;
     if (this.fuse >= 0 && Math.floor(game.time * 20) % 2) tint = WARN;
     r.drawMesh(getModel(r, this.model).mesh, M, tint);

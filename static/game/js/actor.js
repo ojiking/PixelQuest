@@ -13,6 +13,7 @@ export const CHILD = { armF: 'handF', armB: 'handB', legF: 'shinF', legB: 'shinB
 const TOP = ['head', 'torso', 'armF', 'armB', 'legF', 'legB'];
 const FLASH = [1, 1, 1, .75];
 const CHAR = [.08, .05, .03, .7];
+const HEAVY = new Set(['barrel', 'moto']); // 머리 위로 들어 던지는 물건
 const BURN = [1, .45, .08, .35];
 const WARN = [1, .2, .08, .5];
 
@@ -172,7 +173,7 @@ export class Actor {
     if (d.projectile === 'barrel') {
       if (!a.spawned) {
         a.spawned = true;
-        if (this.carry?.kind === 'barrel') g.spawnProjectile({ kind: 'barrel', x: this.x + this.facing * 0.5, y: 1.7 * this.scale, z: this.z, dir: this.facing, team: this.team, dmg: 0, owner: this });
+        if (HEAVY.has(this.carry?.kind)) g.spawnProjectile({ kind: this.carry.kind, x: this.x + this.facing * 0.5, y: 1.7 * this.scale, z: this.z, dir: this.facing, team: this.team, dmg: 0, owner: this });
         this.carry = null;
       }
       return;
@@ -359,8 +360,13 @@ export class Actor {
       case 'attack': this.attackPose(T); rate = 35; break;
     }
     // 드럼통을 머리 위로 들고 있음
-    if (this.carry?.kind === 'barrel' && (this.state === 'idle' || this.state === 'walk' || this.state === 'jump')) {
+    if (HEAVY.has(this.carry?.kind) && (this.state === 'idle' || this.state === 'walk' || this.state === 'jump')) {
       T.armF = T.armB = 2.9; T.handF = T.handB = 0.2;
+    }
+    // 오토바이 탑승: 앉은 자세로 핸들을 잡음
+    if (this.mounted && (this.state === 'idle' || this.state === 'walk' || this.state === 'jump' || this.state === 'attack')) {
+      T.legF = T.legB = 1.35; T.shinF = T.shinB = -1.35; T.armF = T.armB = 1.2; T.handF = T.handB = .35;
+      T.torso = this.revving ? -.45 : -.25; T.head = 0;
     }
     const k = Math.min(1, dt * rate);
     for (const n of PART_ORDER) if (P[n].alive && T[n] !== undefined) P[n].rz += (T[n] - P[n].rz) * k;
@@ -585,6 +591,7 @@ export class Actor {
     if (this.burnT > 0 && Math.floor(this.game.time * 12) % 2) return BURN;
     const a = this.attack;
     if (a && a.def.telegraph && this.attackPhase() === 'startup' && Math.floor(this.game.time * 14) % 2) return WARN;
+    if (this.revving && Math.floor(this.game.time * 14) % 2) return WARN; // 폭주족 돌진 예고
     return null;
   }
 
@@ -593,6 +600,12 @@ export class Actor {
     if (this.invuln > 0 && this.team === 'hero' && Math.floor(this.game.time * 20) % 2) return;
     const root = this.rootMatrix(M);
     const tint = this.tint();
+    if (this.mounted) {
+      // 타고 있는 오토바이 (몸 아래)
+      mat4.copy(WM, root);
+      mat4.translate(WM, -0.05, 0, 0);
+      r.drawMesh(getModel(r, 'moto').mesh, WM, tint);
+    }
     if (this.shieldUp()) {
       // 맨홀 방패: 몸 앞쪽에
       mat4.copy(WM, root);
@@ -618,10 +631,10 @@ export class Actor {
         const fx = FLEX[this.weapon.type];
         r.drawMesh(getModel(r, fx ? fx.handleModel : WEAPON_MODEL[this.weapon.type]).mesh, WM, tint);
       }
-      if (k === 'handF' && this.carry?.kind === 'barrel') {
+      if (k === 'handF' && HEAVY.has(this.carry?.kind)) {
         mat4.copy(WM, root);
         mat4.translate(WM, 0.05, this.model.height + 0.02, 0);
-        r.drawMesh(getModel(r, 'barrel').mesh, WM, tint);
+        r.drawMesh(getModel(r, this.carry.kind).mesh, WM, tint);
       } else if (k === 'handF' && this.carry) {
         const c = this.carry;
         mat4.copy(WM, PM);

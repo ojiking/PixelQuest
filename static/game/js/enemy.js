@@ -21,6 +21,7 @@ export class Enemy extends Actor {
     this.goItem = null;
     this.blocks = !!def.shield;      // 맨홀 방패로 정면을 막음
     this.guardBroken = 0; this.turnT = 0; this.dodgeCd = 1; this.flip = 0; this.flipping = false;
+    this.mounted = !!def.bike;       // 폭주족: 오토바이에 탄 채 등장
     if (def.katana) this.weapon = { type: 'katana', dur: 999 };
     // 처음부터 무기를 들고 나오는 적
     if (def.armed && Math.random() < def.armed.chance) {
@@ -31,7 +32,7 @@ export class Enemy extends Actor {
 
   // 근처에 떨어진 무기를 찾아 주우러 감 (전기톱 제외)
   seekWeapon() {
-    if (!this.def.pickup || this.weapon || !this.hasArms() || this.goItem) return;
+    if (!this.def.pickup || this.mounted || this.weapon || !this.hasArms() || this.goItem) return;
     const g = this.game;
     let best = null, bd = 4.5;
     for (const it of g.items) {
@@ -194,6 +195,58 @@ export class Enemy extends Actor {
     if (dz < 0.4 && dx > 2.2 && dx < 8.5 && this.cool <= 0 && this.onScreen(1.0)) {
       this.doAttack('eCharge');
       this.cool = rand(2.5, 3.5);
+    }
+  }
+
+  // 폭주족: 라인을 맞춘 뒤 부릉부릉(예고) → 직선 돌진으로 들이받음 → 지나쳐서 유턴. 떨어지면 맨몸 싸움꾼
+  biker(dt, t) {
+    const g = this.game;
+    if (!this.mounted) { this.revving = false; return this.brawler(dt, t); }
+    if (!this.bikePhase) { this.bikePhase = 'line'; this.bikeT = 0; }
+    this.bikeT += dt;
+    const ph = this.bikePhase;
+    const go = (p) => { this.bikePhase = p; this.bikeT = 0; };
+    if (ph === 'line') {
+      this.revving = false;
+      const side = this.x < t.x ? -1 : 1;
+      this.moveToward(this.inScreen(t.x + side * 6.5, 0.6), t.z, 4.5);
+      this.face(t);
+      const dx = Math.abs(t.x - this.x);
+      if (this.cool <= 0 && this.onScreen(0.3) && dx > 2.4 && (Math.abs(this.z - t.z) < 0.35 || this.bikeT > 3.5)) {
+        go('rev'); g.sfx?.('engine');
+      }
+    } else if (ph === 'rev') {
+      this.vx = this.vz = 0; this.revving = true; this.face(t);
+      if (Math.random() < 0.4) g.debris.puff(this.x - this.facing * 1.0, 0.3, this.z, [0x777777, 0x999999], 1, 1, .1, .5, -0.1);
+      if (this.bikeT > 0.65) { go('charge'); this.chargeHit = new Set(); this.revving = false; }
+    } else if (ph === 'charge') {
+      this.vx = this.facing * 9.5; this.vz = 0; this.wantMove = true;
+      if (Math.random() < 0.5) g.debris.puff(this.x - this.facing * 1.0, 0.3, this.z, [0x666666, 0x888888], 1, 1.5, .12, .5, -0.1);
+      // 경로 위의 모두를 들이받음 (같은 편도 예외 없음)
+      for (const a of g.actors) {
+        if (a === this || !a.alive || this.chargeHit.has(a) || a.state === 'down' || a.y > this.y + 1.0) continue;
+        if (Math.abs(a.x - this.x) > 0.75 + a.radius || Math.abs(a.z - this.z) > 0.45) continue;
+        this.chargeHit.add(a);
+        g.bikeHit(this, a);
+      }
+      const ax = this.x + this.facing * 1.0;
+      const car = g.carAt(ax, this.z, 0, this.y);
+      const fl = g.floorAt(ax, this.z);
+      if (car || fl > this.y + 0.5) {          // 차·벽에 정면충돌 → 낙차
+        if (car) g.hitCar(car, 35, this.facing);
+        g.shake(0.3); g.sfx?.('crush');
+        const dir = -this.facing;
+        g.dismount(this, dir);
+        this.hp -= 12;
+        if (this.hp <= 0) { g.kill(this, { dir, knock: 6, attacker: null }); return; }
+        this.setState('down'); this.downT = 0; this.vx = dir * 4; this.vy = 5; this.y = Math.max(this.y, 0.01);
+        return;
+      }
+      if (fl < -50) { this.vx *= 0.3; go('turn'); return; }   // 낭떠러지 앞에서 급정거
+      if (this.bikeT > 1.8 || Math.abs(this.x - g.camX) > g.viewHalf + 1.2) go('turn');
+    } else if (ph === 'turn') {
+      this.vx *= Math.pow(0.02, dt); this.vz = 0;
+      if (this.bikeT > 0.45) { this.facing = t.x > this.x ? 1 : -1; this.cool = rand(1.0, 2.0); go('line'); }
     }
   }
 

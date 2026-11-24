@@ -281,7 +281,7 @@ function updateHud(dt) {
   setWidth('hp-player', p.hp / p.maxHp);
   setWidth('hp-bot', b.hp / b.maxHp);
   setText('hp-player-t', `${Math.max(0, Math.ceil(p.hp))} / ${p.maxHp}`);
-  setText('weapon', p.carry?.kind === 'barrel' ? '폭탄 드럼통 (J/L 던지기)' : p.carry ? (p.carry.limb ? `${CARRY_NAME[p.carry.part] ?? '조각'} (${p.carry.dur}) J 휘두르기 · L 던지기` : `${CARRY_NAME[p.carry.part] ?? '조각'} 들고 있음 (J/L 던지기)`) : p.weapon ? `${WEAPONS[p.weapon.type].name} (${WEAPONS[p.weapon.type].ammo ? '탄 ' : WEAPONS[p.weapon.type].fuel ? '연료 ' : ''}${p.weapon.dur})` : '맨손');
+  setText('weapon', p.carry?.kind === 'barrel' ? '폭탄 드럼통 (J/L 던지기)' : p.carry?.kind === 'moto' ? '오토바이 (J/L 던지기 — 폭발!)' : p.carry ? (p.carry.limb ? `${CARRY_NAME[p.carry.part] ?? '조각'} (${p.carry.dur}) J 휘두르기 · L 던지기` : `${CARRY_NAME[p.carry.part] ?? '조각'} 들고 있음 (J/L 던지기)`) : p.weapon ? `${WEAPONS[p.weapon.type].name} (${WEAPONS[p.weapon.type].ammo ? '탄 ' : WEAPONS[p.weapon.type].fuel ? '연료 ' : ''}${p.weapon.dur})` : '맨손');
   setText('bot-lv', `${botLevel(meta)} ${BOT.classes[game.stats.bot.cls].name}`);
   setText('tactic', b.state === 'ko' ? `수리 중 ${Math.ceil(b.koT)}s` : game.rescuePending ? '구조 중!' : b.tacticDef.name);
   setText('scrap-n', String(Math.floor(game.run.scrap)));

@@ -64,6 +64,13 @@ const HEADS = {
     for (let z = 1; z <= s; z++) { g.set(0, 4, z, p.band); g.set(s - 1, 4, z, p.band); }
     g.set(0, 3, 0, p.band); g.set(0, 2, 0, p.band); // 뒤로 늘어진 띠
   },
+  // 풀페이스 헬멧 (검은 바이저 + 불꽃 줄무늬)
+  fullhelm(g, s, p) {
+    g.fill(0, 0, 1, s - 1, s - 1, s, p.helm);
+    g.fill(s - 1, 2, 2, s - 1, 3, s - 1, 0x111111);
+    g.fill(0, s - 1, 2, s - 1, s - 1, 2, 0xff8a1f); g.fill(0, s - 1, s - 1, s - 1, s - 1, s - 1, 0xff8a1f);
+    g.fill(s - 1, 0, 2, s - 1, 0, s - 1, darken(p.helm, .6));
+  },
   cap(g, s, p) {
     HEADS.hair(g, s, p);
     g.fill(0, s - 1, 1, s - 1, s, s, p.cap);
@@ -313,6 +320,10 @@ const BUILDERS = {
     head: 'ninja', torso: 'ninja', sleeve: 7, tw: 3, td: 7,
     pal: { skin: 0xe0b080, cloth: 0x16161c, band: 0xb3161d, shirt: 0x16161c, sleeve: 0x16161c, pants: 0x16161c, shoes: 0x0a0a0c, glove: 0x16161c },
   }),
+  biker: r => humanoid(r, {
+    head: 'fullhelm', torso: 'leather', tw: 4, sleeve: 7,
+    pal: { skin: 0xd8a070, helm: 0xc0392b, metal: 0xb6bcc4, shirt: 0x1c1c1e, sleeve: 0x1c1c1e, pants: 0x2f3f5f, shoes: 0x111111, glove: 0x111111 },
+  }),
   bomber: r => humanoid(r, {
     head: 'bomb', torso: 'stripe', sleeve: 3,
     pal: { skin: 0xf6d0a0, helm: 0x2a2a2a, shirt: 0xd94a2a, tee: 0xf2f2f2, pants: 0x3a3a5a, shoes: 0xd94a2a },
@@ -425,6 +436,25 @@ const BUILDERS = {
     g.fill(1, 65, 0, 2, 66, 15, 0x6a6a68);
     g.fill(0, 54, 10, 3, 60, 13, 0x6a6f74);
     for (let y = 20; y < 50; y += 6) g.fill(0, y, 6, 3, y, 9, 0xf2d21a); // 노란 경고 띠
+  }),
+  moto: r => single(r, 22, 11, 6, [11, 0, 3], g => { // 오토바이 (앞 = +x)
+    for (const cx of [3.5, 17.5]) for (let x = 0; x < 22; x++) for (let y = 0; y < 7; y++) {
+      const d = Math.hypot(x - cx, y - 3);
+      if (d <= 3.4) { g.set(x, y, 2, d < 1.3 ? 0xb8bcc2 : 0x161616); g.set(x, y, 3, d < 1.3 ? 0xb8bcc2 : 0x161616); }
+    }
+    g.fill(5, 4, 2, 16, 5, 3, 0x2a2a2e);
+    g.fill(9, 6, 1, 14, 8, 4, 0xc0392b); g.fill(10, 8, 2, 13, 8, 3, 0xe8e8e8);
+    g.fill(4, 6, 1, 9, 7, 4, 0x1a1a1a);
+    g.fill(16, 6, 2, 17, 9, 3, 0x8a9099); g.fill(16, 9, 0, 17, 9, 5, 0xc8ccd2);
+    g.fill(18, 7, 2, 19, 8, 3, 0xfff3a0);
+    g.fill(1, 3, 4, 8, 3, 4, 0xc8ccd2);
+  }),
+  carwreck: r => single(r, 44, 13, 20, [0, 0, 0], g => { // 불타고 남은 차
+    for (const wx of [8, 35]) for (const z0 of [0, 17]) g.fill(wx - 3, 0, z0, wx + 3, 3, z0 + 2, 0x2a1a10);
+    g.fill(0, 2, 1, 43, 7, 18, 0x2a2622);
+    g.fill(12, 8, 2, 32, 11, 17, 0x1a1715);
+    g.fill(14, 8, 4, 30, 8, 15, 0x0c0b0a);
+    for (let x = 2; x < 42; x += 5) g.set(x, 7, 9, 0x6a2a10);
   }),
   w_nunchaku_handle: r => single(r, 4, 2, 2, [0, 1, 1], g => { g.fill(0, 0, 0, 3, 1, 1, 0x8a5a2b); g.fill(0, 0, 0, 0, 1, 1, 0x1a1a1a); g.fill(3, 0, 0, 3, 1, 1, 0x1a1a1a); }),
   w_nunchaku: r => single(r, 10, 2, 5, [0, 1, 1], g => { // 쌍절곤: 막대 두 개 + 짧은 사슬
