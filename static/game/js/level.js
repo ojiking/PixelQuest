@@ -1,5 +1,5 @@
 // 블록 지형 생성 + 스테이지 구성(전투 구역, 오브젝트, 함정 배치)
-import { BIOMES, SPAWN_POOLS, LANE, TRAPS } from './config.js';
+import { BIOMES, ENEMY_CURVE, WAVE_CURVE, ENEMIES, LANE, TRAPS } from './config.js';
 import { hash3, hexToRgb, FACES, MeshBuilder } from './voxel.js';
 import { rand, randi, weightedPick } from './math.js';
 import { Prop, SpikeTrap, Item } from './props.js';
@@ -165,6 +165,18 @@ function buildTerrain(r, L, biome, seed, hmap) {
 }
 
 export const STAGE_COUNT = 2;
+// 스테이지별 전투 구역 위치 (마지막 스테이지는 보스 구역 하나 더)
+export const stageTriggers = i => i === STAGE_COUNT - 1 ? [18, 42, 66, 90] : [20, 46, 72];
+// 런 전체에서 이 구역의 진행도 0~1 (보스 구역 제외)
+function zoneT(index, zi) {
+  let before = 0, total = 0;
+  for (let i = 0; i < STAGE_COUNT; i++) {
+    const n = stageTriggers(i).length - (i === STAGE_COUNT - 1 ? 1 : 0);
+    if (i < index) before += n;
+    total += n;
+  }
+  return Math.min(1, (before + zi) / Math.max(1, total - 1));
+}
 
 // ---------------------------------------------------------------- 지형 구간
 // 구간 종류: 걸을 수 있는 높이 맵(hmap)을 칠함. 값: PIT=낭떠러지, 1=올라설 블록, 2=넘을 수 없는 벽
@@ -215,8 +227,7 @@ export class Stage {
     this.hmap = new Map();
     this.segments = [];
 
-    const pool = SPAWN_POOLS[Math.min(index, SPAWN_POOLS.length - 1)];
-    const triggers = this.final ? [18, 42, 66, 90] : [20, 46, 72];
+    const triggers = stageTriggers(index);
 
     // ---- 지형 구간 배치: 전투 구역(아레나) 사이를 이동 구간으로 채움
     const arenaSpan = t => [t - 5, t + 13];
@@ -224,7 +235,7 @@ export class Stage {
     triggers.forEach((t, zi) => {
       const [a0, a1] = arenaSpan(t);
       if (a0 - cursor >= 5) this.addSeg(this.pickSeg(PATH_TYPES), cursor, a0);
-      const boss = zi === triggers.length - 1;
+      const boss = this.final && zi === triggers.length - 1;
       this.addSeg(boss ? 'open' : this.pickSeg(ARENA_TYPES), Math.max(cursor, a0), a1);
       cursor = a1;
     });
@@ -243,9 +254,9 @@ export class Stage {
 
     triggers.forEach((tx, zi) => {
       const waves = [];
-      // 스테이지마다 마지막 구역은 보스: 1스테이지 철거반장, 도심(마지막) 사이보그 폭주왕
-      const isBoss = zi === triggers.length - 1;
-      const bossType = game.run.bosses?.[index] ?? 'boss';
+      // 보스는 마지막 스테이지의 마지막 구역에만 (철거반장 / 사이보그 폭주왕 중 무작위)
+      const isBoss = this.final && zi === triggers.length - 1;
+      const bossType = game.run.boss ?? 'boss';
       if (isBoss && bossType === 'cyborg') {
         waves.push(['grunt', 'biker', 'thrower', 'grunt']);
         waves.push(['cyborg']);
@@ -253,13 +264,7 @@ export class Stage {
         waves.push(['grunt', 'thrower', 'grunt']);
         waves.push(['boss', 'grunt']);
       } else {
-        const nWaves = zi === triggers.length - 1 ? 3 : 2;
-        for (let wv = 0; wv < nWaves; wv++) {
-          const size = Math.round(3 + index * 0.8 + zi * 0.5 + wv * 0.4);
-          const list = [];
-          for (let k = 0; k < size; k++) list.push(weightedPick(pool));
-          waves.push(list);
-        }
+        waves.push(...this.curveWaves(game, zoneT(index, zi), zi === triggers.length - 1));
       }
       this.zones.push({ trigger: tx, waves, boss: isBoss });
       // 구역 근처 폭발 드럼통
@@ -308,6 +313,35 @@ export class Stage {
     a = Math.floor(a); b = Math.floor(b);
     SEG[type](this.hmap, a, b);
     this.segments.push({ type, a, b });
+  }
+
+  // 난이도 곡선에 따른 구역 웨이브 구성
+  curveWaves(game, t, lastOfStage) {
+    const run = game.run;
+    run.introduced ??= new Set();
+    // 아직 소개 안 된 적 중 등장 시점이 된 것 → 이번 구역에서 소개 (구역당 최대 2종)
+    const backlog = Object.keys(ENEMY_CURVE).filter(k => ENEMY_CURVE[k].from <= t + 1e-6 && !run.introduced.has(k))
+      .sort((a, b) => ENEMY_CURVE[a].from - ENEMY_CURVE[b].from);
+    const fresh = backlog.slice(-2);   // 밀린 게 많으면(중간 스테이지부터 시작 등) 나머지는 조용히 합류
+    backlog.forEach(k => run.introduced.add(k));
+    const pool = {};
+    for (const k of run.introduced) {
+      const c = ENEMY_CURVE[k];
+      const u = Math.min(1, Math.max(0, (t - c.from) / Math.max(.01, 1 - c.from)));
+      pool[k] = (c.w[0] + (c.w[1] - c.w[0]) * u) * (this.biome.city && c.city ? c.city : 1);
+    }
+    const W = WAVE_CURVE;
+    const nWaves = Math.round(W.waves[0] + (W.waves[1] - W.waves[0]) * t) + (lastOfStage && t < .5 ? 1 : 0);
+    const waves = [];
+    for (let wv = 0; wv < nWaves; wv++) {
+      const size = Math.round(W.size[0] + (W.size[1] - W.size[0]) * t + wv * 0.4);
+      const list = [];
+      // 새로 소개되는 적: 첫 웨이브에 1명 (기본 적이 아닌 경우)
+      if (wv === 0) for (const k of fresh) if (ENEMY_CURVE[k].from > 0) list.push(k);
+      while (list.length < size) list.push(weightedPick(pool));
+      waves.push(list);
+    }
+    return waves;
   }
 
   // 셀 높이: PIT / 0 / 1 / 2

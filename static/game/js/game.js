@@ -49,7 +49,7 @@ export class Game {
     this.stats = stats;
     this.run = {
       stage: 0, scrap: 0, kills: 0, severs: 0, maxCombo: 0, time: 0,
-      perks: new Set(), biomes: shuffle(Object.keys(BIOMES)).slice(0, 2), bosses: shuffle(['boss', 'cyborg']), rescueUsed: false, // 바이옴·보스 순서 모두 무작위
+      perks: new Set(), biomes: shuffle(Object.keys(BIOMES)).slice(0, 2), boss: pick(['boss', 'cyborg']), introduced: new Set(), seen: new Set(), rescueUsed: false, // 바이옴 순서·최종 보스 무작위
     };
     this.player = new Player(this, stats.player);
     this.bot = new Companion(this, stats.bot);
@@ -259,6 +259,11 @@ export class Game {
     const cx = this.lock ? this.lock.cx : this.camX;
     const spot = this.stage.safeSpot(cx + side * (this.viewHalf + 1.2), rand(LANE.zMin + 0.2, LANE.zMax - 0.2));
     const e = new Enemy(this, type, spot.x, spot.z, 1 + this.run.stage * 0.15);
+    // 처음 보는 적은 이름을 알려줌 (기본 적 제외)
+    if (this.run.seen && !this.run.seen.has(type)) {
+      this.run.seen.add(type);
+      if (!['grunt', 'thrower'].includes(type) && !ENEMIES[type].boss) this.banner(`새로운 적: ${ENEMIES[type].name}`, 1.8);
+    }
     this.actors.push(e);
     this.enemies.push(e);
     return e;

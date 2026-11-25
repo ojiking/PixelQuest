@@ -129,11 +129,21 @@ export const ENEMIES = {
   boss:    { name: '철거반장 굴삭', model: 'boss',    hp: 520, speed: 1.6,  scale: 1.55, ai: 'boss',    attacks: ['eSlam', 'eCharge', 'eThrow'], scrap: [30, 30], poise: 30, boss: true },
 };
 
-// 스테이지별 적 등장 가중치
-export const SPAWN_POOLS = [
-  { grunt: 5, thrower: 2, bomber: 1.2, charger: 1, shield: .8, ninja: .7 },
-  { grunt: 4, thrower: 2, bomber: 1.5, charger: 2, brute: 1.5, shield: 1.4, ninja: 1.3, biker: 1.6 },
-];
+// 난이도 곡선: 런 진행도 t (0 = 첫 전투 구역, 1 = 보스 직전 구역)
+//  from: 처음 등장하는 진행도 (등장하는 구역에서 반드시 1명 이상 소개됨)
+//  w: [첫 등장 때 가중치, 막판 가중치] — 진행에 따라 선형 변화
+export const ENEMY_CURVE = {
+  grunt:   { from: 0,   w: [6, 2.2] },
+  thrower: { from: 0,   w: [1.6, 1.8] },
+  charger: { from: .15, w: [1.2, 1.8] },
+  bomber:  { from: .3,  w: [1.0, 1.5] },
+  shield:  { from: .45, w: [.9, 1.5] },
+  brute:   { from: .6,  w: [.9, 1.7] },
+  ninja:   { from: .75, w: [.8, 1.4] },
+  biker:   { from: .9,  w: [1.0, 1.5], city: 1.8 },   // 도심에서는 더 자주
+};
+// 웨이브 크기 [초반, 막판], 구역당 웨이브 수 [초반, 막판]
+export const WAVE_CURVE = { size: [3, 6.5], waves: [2, 3] };
 
 // ---------------- 무기 ----------------
 // sever: 부위 파괴 배율 (날붙이는 높게, 둔기는 낮게)
