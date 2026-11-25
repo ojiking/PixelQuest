@@ -113,7 +113,7 @@ export const ATTACKS = {
   // 사이보그 폭주왕: 전기톱 팔
   eSawRush:  { startup: .60, active: 1.1, recovery: .75, range: [.1, 1.25], depth: .6, dmg: 4, knock: .6, zone: 'all', mode: 'saw', sever: 2.6, tick: .1, hitstun: .26, hitstop: 0, anim: 'saw', telegraph: true, rush: 3.4 },
   eSawSweep: { startup: .55, active: .14, recovery: .65, range: [-.3, 1.95], depth: .85, dmg: 20, knock: 6.5, zone: 'mid', mode: 'saw', sever: 2.2, anim: 'hslash', knockdown: true, telegraph: true, hitstop: .1, shake: .2 },
-  eThrow:  { startup: .50, active: .05, recovery: .60, anim: 'throw', projectile: 'brick', dmg: 8, needArms: true },
+  eThrow:  { startup: .50, active: .05, recovery: .60, anim: 'throw', projectile: 'brick', dmg: 6, needArms: true },
   eFuse:   { startup: .80, active: .05, recovery: 0, anim: 'fuse', telegraph: true, explode: { radius: 1.9, dmg: 24 } },
 };
 
@@ -137,7 +137,7 @@ export const ENEMIES = {
 //  w: [첫 등장 때 가중치, 막판 가중치] — 진행에 따라 선형 변화
 export const ENEMY_CURVE = {
   grunt:   { from: 0,   w: [6, 2.2] },
-  thrower: { from: 0,   w: [1.6, 1.8] },
+  thrower: { from: 0,   w: [1.0, 1.5] },
   charger: { from: .15, w: [1.2, 1.8] },
   bomber:  { from: .3,  w: [1.0, 1.5] },
   shield:  { from: .45, w: [.9, 1.5] },
@@ -151,6 +151,8 @@ export const WAVE_CURVE = { size: [3, 6.5], waves: [2, 3] };
 // ---------------- 해금 전 기본 콘텐츠 ----------------
 export const BASE_UNLOCKS = { weapons: ['pipe', 'machete', 'block', 'golf', 'bat', 'katana', 'manhole'], biomes: ['plains', 'city'], bosses: ['boss'] };
 // 위험 등급(클리어할 때마다 한 단계씩 열림, 최대 5): 등급당 효과
+// 주변 폭발(드럼통·차·오토바이·폭죽 꼬마)이 뱀돌이·볼트에게 주는 피해 배율 (자기가 터뜨린 폭발에 너무 쉽게 죽지 않게)
+export const HERO_BLAST = .55;
 export const HEAT = { max: 5, enemyHp: .2, enemyPow: .12, scrap: .25 };
 
 // ---------------- 핏자국 (과장 연출) ----------------
@@ -233,7 +235,7 @@ export const GIB_THROW = { dmg: 4, knock: 1.6, speed: 10, hitstun: .18 };
 // ---------------- 함정/오브젝트 ----------------
 export const TRAPS = {
   spike: { cycle: 3.2, warnAt: 2.0, upAt: 2.5, dmg: 15 },
-  barrel: { radius: 2.3, dmg: 30, fuse: .25 },
+  barrel: { radius: 2.3, dmg: 30, fuse: .45 },
   car:    { hp: 70, radius: 3.2, dmg: 42, fuse: .7 },    // 주차된 차 폭발
   moto:   { hp: 28, radius: 2.6, dmg: 34, fuse: .35, throwRadius: 3.0, throwDmg: 45 }, // 오토바이
 };

@@ -1,6 +1,6 @@
 // 게임 월드: 스테이지 진행, 카메라, 웨이브, 투사체, 폭발, 렌더링
 import { mat4, clamp, rand, randi, sign, shuffle, pick, weightedPick } from './math.js';
-import { HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
+import { HERO_BLAST, HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
 import { Debris, Stains } from './fx.js';
 import { Gibs, bleed } from './gibs.js';
 import { getModel, WEAPON_MODEL } from './models.js';
@@ -243,6 +243,20 @@ export class Game {
 
   // 진행 막힘 방지: 화면 밖에 오래 있거나 제자리에 묶인 적은 화면 안으로 옮기고,
   // 그래도 웨이브가 40초간 변화 없으면 남은 적을 정리
+  // x0 → x1 사이를 같은 z 라인으로 걸어갈 수 있나 (낭떠러지·넘을 수 없는 벽 검사, 다른 z 라인도 시도)
+  reachable(x0, x1, z) {
+    const zs = [z, LANE.zMin + 0.4, 0, 1.5, LANE.zMax - 0.4];
+    return zs.some(zz => {
+      let prev = this.floorAt(x0, zz);
+      for (let x = Math.min(x0, x1); x <= Math.max(x0, x1); x += 0.4) {
+        const f = this.floorAt(x, zz);
+        if (f < -50 || f - prev > 1.2) return false;
+        prev = f;
+      }
+      return true;
+    });
+  }
+
   unstick(L, alive, dt) {
     if (L.lastCount !== alive.length) { L.lastCount = alive.length; L.idleT = 0; }
     L.idleT = (L.idleT || 0) + dt;
@@ -255,16 +269,23 @@ export class Game {
       const t = e.target;
       const far = !t || Math.hypot(t.x - e.x, t.z - e.z) > 2.5;
       e.stuckT = moved < 0.01 && far && e.state !== 'attack' && e.state !== 'down' ? (e.stuckT || 0) + dt : 0;
-      if (e.offT > 3.5 || e.stuckT > 5) {
+      // 걷고는 있는데 다가오지 못함 (벽·낭떠러지 건너편에서 제자리걸음)
+      const dT = t ? Math.hypot(t.x - e.x, (t.z - e.z) * 1.5) : 0;
+      if (!far || e.state === 'attack' || e.state === 'down' || e.grabbedBy || dT < (e.bestD ?? 1e9) - 0.4) { e.bestD = dT; e.noProgT = 0; }
+      else e.noProgT = (e.noProgT || 0) + dt;
+      const kiter = e.def.ai === 'kiter' && e.hasArms() && !off;   // 거리를 두는 적은 제외
+      if (e.offT > 3.5 || e.stuckT > 5 || (!kiter && e.noProgT > 4.5)) {
+        e.bestD = undefined; e.noProgT = 0;
         const side = e.x < L.cx ? -1 : 1;
-        const s = this.stage.safeSpot(L.cx + side * (this.viewHalf - 1.5), this.player.z);
+        let s = this.stage.safeSpot(L.cx + side * (this.viewHalf - 1.5), this.player.z);
+        if (!this.reachable(s.x, this.player.x, s.z)) s = this.stage.safeSpot(L.cx - side * (this.viewHalf - 1.5), this.player.z);
         this.debris.puff(e.x, e.y + 0.5, e.z, [0x9c958a, 0x7a7266], 8, 1.5, .14, .35, -0.3);
         e.x = s.x; e.z = s.z; e.y = this.floorAt(s.x, s.z); e.vx = e.vy = e.vz = 0;
         if (e.goItem) { e.goItem.claimed = 'blocked'; e.goItem = null; }
         e.offT = 0; e.stuckT = 0;
       }
     }
-    if (L.idleT > 40) {
+    if (L.idleT > 25) {
       for (const e of alive) { if (!e.dead) this.run.kills++; e.dead = true; e.remove = true; this.releaseToken(e); }
       L.idleT = 0;
     }
@@ -272,7 +293,9 @@ export class Game {
 
   spawnEnemy(type, side) {
     const cx = this.lock ? this.lock.cx : this.camX;
-    const spot = this.stage.safeSpot(cx + side * (this.viewHalf + 1.2), rand(LANE.zMin + 0.2, LANE.zMax - 0.2));
+    let spot = this.stage.safeSpot(cx + side * (this.viewHalf + 1.2), rand(LANE.zMin + 0.2, LANE.zMax - 0.2));
+    // 플레이어 쪽으로 걸어올 길이 낭떠러지로 끊겨 있으면 화면 가장자리 안쪽에서 등장
+    if (!this.reachable(spot.x, cx, spot.z)) spot = this.stage.safeSpot(cx + side * (this.viewHalf - 1.2), spot.z);
     const e = new Enemy(this, type, spot.x, spot.z, (1 + this.run.stage * 0.15) * (1 + HEAT.enemyHp * this.heat));
     e.power *= 1 + HEAT.enemyPow * this.heat;   // 위험 등급
     // 처음 보는 적은 이름을 알려줌 (기본 적 제외)
@@ -553,7 +576,8 @@ export class Game {
       if (a === source || a.dead || a.team === spareTeam) continue;
       const d = Math.hypot(a.x - x, (a.z - z) * 1.2);
       if (d > radius) continue;
-      applyHit(this, a, { attacker: null, explosion: true, dmg: dmg * (1 - d / radius * 0.5), knock: 6, dir: sign(a.x - x) || 1, zone: 'all', knockdown: true, sever: 2, hitstop: 0, shake: 0 });
+      const heroMul = a.team === 'hero' ? HERO_BLAST : 1;
+      applyHit(this, a, { attacker: null, explosion: true, dmg: dmg * (1 - d / radius * 0.5) * heroMul, knock: 6, dir: sign(a.x - x) || 1, zone: 'all', knockdown: true, sever: 2, hitstop: 0, shake: 0 });
     }
     for (const p of this.props) {
       if (p.broken) continue;
