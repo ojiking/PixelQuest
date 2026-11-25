@@ -27,9 +27,10 @@ layout(location=3) in vec3 aColor2;
 layout(location=4) in float aStrip;
 uniform mat4 uVP;
 uniform mat4 uModel;
-out vec3 vColor; out vec3 vColor2; out float vStrip; out vec3 vNormal; out vec3 vWorld;
+out vec3 vColor; out vec3 vColor2; out float vStrip; out vec3 vNormal; out vec3 vWorld; out vec3 vLocal;
 void main() {
   vec4 w = uModel * vec4(aPos, 1.0);
+  vLocal = aPos;
   vWorld = w.xyz;
   vNormal = normalize(mat3(uModel) * aNormal);
   vColor = aColor; vColor2 = aColor2; vStrip = aStrip;
@@ -38,8 +39,9 @@ void main() {
 
 const FS = `#version 300 es
 precision highp float;
-in vec3 vColor; in vec3 vColor2; in float vStrip; in vec3 vNormal; in vec3 vWorld;
+in vec3 vColor; in vec3 vColor2; in float vStrip; in vec3 vNormal; in vec3 vWorld; in vec3 vLocal;
 uniform vec4 uTint;
+uniform vec4 uSplat;   // x = 묻은 양(0~1), yzw = 무늬 시드
 uniform float uTex;
 uniform float uAlpha;
 out vec4 outColor;
@@ -61,6 +63,13 @@ void main() {
       if (fy > edge) col = vColor2;
     }
     col *= 0.88 + 0.22 * hash(q);
+  }
+  if (uSplat.x > 0.0) {
+    // 핏자국: 반 복셀 크기 칸마다 묻었는지 결정 → 양이 늘면 얼룩이 번지고, 줄면 듬성듬성 사라짐
+    vec3 q = floor(vLocal * 22.2 + uSplat.yzw);
+    float h = hash(q), h2 = hash(q + vec3(3.7, 1.3, 9.1));
+    float big = hash(floor(vLocal * 7.4 + uSplat.zwy));   // 큰 덩어리 단위로 뭉치게
+    if (h * 0.55 + big * 0.45 < uSplat.x) col = mix(col, vec3(0.36 + 0.3 * h2, 0.015, 0.025), 0.92);
   }
   col = shade(col, n, vWorld);
   col = mix(col, uTint.rgb, uTint.a);
@@ -116,6 +125,7 @@ function link(gl, vs, fs) {
 
 const IDENTITY = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 const NO_TINT = [0, 0, 0, 0];
+const NO_SPLAT = new Float32Array([0, 0, 0, 0]);
 
 export class Renderer {
   constructor(canvas) {
@@ -227,7 +237,7 @@ export class Renderer {
     this.current = null;
   }
 
-  drawMesh(mesh, model = IDENTITY, tint = NO_TINT, tex = 0, alpha = 1) {
+  drawMesh(mesh, model = IDENTITY, tint = NO_TINT, tex = 0, alpha = 1, splat = NO_SPLAT) {
     const gl = this.gl;
     const pr = this.mesh;
     if (this.current !== pr) { gl.useProgram(pr.p); this.current = pr; }
@@ -235,6 +245,7 @@ export class Renderer {
     gl.uniform4fv(pr.u.uTint, tint || NO_TINT);
     gl.uniform1f(pr.u.uTex, tex);
     gl.uniform1f(pr.u.uAlpha, alpha);
+    gl.uniform4fv(pr.u.uSplat, splat || NO_SPLAT);
     gl.bindVertexArray(mesh.vao);
     gl.drawElements(gl.TRIANGLES, mesh.count, gl.UNSIGNED_INT, 0);
   }

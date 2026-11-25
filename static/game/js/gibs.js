@@ -135,7 +135,7 @@ export class Gibs {
       const dir = a.facing;
       for (let k = 0; k < 2; k++) {
         const [r, gg, b] = WOUND_RGB[Math.floor(Math.random() * WOUND_RGB.length)];
-        debris.spawn(M[12], M[13], M[14], -dir * rand(0.5, 2.5), rand(2, 4.5), rand(-1, 1), r, gg, b, rand(0.06, 0.1), rand(1.8, 2.8));
+        debris.spawn(M[12], M[13], M[14], -dir * rand(0.5, 2.5), rand(2, 4.5), rand(-1, 1), r, gg, b, rand(0.06, 0.1), rand(1.8, 2.8), 1, 1);
       }
     }
   }
@@ -178,6 +178,6 @@ export function bleed(debris, x, y, z, dir, n) {
   for (let i = 0; i < n; i++) {
     const [r, g, b] = WOUND_RGB[i % WOUND_RGB.length];
     debris.spawn(x, y, z, dir * rand(0.5, 4) + rand(-1, 1), rand(1.5, 5.5), rand(-1.6, 1.6),
-      r, g, b, rand(0.06, 0.13), rand(2.2, 3.4));
+      r, g, b, rand(0.06, 0.13), rand(2.2, 3.4), 1, 1);
   }
 }

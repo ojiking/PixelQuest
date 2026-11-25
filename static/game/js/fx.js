@@ -1,6 +1,11 @@
 // 복셀 파편, 타격 불꽃, 떠오르는 텍스트
 import { mat4, rand } from './math.js';
 import { hexToRgb } from './voxel.js';
+import { WOUND } from './models.js';
+
+// 피(상처 색) 복셀인지: 이런 파편은 닿는 곳에 얼룩을 남김
+const WOUND_KEYS = new Set(WOUND);
+const rgbKey = (r, g, b) => (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
 
 const tmp = [0, 0, 0];
 
@@ -14,10 +19,11 @@ export class Debris {
     this.life = new Float32Array(cap);
     this.max = new Float32Array(cap);
     this.g = new Float32Array(cap);
+    this.b = new Uint8Array(cap);   // 1 = 피 (닿으면 얼룩)
     this.inst = new Float32Array(cap * 7);
   }
 
-  spawn(x, y, z, vx, vy, vz, r, g, b, size, life, grav = 1) {
+  spawn(x, y, z, vx, vy, vz, r, g, b, size, life, grav = 1, blood = 0) {
     let i;
     if (this.n < this.cap) i = this.n++;
     else i = Math.floor(Math.random() * this.cap);
@@ -25,7 +31,7 @@ export class Debris {
     this.p[i3] = x; this.p[i3 + 1] = y; this.p[i3 + 2] = z;
     this.v[i3] = vx; this.v[i3 + 1] = vy; this.v[i3 + 2] = vz;
     this.c[i3] = r; this.c[i3 + 1] = g; this.c[i3 + 2] = b;
-    this.s[i] = size; this.life[i] = life; this.max[i] = life; this.g[i] = grav;
+    this.s[i] = size; this.life[i] = life; this.max[i] = life; this.g[i] = grav; this.b[i] = blood;
   }
 
   // 모델 부위의 복셀을 월드로 변환해 튕겨냄
@@ -36,7 +42,8 @@ export class Debris {
       mat4.point(tmp, matrix, voxels[i], voxels[i + 1], voxels[i + 2]);
       this.spawn(tmp[0], tmp[1], tmp[2],
         imp[0] + rand(-spread, spread), imp[1] + rand(1, spread * 1.6), imp[2] + rand(-spread, spread) * 0.6,
-        voxels[i + 3], voxels[i + 4], voxels[i + 5], size * rand(0.8, 1.25), rand(1.6, 2.6));
+        voxels[i + 3], voxels[i + 4], voxels[i + 5], size * rand(0.8, 1.25), rand(1.6, 2.6), 1,
+        WOUND_KEYS.has(rgbKey(voxels[i + 3], voxels[i + 4], voxels[i + 5])) ? 1 : 0);
     }
   }
 
@@ -57,7 +64,8 @@ export class Debris {
 
   clear() { this.n = 0; }
 
-  update(dt, floorAt = null) {
+  // blood: { actor(i, x, y, z) → 묻었으면 true, stain(x, y, z, axis, sign, size, r, g, b) }
+  update(dt, floorAt = null, blood = null) {
     for (let i = 0; i < this.n; i++) {
       this.life[i] -= dt;
       if (this.life[i] <= 0) {
@@ -65,18 +73,41 @@ export class Debris {
         if (i !== last) {
           const i3 = i * 3, l3 = last * 3;
           for (let k = 0; k < 3; k++) { this.p[i3 + k] = this.p[l3 + k]; this.v[i3 + k] = this.v[l3 + k]; this.c[i3 + k] = this.c[l3 + k]; }
-          this.s[i] = this.s[last]; this.life[i] = this.life[last]; this.max[i] = this.max[last]; this.g[i] = this.g[last];
+          this.s[i] = this.s[last]; this.life[i] = this.life[last]; this.max[i] = this.max[last]; this.g[i] = this.g[last]; this.b[i] = this.b[last];
           i--;
         }
         continue;
       }
       const i3 = i * 3;
       this.v[i3 + 1] -= 22 * this.g[i] * dt;
+      const ox = this.p[i3], oy = this.p[i3 + 1], oz = this.p[i3 + 2];
       this.p[i3] += this.v[i3] * dt;
       this.p[i3 + 1] += this.v[i3 + 1] * dt;
       this.p[i3 + 2] += this.v[i3 + 2] * dt;
       const half = this.s[i] / 2;
       const fl = this.g[i] > 0 && floorAt ? floorAt(this.p[i3], this.p[i3 + 2]) : 0;
+      if (this.b[i] && blood && floorAt && this.life[i] > 0.05) {
+        const x = this.p[i3], y = this.p[i3 + 1], z = this.p[i3 + 2];
+        // 1) 캐릭터에 묻음 (튀어나온 직후는 제외)
+        if (this.max[i] - this.life[i] > 0.1 && blood.actor(x, y, z)) { this.life[i] = 0.0001; continue; }
+        // 2) 벽(높은 블록 옆면)에 부딪힘: 이전 위치는 비어 있고 지금 위치는 블록 안
+        if (fl > y + 0.04 && fl - y < 6 && floorAt(ox, oz) <= oy + 0.04) {
+          const s = this.s[i] * rand(1.1, 1.8);
+          const xCell = Math.floor(ox) !== Math.floor(x) && floorAt(x, oz) > y + 0.04;
+          if (xCell) { const bx = this.v[i3] > 0 ? Math.floor(x) : Math.floor(ox); blood.stain(bx, Math.min(y, fl - s / 2), z, 0, this.v[i3] > 0 ? 1 : -1, s, this.c[i3], this.c[i3 + 1], this.c[i3 + 2]); }
+          else { const bz = this.v[i3 + 2] > 0 ? Math.floor(z) : Math.floor(oz); blood.stain(x, Math.min(y, fl - s / 2), bz, 2, this.v[i3 + 2] > 0 ? 1 : -1, s, this.c[i3], this.c[i3 + 1], this.c[i3 + 2]); }
+          this.life[i] = 0.0001; continue;
+        }
+        // 3) 바닥에 떨어짐: 튕기지 않고 얼룩이 됨 (빠를수록 길게 번짐)
+        if (fl > -50 && this.v[i3 + 1] < 0 && y < fl + half && y > fl - 0.4) {
+          const sp = Math.hypot(this.v[i3], this.v[i3 + 2]), n = sp > 3 ? 3 : sp > 1.5 ? 2 : 1;
+          for (let k = 0; k < n; k++) {
+            const u = k * 0.07;
+            blood.stain(x + (sp ? this.v[i3] / sp * u : 0), fl, z + (sp ? this.v[i3 + 2] / sp * u : 0), 1, 1, this.s[i] * rand(1.0, 1.7) * (1 - k * 0.2), this.c[i3], this.c[i3 + 1], this.c[i3 + 2]);
+          }
+          this.life[i] = 0.0001; continue;
+        }
+      }
       if (this.g[i] > 0 && fl > -50 && this.p[i3 + 1] < fl + half && this.p[i3 + 1] > fl - 0.4) {
         this.p[i3 + 1] = fl + half;
         this.v[i3 + 1] *= -0.35;
@@ -95,6 +126,33 @@ export class Debris {
       d[o + 4] = this.c[i3]; d[o + 5] = this.c[i3 + 1]; d[o + 6] = this.c[i3 + 2];
     }
     return this.n;
+  }
+}
+
+// 배경에 남는 핏자국: 표면 바로 안쪽에 묻힌 얇은 큐브 (표면에 페인트처럼 보임). 스테이지 끝까지 유지
+export class Stains {
+  constructor(cap = 6000) { this.cap = cap; this.n = 0; this.head = 0; this.inst = new Float32Array(cap * 7); }
+  clear() { this.n = 0; this.head = 0; }
+  // axis: 0 = x면(벽 옆), 1 = 바닥(위), 2 = z면(벽 앞) / sign: 표면이 바라보는 쪽의 반대(피가 날아온 방향)
+  add(x, y, z, axis, sign, size, r, g, b) {
+    const d = this.inst, o = this.head * 7, e = 0.008;
+    const off = size / 2 - e;
+    if (axis === 1) { y -= off; }
+    else if (axis === 0) { x += sign * off; }
+    else { z += sign * off; }
+    const k = rand(0.62, 1.0);            // 마른 피~선홍색
+    d[o] = x; d[o + 1] = y; d[o + 2] = z; d[o + 3] = size;
+    d[o + 4] = r * k; d[o + 5] = g * k; d[o + 6] = b * k;
+    this.head = (this.head + 1) % this.cap;
+    this.n = Math.min(this.n + 1, this.cap);
+  }
+  // 영역 안 핏자국 제거 (차가 폭발해 지붕이 사라질 때 등)
+  removeBox(x0, x1, z0, z1, yMin) {
+    const d = this.inst;
+    for (let i = 0; i < this.n; i++) {
+      const o = i * 7;
+      if (d[o] >= x0 && d[o] <= x1 && d[o + 2] >= z0 && d[o + 2] <= z1 && d[o + 1] > yMin) d[o + 3] = 0;
+    }
   }
 }
 

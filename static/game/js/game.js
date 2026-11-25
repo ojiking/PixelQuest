@@ -1,7 +1,7 @@
 // 게임 월드: 스테이지 진행, 카메라, 웨이브, 투사체, 폭발, 렌더링
 import { mat4, clamp, rand, randi, sign, shuffle, pick, weightedPick } from './math.js';
 import { BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
-import { Debris } from './fx.js';
+import { Debris, Stains } from './fx.js';
 import { Gibs, bleed } from './gibs.js';
 import { getModel, WEAPON_MODEL } from './models.js';
 import { Player } from './player.js';
@@ -29,6 +29,12 @@ export class Game {
   constructor(renderer, input, texts, hooks) {
     this.r = renderer; this.input = input; this.texts = texts; this.hooks = hooks;
     this.debris = new Debris();
+    this.stains = new Stains();
+    // 피 입자가 닿았을 때: 캐릭터 부위에 묻히거나 배경에 자국을 남김
+    this.bloodHooks = {
+      actor: (x, y, z) => this.bloodHitActor(x, y, z),
+      stain: (x, y, z, axis, sign, size, r, g, b) => this.stains.add(x, y, z, axis, sign, size, r, g, b),
+    };
     this.gibs = new Gibs(this);
     this.time = 0;
     this.proj = mat4.create(); this.view = mat4.create(); this.vp = mat4.create();
@@ -64,7 +70,7 @@ export class Game {
     this.stage = new Stage(this, i, this.run.biomes[i]);
     this.props = this.stage.props; this.traps = this.stage.traps; this.items = this.stage.items;
     this.projectiles = []; this.enemies = []; this.tokens.clear();
-    this.debris.clear(); this.gibs.clear(); this.texts.clear();
+    this.debris.clear(); this.gibs.clear(); this.texts.clear(); this.stains.clear();
     for (const h of [this.player, this.bot]) {
       h.vx = h.vy = h.vz = 0; h.y = 0; h.grounded = true; h.fellOut = false; h.hidden = false; h.facing = 1; h.attack = null; h.weapon = h === this.player ? h.weapon : null;
       if (h.state !== 'ko') h.setState('idle');
@@ -109,7 +115,8 @@ export class Game {
     for (const p of this.props) p.update(dt, this);
     for (const t of this.traps) t.update(dt, this);
     this.updateCars(dt);
-    this.debris.update(dt, (x, z) => this.floorAt(x, z));
+    this.debris.update(dt, (x, z) => this.floorAt(x, z), this.bloodHooks);
+    for (const a of this.actors) a.updateBlood(dt);
     this.gibs.update(dt);
 
     for (const a of this.actors) if (a.remove) this.releaseToken(a);
@@ -549,6 +556,27 @@ export class Game {
     }
   }
 
+  // 튄 피가 캐릭터에 닿음 → 맞은 높이의 부위에 묻음 (일부는 그대로 통과해 뒤로 날아감)
+  bloodHitActor(x, y, z) {
+    for (const a of this.actors) {
+      if (a.hidden || a.remove || a.fellOut) continue;
+      if (Math.abs(a.x - x) > 0.42 * a.scale || Math.abs(a.z - z) > 0.38) continue;
+      const lying = a.state === 'down' || a.state === 'dying' || a.state === 'ko';
+      const top = lying ? 0.55 : a.model.height * a.scale;
+      if (y < a.y - 0.05 || y > a.y + top) continue;
+      const f = (y - a.y) / top, F = z >= a.z ? 'F' : 'B';
+      let k;
+      if (lying) k = ['head', 'torso', 'torso', 'arm' + F, 'leg' + F, 'shin' + F][Math.floor(Math.random() * 6)];
+      else if (f > 0.8) k = 'head';
+      else if (f > 0.45) k = ['torso', 'torso', 'arm' + F, 'hand' + F][Math.floor(Math.random() * 4)];
+      else if (f > 0.22) k = 'leg' + F;
+      else k = 'shin' + F;
+      a.addBlood(k, a.team === 'hero' ? 0.09 : 0.07);
+      return Math.random() < 0.65;
+    }
+    return false;
+  }
+
   // ------------------------------------------------ 주차된 차 (부수면 폭발)
   cars() { return this.stage.solids.filter(s => s.car && !s.wreck); }
   // (x, z) 근처(여유 pad)에 있는 차
@@ -599,6 +627,7 @@ export class Game {
     mat4.identity(M); mat4.translate(M, c.x + 0.02, 0, c.z + 0.1);
     this.debris.burst(getModel(this.r, c.model).voxels, M, { frac: .45, size: .13, spread: 6 });
     c.model = 'carwreck';
+    this.stains.removeBox(c.x, c.x + c.len, c.z, c.z + c.dep, 0.9);  // 지붕 위 핏자국은 함께 날아감
     for (let x = c.x; x < c.x + c.len; x++) for (let z = c.z; z < c.z + c.dep; z++) this.stage.solid.set(x + ',' + z, 1.0);
     this.debris.puff(cx, 1.4, cz, [0xffe14a, 0xff8a1f, 0xd94a2a, 0x333333], 60, 7, .3, 1.1, -0.1);
     this.texts.add(cx, 2.6, cz, '차량 폭발!', 'sever');
@@ -920,6 +949,7 @@ export class Game {
     r.begin(this.vp, eye, { sky: b.sky, fog: b.fog, fogNear: 34, fogFar: 80 });
     r.drawMesh(this.stage.terrain, IDENT, null, 8);
     this.drawCity(r);
+    r.drawInstances(this.stains.inst, this.stains.n);
     for (const t of this.traps) t.draw(r, this);
     for (const p of this.props) p.draw(r, this);
     for (const it of this.items) it.draw(r, this);

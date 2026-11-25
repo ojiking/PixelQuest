@@ -586,6 +586,28 @@ export class Actor {
     return out;
   }
 
+  // 부위별 핏자국 (0~1). 셰이더에 묻은 양 + 개체별 무늬 시드 전달
+  addBlood(k, amt) {
+    if (!this.parts[k]?.alive) k = 'torso';
+    this.blood ??= {};
+    this.blood[k] = Math.min(1, (this.blood[k] || 0) + amt);
+  }
+  splatFor(k) {
+    const v = this.blood?.[k];
+    if (!v || v < 0.01) return null;
+    this.splatBuf ??= {};
+    this.splatSeed ??= [Math.random() * 50, Math.random() * 50, Math.random() * 50];
+    const b = this.splatBuf[k] ??= new Float32Array([0, ...this.splatSeed]);
+    b[0] = v;
+    return b;
+  }
+  // 주인공·볼트는 서서히 원래 색으로, 살아 있는 적은 아주 천천히, 시체는 그대로
+  updateBlood(dt) {
+    if (!this.blood || this.dead) return;
+    const rate = this.team === 'hero' ? 0.11 : 0.02;
+    for (const k in this.blood) this.blood[k] = Math.max(0, this.blood[k] - rate * dt);
+  }
+
   tint() {
     if (this.flash > 0) return FLASH;
     if (this.charred) return CHAR;
@@ -619,12 +641,12 @@ export class Actor {
         // 몸에 남은 붉은 단면 (부모가 살아 있을 때만)
         if (!mp.parent || this.parts[mp.parent].alive) {
           this.partMatrix(k, root, PM);
-          r.drawMesh(mp.stump, PM, tint);
+          r.drawMesh(mp.stump, PM, tint, 0, 1, this.splatFor(mp.parent ?? 'torso'));
         }
         continue;
       }
       this.partMatrix(k, root, PM);
-      r.drawMesh(mp.mesh, PM, tint);
+      r.drawMesh(mp.mesh, PM, tint, 0, 1, this.splatFor(k));
       if (k === 'handF' && this.weapon) {
         mat4.copy(WM, PM);
         mat4.translate(WM, 0, -this.model.handLen, 0);
