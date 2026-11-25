@@ -246,6 +246,7 @@ export class Stage {
     if (this.biome.city) this.placeCityProps();
     const built = buildTerrain(game.r, this.L, this.biome, randi(1, 9999), this.hmap);
     this.terrain = built.mesh;
+    this.buildHazard();
     if (this.biome.city) {
       this.signs = makeSigns(game.r, built.signSpecs);
       this.roadMarks = buildRoadMarks(game.r, this.L, (x, z) => this.heightAt(x, z) === PIT);
@@ -342,6 +343,28 @@ export class Stage {
       waves.push(list);
     }
     return waves;
+  }
+
+  // 낭떠러지 가장자리에 노랑·검정 경고 줄무늬 (바닥에 칠한 것처럼 표면 바로 아래에 묻힌 얇은 큐브)
+  buildHazard() {
+    const out = [], T = 0.25, e = 0.012;
+    const Y = [0.95, 0.78, 0.1], K = [0.08, 0.08, 0.09];
+    for (let x = 0; x < this.L; x++) for (let z = -5; z <= 6; z++) {
+      const h = this.heightAt(x + .5, z + .5);
+      if (h === PIT || h > 1) continue;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (this.heightAt(x + .5 + dx, z + .5 + dz) !== PIT) continue;
+        for (let i = 0; i < 4; i++) {
+          const u = (i + .5) * T;                       // 가장자리를 따라 4칸
+          const px = dx ? x + (dx > 0 ? 1 - T / 2 - 0.02 : T / 2 + 0.02) : x + u;
+          const pz = dz ? z + (dz > 0 ? 1 - T / 2 - 0.02 : T / 2 + 0.02) : z + u;
+          const c = (i + x + z) % 2 ? K : Y;
+          out.push(px, h - T / 2 + e, pz, T * 0.96, c[0], c[1], c[2]);
+        }
+      }
+    }
+    this.hazard = new Float32Array(out);
+    this.hazardN = out.length / 7;
   }
 
   // 셀 높이: PIT / 0 / 1 / 2

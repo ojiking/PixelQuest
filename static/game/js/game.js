@@ -1,6 +1,6 @@
 // 게임 월드: 스테이지 진행, 카메라, 웨이브, 투사체, 폭발, 렌더링
 import { mat4, clamp, rand, randi, sign, shuffle, pick, weightedPick } from './math.js';
-import { HERO_BLAST, HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
+import { ZONE_HEAL, EARLY_CHARGER_MAX, HERO_BLAST, HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
 import { Debris, Stains } from './fx.js';
 import { Gibs, bleed } from './gibs.js';
 import { getModel, WEAPON_MODEL } from './models.js';
@@ -85,7 +85,9 @@ export class Game {
     this.player.x = 3; this.player.z = 0;
     this.bot.x = 1.6; this.bot.z = 0.9;
     if (i > 0) {
-      this.player.hp = Math.min(this.player.maxHp, this.player.hp + Math.round(this.player.maxHp * (0.25 + this.stats.player.regen)));
+      const heal = Math.min(this.player.maxHp - this.player.hp, Math.round(this.player.maxHp * (0.25 + this.stats.player.regen)));
+      this.player.hp += heal;
+      if (heal > 0) this.stageHealMsg = `+${heal}`;
       if (this.bot.state === 'ko') { this.bot.setState('idle'); this.bot.hp = Math.round(this.bot.maxHp * 0.5); }
     }
     this.actors = [this.player, this.bot];
@@ -94,6 +96,7 @@ export class Game {
     this.curSeg = null;
     this.running = true;
     this.banner(`STAGE ${i + 1} — ${this.stage.biome.name}`, 2.4);
+    if (this.stageHealMsg) { this.texts.add(3, 2.6, 0, `${this.stageHealMsg} 회복`, 'heal big'); this.stageHealMsg = null; }
   }
 
   // ------------------------------------------------ 메인 업데이트
@@ -226,7 +229,13 @@ export class Game {
       L.spawnT -= dt;
       if (L.spawnT <= 0) {
         L.spawnT = 0.45;
-        const type = L.queue.shift();
+        let qi = 0;
+        // 첫 스테이지: 돌격 헬멧은 한 번에 한 명만 (살아 있으면 다른 적을 먼저 내보내고, 없으면 기다림)
+        if (this.run.stage === 0) {
+          const busy = this.enemies.filter(e => e.type === 'charger' && !e.dead).length >= EARLY_CHARGER_MAX;
+          if (busy) { qi = L.queue.findIndex(t => t !== 'charger'); if (qi < 0) return; }
+        }
+        const type = L.queue.splice(qi, 1)[0];
         this.spawnEnemy(type, ENEMIES[type].boss ? 1 : (Math.random() < 0.5 ? -1 : 1));
       }
       return;
@@ -245,6 +254,12 @@ export class Game {
       this.lock = null;
       this.zoneIdx++;
       this.goT = 2.5;
+      // 구역 정리 보상: 체력 회복
+      const p = this.player;
+      if (p.alive) {
+        const heal = Math.min(p.maxHp - p.hp, Math.round(p.maxHp * ZONE_HEAL));
+        if (heal > 0) { p.hp += heal; this.texts.add(p.x, p.y + 2.4, p.z, `+${heal}`, 'heal big'); this.debris.puff(p.x, p.y + 1, p.z, [0x7af08f, 0xc8ffd0], 14, 1.6, .1, .6, -0.6); }
+      }
     }
   }
 
@@ -1089,6 +1104,7 @@ export class Game {
     r.drawMesh(this.stage.terrain, IDENT, null, 8);
     this.drawCity(r);
     r.drawInstances(this.stains.vis, this.stains.visible(this.camX, this.viewHalf + 3));
+    if (this.stage.hazardN) r.drawInstances(this.stage.hazard, this.stage.hazardN);
     for (const t of this.traps) t.draw(r, this);
     for (const p of this.props) p.draw(r, this);
     for (const it of this.items) it.draw(r, this);
