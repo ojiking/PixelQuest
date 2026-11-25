@@ -1,6 +1,6 @@
 // 게임 월드: 스테이지 진행, 카메라, 웨이브, 투사체, 폭발, 렌더링
 import { mat4, clamp, rand, randi, sign, shuffle, pick, weightedPick } from './math.js';
-import { BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
+import { HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
 import { Debris, Stains } from './fx.js';
 import { Gibs, bleed } from './gibs.js';
 import { getModel, WEAPON_MODEL } from './models.js';
@@ -17,9 +17,13 @@ const SEVER_TEXT = { head: '목 절단!', armF: '팔 절단!', armB: '팔 절단
 const CRUSH_TEXT = { head: '헤드 크러시!!', armF: '팔 분쇄!', armB: '팔 분쇄!', handF: '손 분쇄!', handB: '손 분쇄!', legF: '다리 분쇄!', legB: '다리 분쇄!', shinF: '정강이 분쇄!', shinB: '정강이 분쇄!' };
 
 // 가중치 기반 무기 뽑기
+// 이번 런에 나올 수 있는 무기 (정비소 해금에 따라)
+let WEAPON_POOL = null;
+export const weaponOk = k => !WEAPON_POOL || WEAPON_POOL.includes(k);
 export function rollWeapon(exclude = []) {
   const w = {};
-  for (const [k, d] of Object.entries(WEAPONS)) if (!exclude.includes(k)) w[k] = d.weight ?? 1;
+  for (const [k, d] of Object.entries(WEAPONS)) if (!exclude.includes(k) && weaponOk(k)) w[k] = d.weight ?? 1;
+  if (!Object.values(w).some(v => v > 0)) return 'pipe';
   return weightedPick(w);
 }
 const IDENT = mat4.create();
@@ -53,9 +57,12 @@ export class Game {
   // ------------------------------------------------ 런 / 스테이지
   startRun(stats) {
     this.stats = stats;
+    const U = stats.unlocked ?? { biomes: Object.keys(BIOMES), bosses: ['boss', 'cyborg'], weapons: null };
+    WEAPON_POOL = U.weapons;
+    this.heat = stats.heat || 0;
     this.run = {
       stage: 0, scrap: 0, kills: 0, severs: 0, maxCombo: 0, time: 0,
-      perks: new Set(), biomes: shuffle(Object.keys(BIOMES)).slice(0, 2), boss: pick(['boss', 'cyborg']), introduced: new Set(), seen: new Set(), rescueUsed: false, // 바이옴 순서·최종 보스 무작위
+      perks: new Set(), biomes: shuffle([...U.biomes]).slice(0, 2), boss: pick(U.bosses), introduced: new Set(), seen: new Set(), rescueUsed: false, // 바이옴 순서·최종 보스 무작위
     };
     this.player = new Player(this, stats.player);
     this.bot = new Companion(this, stats.bot);
@@ -117,6 +124,7 @@ export class Game {
     this.updateCars(dt);
     this.debris.update(dt, (x, z) => this.floorAt(x, z), this.bloodHooks);
     for (const a of this.actors) a.updateBlood(dt);
+    this.updateLHint();
     this.gibs.update(dt);
 
     for (const a of this.actors) if (a.remove) this.releaseToken(a);
@@ -265,7 +273,8 @@ export class Game {
   spawnEnemy(type, side) {
     const cx = this.lock ? this.lock.cx : this.camX;
     const spot = this.stage.safeSpot(cx + side * (this.viewHalf + 1.2), rand(LANE.zMin + 0.2, LANE.zMax - 0.2));
-    const e = new Enemy(this, type, spot.x, spot.z, 1 + this.run.stage * 0.15);
+    const e = new Enemy(this, type, spot.x, spot.z, (1 + this.run.stage * 0.15) * (1 + HEAT.enemyHp * this.heat));
+    e.power *= 1 + HEAT.enemyPow * this.heat;   // 위험 등급
     // 처음 보는 적은 이름을 알려줌 (기본 적 제외)
     if (this.run.seen && !this.run.seen.has(type)) {
       this.run.seen.add(type);
@@ -352,6 +361,7 @@ export class Game {
     if (h.knock >= 7.5) v.flung = { owner: h.attacker, hit: new Set() };
     v.facing = -h.dir;
     if (v.mounted) this.dismount(v, h.dir, true);
+    if (v.grabbedBy) this.releaseGrab(v.grabbedBy);
     if (v.weapon) this.dropWeapon(v);
     if (v.blocks) this.dropShield(v);
     if (v.goItem) { v.goItem.claimed = null; v.goItem = null; }
@@ -641,60 +651,153 @@ export class Game {
   }
 
   // ------------------------------------------------ 아이템 / 무기
-  interact(p) {
+  // L 키가 지금 무엇을 할지 (우선순위: 바닥 무기·음식 > 들고 있는 것 던지기 > 드럼통·오토바이 > 무기 던지기 > 적 잡기 > 신체 조각)
+  lAction(p) {
     let best = null, bd = 1e9;
     for (const it of this.items) {
       if (it.kind === 'scrap') continue;
       const dx = Math.abs(it.x - p.x), dz = Math.abs(it.z - p.z);
       if (dx < 0.9 && dz < 0.6 && dx + dz < bd) { best = it; bd = dx + dz; }
     }
-    if (best) {
-      best.remove = true;
-      this.sfx?.('pickup');
-      if (best.kind === 'food') {
-        p.hp = Math.min(p.maxHp, p.hp + 30);
-        this.texts.add(p.x, 2.2, p.z, '+30', 'heal');
-      } else {
-        if (p.carry) this.dropCarry(p);
-        if (p.weapon) this.dropWeapon(p);
-        const fresh = best.dur === WEAPONS[best.type].dur;
-        const dur = best.dur * (fresh && this.run.perks.has('durable') ? 1.6 : 1) * (fresh ? this.stats.player.durMul : 1);
-        p.weapon = { type: best.type, dur: Math.round(dur) };
-        this.texts.add(p.x, 2.3, p.z, WEAPONS[best.type].name, 'item');
-      }
-      return;
-    }
-    if (p.carry) { p.startAttack(p.carry.kind === 'barrel' || p.carry.kind === 'moto' ? 'pThrowBarrel' : 'pThrowGib'); return; }
-    // 맨손이면 폭탄 드럼통을 들어 올림
+    if (best) return { type: 'item', obj: best, x: best.x, y: 0.7, z: best.z, verb: '줍기', label: best.kind === 'food' ? '음식' : WEAPONS[best.type].name };
+    if (p.carry) return { type: 'throwCarry' };
     if (!p.weapon) {
       const bar = this.props.find(b => b.kind === 'barrel' && !b.broken && b.fuse < 0 && Math.abs(b.x - p.x) < 1.0 && Math.abs(b.z - p.z) < 0.65);
-      if (bar) {
-        bar.broken = true; // 바닥에서 치움
-        p.carry = { kind: 'barrel' };
-        this.texts.add(p.x, 2.6, p.z, '폭탄 드럼통 — 던져라!', 'item');
-        this.sfx?.('pickup');
-        return;
-      }
+      if (bar) return { type: 'barrel', obj: bar, x: bar.x, y: 1.3, z: bar.z, verb: '들기', label: '드럼통' };
       const moto = this.props.find(b => b.kind === 'moto' && !b.broken && b.fuse < 0 && Math.abs(b.x - p.x) < 1.3 && Math.abs(b.z - p.z) < 0.7);
-      if (moto) {
-        moto.broken = true;
-        p.carry = { kind: 'moto' };
-        this.texts.add(p.x, 2.6, p.z, '오토바이 번쩍! — 던져라!', 'item');
+      if (moto) return { type: 'moto', obj: moto, x: moto.x, y: 1.1, z: moto.z, verb: '들기', label: '오토바이' };
+    }
+    if (p.weapon) return { type: 'throwWeapon' };
+    const e = this.grabbable(p);
+    if (e) return { type: 'grab', obj: e, x: e.x, y: e.y + 2.2 * e.scale, z: e.z, verb: '잡기', label: e.blockedGrab ? '방패에 막힘' : '' };
+    const gib = this.gibs.nearest(p.x, p.z);
+    if (gib) return { type: 'gib', obj: gib, x: gib.pos[0], y: gib.pos[1] + 0.6, z: gib.pos[2], verb: '줍기', label: PART_NAME[gib.part] ?? '조각' };
+    return null;
+  }
+
+  interact(p) {
+    const act = this.lAction(p);
+    if (!act) { this.sfx?.('clang'); return; }
+    const o = act.obj;
+    switch (act.type) {
+      case 'item':
+        o.remove = true;
+        this.sfx?.('pickup');
+        if (o.kind === 'food') {
+          p.hp = Math.min(p.maxHp, p.hp + 30);
+          this.texts.add(p.x, 2.2, p.z, '+30', 'heal');
+        } else {
+          if (p.carry) this.dropCarry(p);
+          if (p.weapon) this.dropWeapon(p);
+          const fresh = o.dur === WEAPONS[o.type].dur;
+          const dur = o.dur * (fresh && this.run.perks.has('durable') ? 1.6 : 1) * (fresh ? this.stats.player.durMul : 1);
+          p.weapon = { type: o.type, dur: Math.round(dur) };
+          this.texts.add(p.x, 2.3, p.z, WEAPONS[o.type].name, 'item');
+        }
+        return;
+      case 'throwCarry': p.startAttack(p.carry.kind === 'barrel' || p.carry.kind === 'moto' ? 'pThrowBarrel' : 'pThrowGib'); return;
+      case 'barrel': case 'moto':
+        o.broken = true; // 바닥에서 치움
+        p.carry = { kind: act.type };
+        this.texts.add(p.x, 2.6, p.z, act.type === 'barrel' ? '폭탄 드럼통 — 던져라!' : '오토바이 번쩍! — 던져라!', 'item');
         this.sfx?.('pickup');
         return;
+      case 'throwWeapon': p.startAttack('pThrow'); return;
+      case 'grab':
+        if (o.blockedGrab) { this.texts.add(o.x, o.y + 2.2 * o.scale, o.z, '막음!', 'item'); this.sfx?.('clang'); return; }
+        this.startGrab(p, o); return;
+      case 'gib': {
+        p.carry = this.gibs.take(o);
+        this.sfx?.('pickup');
+        const lk = limbKind(o.part);
+        p.carry.limb = lk; p.carry.local = null;
+        if (lk) p.carry.dur = LIMB_WEAPONS[lk].dur;
+        this.texts.add(p.x, 2.3, p.z, (PART_NAME[o.part] ?? '조각') + (lk ? ' — 휘둘러라!' : ''), 'item');
       }
     }
-    if (p.weapon) { p.startAttack('pThrow'); return; }
-    // 맨손이면 떨어진 부위/시체 조각을 집음
-    const gib = this.gibs.nearest(p.x, p.z);
-    if (gib) {
-      p.carry = this.gibs.take(gib);
-      this.sfx?.('pickup');
-      const lk = limbKind(gib.part);
-      p.carry.limb = lk; p.carry.local = null;
-      if (lk) p.carry.dur = LIMB_WEAPONS[lk].dur;
-      this.texts.add(p.x, 2.3, p.z, (PART_NAME[gib.part] ?? '조각') + (lk ? ' — 휘둘러라!' : ''), 'item');
+  }
+
+  // L 키 대상 표시 (대상 위에 '[L] 줍기: 쇠파이프' 같은 라벨)
+  updateLHint() {
+    const p = this.player;
+    const act = (p.state === 'idle' || p.state === 'walk') && p.alive ? this.lAction(p) : null;
+    if (!act || act.x === undefined) { this.texts.setHint(null); return; }
+    const key = document.documentElement.classList.contains('mobile') ? '줍기' : 'L';
+    this.texts.setHint({ x: act.x, y: act.y, z: act.z, html: `<b>[${key}]</b> ${act.verb}${act.label ? ': ' + act.label : ''}` });
+  }
+
+  // ------------------------------------------------ 잡기 (더블드래곤식 멱살 잡기 → 무릎 / 던지기)
+  grabbable(p) {
+    let best = null, bd = 1e9;
+    for (const e of this.enemies) {
+      if (e.dead || e.isBoss || e.mounted || e.grabbedBy || e.flipping || e.y > 0.4 + (e.floor ?? 0) || e.invuln > 0) continue;
+      if (e.state === 'down' || e.state === 'getup' || e.state === 'dying') continue;
+      const dx = (e.x - p.x) * p.facing, dz = Math.abs(e.z - p.z);
+      if (dx < -0.15 || dx > 0.95 * Math.max(1, e.scale * 0.85) || dz > 0.45) continue;
+      if (dx + dz < bd) { best = e; bd = dx + dz; }
     }
+    // 방패병: 정면에서는 방패에 막힘 (뒤나 가드 브레이크 중에는 잡힘)
+    if (best) best.blockedGrab = !!(best.shieldUp?.() && best.facing === -p.facing && best.guardBroken <= 0);
+    return best;
+  }
+
+  startGrab(p, e) {
+    e.interrupt(); this.releaseToken(e);
+    if (e.goItem) { e.goItem.claimed = null; e.goItem = null; }
+    p.interrupt();
+    p.grabbing = e; p.grabT = 0; p.knees = 0;
+    e.grabbedBy = p; e.facing = -p.facing; e.vx = e.vz = 0;
+    e.setState('hurt'); e.hitstun = 99;
+    p.setState('grab');
+    // 덩치(슈퍼아머)는 금방 뿌리침
+    e.grabEscape = e.def.poise ? 0.95 : 2.1;
+    this.texts.add(e.x, e.y + 2.2 * e.scale, e.z, '잡았다!', 'back');
+    this.sfx?.('thud');
+  }
+
+  releaseGrab(p, escaped = false) {
+    const e = p?.grabbing;
+    if (p) { p.grabbing = null; if (p.state === 'grab') p.setState('idle'); }
+    if (!e) return;
+    e.grabbedBy = null;
+    if (escaped && !e.dead) {
+      e.setState('idle'); e.cool = Math.min(e.cool, 0.3);
+      p.vx = -p.facing * 4; p.setState('hurt'); p.hitstun = 0.25;
+      this.texts.add(e.x, e.y + 2.2 * e.scale, e.z, '뿌리침!', 'hurt');
+      this.sfx?.('swing');
+    }
+  }
+
+  // 잡은 상태에서 J: 무릎 차기 (세 번째는 강하게 날려버림)
+  grabKnee(p) {
+    const e = p.grabbing;
+    if (!e) return;
+    p.knees++;
+    const fin = p.knees >= 3;
+    if (fin) this.releaseGrab(p);
+    applyHit(this, e, {
+      attacker: p, grab: true, dmg: (fin ? 15 : 8) * p.power, knock: fin ? 7 : 0, dir: p.facing, zone: fin ? 'head' : 'mid',
+      knockdown: fin, launch: fin ? 6 : undefined, sever: fin ? 1.0 : 0.4, hitstop: fin ? .1 : .06, shake: fin ? .15 : .06, hitstun: 99,
+    });
+    if (!fin && !e.dead && e.grabbedBy === p) { e.setState('hurt'); e.hitstun = 99; }
+    this.addCombo();
+    if (fin) this.texts.add(e.x, e.y + 2.4 * e.scale, e.z, '니킥!', 'sever');
+  }
+
+  // 잡은 상태에서 L: 던지기 → 날아가는 몸이 되어 다른 적과 충돌
+  grabThrow(p) {
+    const e = p.grabbing;
+    if (!e) return;
+    this.releaseGrab(p);
+    const dir = p.facing;
+    e.x = p.x + dir * 0.5; e.facing = -dir;
+    applyHit(this, e, {
+      attacker: p, grab: true, dmg: 12 * p.power * this.stats.player.throwMul, knock: 11.5, dir, zone: 'all',
+      knockdown: true, launch: 5, sever: 0.5, hitstop: .08, shake: .2,
+    });
+    this.addCombo();
+    this.texts.add(e.x, e.y + 2.4 * e.scale, e.z, '던지기!', 'sever');
+    this.sfx?.('heavy');
   }
 
   dropWeapon(a) {
@@ -817,7 +920,7 @@ export class Game {
   }
 
   collectScrap(v) {
-    this.run.scrap += v * (this.run.perks.has('scrapper') ? 1.5 : 1) * this.stats.player.scrapMul;
+    this.run.scrap += v * (this.run.perks.has('scrapper') ? 1.5 : 1) * this.stats.player.scrapMul * (1 + HEAT.scrap * this.heat);
     this.sfx?.('coin');
   }
 

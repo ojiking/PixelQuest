@@ -15,7 +15,7 @@ const FLASH = [1, 1, 1, .75];
 const CHAR = [.08, .05, .03, .7];
 const HEAVY = new Set(['barrel', 'moto']); // 머리 위로 들어 던지는 물건
 const BURN = [1, .45, .08, .35];
-const WARN = [1, .2, .08, .5];
+const WARN = [.55, 1, 1, .62];   // 공격 예고: 피(빨강)와 겹치지 않는 밝은 청록
 
 export class Actor {
   constructor(game, modelKey, o) {
@@ -169,6 +169,10 @@ export class Actor {
       }
       g.debris.sparks(this.x + this.facing * 1.2 * this.scale, 1.2 * this.scale, this.z + 0.2, 0xffd27a, 3, 3);
       tryHits(g, this, a);
+      return;
+    }
+    if (d.grab) {
+      if (!a.spawned) { a.spawned = true; if (d.grab === 'knee') g.grabKnee(this); else g.grabThrow(this); }
       return;
     }
     if (d.projectile === 'barrel') {
@@ -350,6 +354,7 @@ export class Actor {
         }
         break;
       }
+      case 'grab': T.armF = T.armB = 1.35; T.handF = T.handB = .45; T.torso = -.12; T.legF = .3; T.legB = -.25; T.shinB = -.2; break;
       case 'jump': T.legF = .9; T.shinF = -1.2; T.legB = -.3; T.shinB = -.9; T.armF = 2.3; T.armB = -.5; break;
       case 'hurt': T.torso = .3; T.head = .3; T.armF = -.6; T.armB = -.4; T.handF = .6; T.handB = .6; T.shinF = -.3; rate = 30; break;
       case 'down': case 'dying': case 'ko': fallT = Math.PI / 2; T.armF = 2.6; T.armB = 2.4; T.handF = .2; T.handB = .5; T.legF = .2; T.shinF = -.4; break;
@@ -500,6 +505,12 @@ export class Actor {
       case 'kick':
         T.legF = S ? .5 : A ? 1.5 : .7; T.shinF = S ? -1.4 : A ? 0 : -.8;
         T.torso = S ? .1 : .35; T.armF = -.6; T.armB = .7; T.handB = 1; break;
+      case 'knee': // 멱살 잡고 무릎 올려차기
+        T.armF = T.armB = A ? 1.0 : 1.3; T.handF = T.handB = .6; T.torso = A ? .25 : 0;
+        T.legF = S ? .4 : A ? 1.75 : .9; T.shinF = S ? -.6 : A ? -2.2 : -1.2; T.legB = -.15; break;
+      case 'gthrow': // 몸을 비틀어 집어던짐
+        T.armF = T.armB = S ? 1.5 : 2.4; T.handF = T.handB = .2; T.twist = S ? .9 : -1.0; T.torso = S ? .15 : -.35;
+        T.legF = .45; T.shinF = -.3; T.legB = -.35; T.shinB = -.35; break;
       case 'flykick': T.legF = 1.45; T.shinF = 0; T.legB = -.5; T.shinB = -1.3; T.torso = .25; T.armF = -.8; T.armB = 1.4; break;
       case 'swing': // 내려찍기 (파이프, 도끼, 곡괭이)
         T.armF = S ? 3.0 : A ? .55 : .35; T.handF = S ? .6 : 0;

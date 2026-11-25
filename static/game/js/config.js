@@ -95,6 +95,9 @@ export const ATTACKS = {
   // 4연타 콤보의 팔꿈치
   elbow:    { startup: .06, active: .08, recovery: .13, range: [.1, 1.1], depth: .5, dmg: 9, knock: 1.6, zone: 'high', hitstop: .06, anim: 'punchB' },
   pThrowBarrel: { startup: .14, active: .05, recovery: .22, anim: 'throw', projectile: 'barrel' },
+  // 잡기: 무릎 차기 / 던지기 (판정은 잡은 적에게만)
+  grabKnee:  { startup: .09, active: .05, recovery: .2, anim: 'knee', grab: 'knee' },
+  grabThrow: { startup: .16, active: .05, recovery: .34, anim: 'gthrow', grab: 'throw' },
   pThrowGib: { startup: .10, active: .05, recovery: .20, anim: 'throw', projectile: 'gib' },
   smash:   { startup: .18, active: .10, recovery: .34, range: [.1, 1.0], depth: .65, dmg: 1.5, knock: 6,   zone: 'high', hitstop: .12, anim: 'swing', weapon: true, knockdown: true, finisher: true },
   // 동료
@@ -144,6 +147,11 @@ export const ENEMY_CURVE = {
 };
 // 웨이브 크기 [초반, 막판], 구역당 웨이브 수 [초반, 막판]
 export const WAVE_CURVE = { size: [3, 6.5], waves: [2, 3] };
+
+// ---------------- 해금 전 기본 콘텐츠 ----------------
+export const BASE_UNLOCKS = { weapons: ['pipe', 'machete', 'block', 'golf', 'bat', 'katana', 'manhole'], biomes: ['plains', 'city'], bosses: ['boss'] };
+// 위험 등급(클리어할 때마다 한 단계씩 열림, 최대 5): 등급당 효과
+export const HEAT = { max: 5, enemyHp: .2, enemyPow: .12, scrap: .25 };
 
 // ---------------- 핏자국 (과장 연출) ----------------
 // 실제 튀는 양보다 훨씬 크게 묻음. 숫자를 키울수록 더 피범벅
@@ -272,13 +280,20 @@ export const PERKS = [
 
 // ---------------- 영구 업그레이드 (정비소) ----------------
 export const UPGRADES = [
-  { id: 'p_hp',    group: '뱀돌이 · 기본', name: '체력 단련',       desc: '뱀돌이 최대 체력 +15',       max: 15, cost: [15, 30, 50, 75, 105, 140, 180, 225, 275, 330, 390, 455, 525, 600, 680] },
-  { id: 'p_pow',   group: '뱀돌이 · 기본', name: '근력 단련',       desc: '뱀돌이 공격력 +8%',          max: 15, cost: [20, 35, 55, 80, 110, 145, 185, 230, 280, 335, 395, 460, 530, 605, 685] },
+  // 해금: 세지는 대신 런에 새로운 것이 등장 (한 번 사면 영구)
+  { id: 'u_flex',   group: '해금 · 무기고', name: '사슬 무기',  desc: '강철 체인·채찍·쌍절곤·철퇴가 나오기 시작', max: 1, cost: [40],  unlock: { weapons: ['chain', 'whip', 'nunchaku', 'flail'] } },
+  { id: 'u_heavy',  group: '해금 · 무기고', name: '중장비',     desc: '전기톱·소방 도끼·오함마·곡괭이가 나오기 시작', max: 1, cost: [60], unlock: { weapons: ['chainsaw', 'axe', 'sledge', 'pickaxe'] } },
+  { id: 'u_guns',   group: '해금 · 무기고', name: '화기',       desc: '샷건·화염 스프레이가 나오기 시작',        max: 1, cost: [90],  unlock: { weapons: ['shotgun', 'flamer'] } },
+  { id: 'u_desert', group: '해금 · 지역·적', name: '모래 공업지대', desc: '새 지역이 런에 나오기 시작',            max: 1, cost: [50],  unlock: { biome: 'desert' } },
+  { id: 'u_snow',   group: '해금 · 지역·적', name: '얼어붙은 항구', desc: '새 지역이 런에 나오기 시작',            max: 1, cost: [70],  unlock: { biome: 'snow' } },
+  { id: 'u_cyborg', group: '해금 · 지역·적', name: '현상수배: 사이보그 폭주왕', desc: '최종 보스 후보에 추가 (보상 부품이 더 많음)', max: 1, cost: [100], unlock: { boss: 'cyborg' } },
+  { id: 'p_hp',    group: '뱀돌이 · 기본', name: '체력 단련',       desc: '뱀돌이 최대 체력 +15',       max: 6, cost: [15, 30, 50, 75, 105, 140, 180, 225, 275, 330, 390, 455, 525, 600, 680] },
+  { id: 'p_pow',   group: '뱀돌이 · 기본', name: '근력 단련',       desc: '뱀돌이 공격력 +8%',          max: 6, cost: [20, 35, 55, 80, 110, 145, 185, 230, 280, 335, 395, 460, 530, 605, 685] },
   { id: 'p_speed', group: '뱀돌이 · 기본', name: '민첩성',          desc: '뱀돌이 이동·대쉬 속도 +5%',   max: 6, cost: [20, 35, 55, 80, 110, 150] },
   { id: 'p_regen', group: '뱀돌이 · 기본', name: '응급 처치',       desc: '스테이지 클리어 시 체력 회복 +10%', max: 3, cost: [25, 50, 90] },
   { id: 'p_scrap', group: '뱀돌이 · 기본', name: '고물 수집가',     desc: '부품 획득량 +10%',            max: 5, cost: [30, 55, 85, 120, 160] },
-  { id: 'p_wpow',  group: '뱀돌이 · 무기', name: '무기 숙련',       desc: '무기(신체 부위 포함) 위력 +10%', max: 10, cost: [15, 25, 40, 60, 85, 115, 150, 190, 235, 285] },
-  { id: 'p_wspd',  group: '뱀돌이 · 무기', name: '빠른 손놀림',     desc: '무기 휘두르는 속도 +6%',      max: 8, cost: [20, 35, 55, 80, 110, 145, 185, 230] },
+  { id: 'p_wpow',  group: '뱀돌이 · 무기', name: '무기 숙련',       desc: '무기(신체 부위 포함) 위력 +10%', max: 5, cost: [15, 25, 40, 60, 85, 115, 150, 190, 235, 285] },
+  { id: 'p_wspd',  group: '뱀돌이 · 무기', name: '빠른 손놀림',     desc: '무기 휘두르는 속도 +6%',      max: 4, cost: [20, 35, 55, 80, 110, 145, 185, 230] },
   { id: 'p_dur',   group: '뱀돌이 · 무기', name: '무기 관리',       desc: '주운 무기 내구도 +15%',       max: 5, cost: [15, 30, 50, 75, 105] },
   { id: 'p_throw', group: '뱀돌이 · 무기', name: '투척 강화',       desc: '던지기 위력 +20% (무기·드럼통·신체)', max: 5, cost: [15, 30, 50, 75, 105] },
   { id: 'p_flykick', group: '뱀돌이 · 기술', name: '날아차기',      desc: '점프 중 공격: 앞으로 뻗으며 적을 날려버림', max: 1, cost: [15] },

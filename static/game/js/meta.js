@@ -1,8 +1,8 @@
 // 영구 성장(로그라이트 메타) 저장/계산
-import { PLAYER, BOT, UPGRADES } from './config.js';
+import { PLAYER, BOT, UPGRADES, BASE_UNLOCKS, HEAT } from './config.js';
 
 const KEY = 'pixelquest_meta_v1';
-const DEFAULT = () => ({ scrap: 0, up: {}, runs: 0, wins: 0, bestStage: 0, botClass: 'attack' });
+const DEFAULT = () => ({ scrap: 0, up: {}, runs: 0, wins: 0, bestStage: 0, botClass: 'attack', heat: 0 });
 
 export function loadMeta() {
   let m;
@@ -11,7 +11,27 @@ export function loadMeta() {
   // 예전 볼트 업그레이드를 새 체계로 옮김
   const mv = { b_hp: 't_hp', b_pow: 'a_pow', b_spin: 'a_spin' };
   for (const [o, n] of Object.entries(mv)) if (m.up[o]) { m.up[n] = Math.max(m.up[n] || 0, m.up[o]); delete m.up[o]; }
+  // 최대 레벨이 줄어든 업그레이드: 넘친 레벨은 부품으로 돌려줌
+  for (const u of UPGRADES) {
+    const lv = m.up[u.id] || 0;
+    if (lv > u.max) { m.scrap += u.cost.slice(u.max, lv).reduce((a, b) => a + b, 0); m.up[u.id] = u.max; }
+  }
+  m.heat = Math.min(m.heat || 0, heatMax(m));
   return m;
+}
+
+export function heatMax(m) { return Math.min(HEAT.max, m.wins || 0); }
+
+// 해금된 콘텐츠 (무기 드롭·지역·최종 보스 후보)
+export function unlocked(meta) {
+  const u = { weapons: [...BASE_UNLOCKS.weapons], biomes: [...BASE_UNLOCKS.biomes], bosses: [...BASE_UNLOCKS.bosses] };
+  for (const up of UPGRADES) {
+    if (!up.unlock || !(meta.up[up.id] > 0)) continue;
+    if (up.unlock.weapons) u.weapons.push(...up.unlock.weapons);
+    if (up.unlock.biome) u.biomes.push(up.unlock.biome);
+    if (up.unlock.boss) u.bosses.push(up.unlock.boss);
+  }
+  return u;
 }
 
 export function saveMeta(m) {
@@ -43,6 +63,8 @@ export function computeStats(meta) {
   const C = BOT.classes[cls];
   const tank = cls === 'tank';
   return {
+    unlocked: unlocked(meta),
+    heat: meta.heat || 0,
     player: {
       maxHp: PLAYER.hp + 15 * L('p_hp'), power: 1 + 0.08 * L('p_pow'),
       speedMul: 1 + 0.05 * L('p_speed'), regen: 0.1 * L('p_regen'), scrapMul: 1 + 0.1 * L('p_scrap'),

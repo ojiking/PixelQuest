@@ -3,9 +3,9 @@ import { Renderer } from './gl.js';
 import { Input } from './input.js';
 import { Texts } from './fx.js';
 import { Game } from './game.js';
-import { PERKS, UPGRADES, WEAPONS, BOT } from './config.js';
+import { PERKS, UPGRADES, WEAPONS, BOT, HEAT } from './config.js';
 import { STAGE_COUNT } from './level.js';
-import { loadMeta, saveMeta, resetMeta, computeStats, upgradeCost, buyUpgrade, level, botLevel } from './meta.js';
+import { loadMeta, saveMeta, resetMeta, computeStats, upgradeCost, buyUpgrade, level, botLevel, heatMax } from './meta.js';
 import { shuffle } from './math.js';
 import { setupTouch, IS_MOBILE } from './touch.js';
 import { play as playSfx, sawLoop, isMuted, setMuted } from './sfx.js';
@@ -99,7 +99,7 @@ function showHub(msg = '') {
         return `<div class="ucard ${cost == null ? 'max' : ''}">
           <div class="uname">${u.name} <span class="pips">${u.max > 5 ? `Lv ${lv}/${u.max}` : '■'.repeat(lv) + '□'.repeat(u.max - lv)}</span></div>
           <div class="udesc">${u.desc}</div>
-          <button class="btn small" data-buy="${u.id}" ${can ? '' : 'disabled'}>${cost == null ? 'MAX' : `⚙ ${cost}`}</button>
+          <button class="btn small" data-buy="${u.id}" ${can ? '' : 'disabled'}>${cost == null ? (u.unlock ? '해금됨' : 'MAX') : `⚙ ${cost}`}</button>
         </div>`;
       }).join('')}
     </div>`).join('');
@@ -108,12 +108,22 @@ function showHub(msg = '') {
       <h1>정비소</h1>
       <div class="bank">보유 부품 <b>⚙ ${Math.floor(meta.scrap)}</b> <span class="dim">· 출동 ${meta.runs}회 · 클리어 ${meta.wins}회</span></div>
       ${msg ? `<div class="msg">${msg}</div>` : ''}
+      ${heatRow()}
       <div class="ugrid">${cards}</div>
       <div class="row">
         <button class="btn primary" data-act="start">출동 (Enter)</button>
         <button class="btn ghost" data-act="reset">기록 초기화</button>
       </div>
     </div>`, 'wide');
+}
+
+// 위험 등급 선택 (클리어할 때마다 한 단계씩 열림)
+function heatRow() {
+  const mx = heatMax(meta), h = meta.heat || 0;
+  if (!mx) return `<div class="heat dim">위험 등급: 첫 클리어 시 해금 — 적이 강해지는 대신 부품을 더 얻음</div>`;
+  return `<div class="heat">위험 등급 <button class="btn small" data-heat="-1" ${h <= 0 ? 'disabled' : ''}>◀</button>
+    <b class="hv">${h}</b> / ${mx} <button class="btn small" data-heat="1" ${h >= mx ? 'disabled' : ''}>▶</button>
+    <span class="dim">적 체력 +${Math.round(HEAT.enemyHp * h * 100)}% · 공격력 +${Math.round(HEAT.enemyPow * h * 100)}% · 부품 +${Math.round(HEAT.scrap * h * 100)}%</span></div>`;
 }
 
 function startRun() {
@@ -125,11 +135,11 @@ function startRun() {
 }
 
 // 화면 아래 조작법 안내
-const HELP_DESKTOP = `<b>이동</b> WASD · <b>공격</b> J · <b>점프</b> K · <b>대쉬</b> Shift · <b>줍기/던지기</b> L · <b>전술</b> T · <b>도움말 끄기</b> H`;
-const HELP_MOBILE = `<b>대쉬</b> 중 <b>공격</b> = 박치기 · <b>줍기</b> = 줍기/던지기`;
+const HELP_DESKTOP = `<b>이동</b> WASD · <b>공격</b> J · <b>점프</b> K · <b>대쉬</b> Shift · <b>줍기·잡기/던지기</b> L · <b>전술</b> T · <b>도움말 끄기</b> H`;
+const HELP_MOBILE = `적에게 붙어 <b>줍기</b> = 잡기 → <b>공격</b> 무릎 / <b>줍기</b> 던지기`;
 // 한 번에 하나씩 돌아가며 보여주는 팁
 const HELP_TIPS = IS_MOBILE ? [] : [
-  '대쉬 중 J = 몸통 박치기', '무기·팔다리·머리는 L로 줍고 J로 휘두르기', '드럼통·오토바이는 L로 들어 던지기',
+  '적에게 붙어 L = 멱살 잡기 → J 무릎(3번째는 니킥) / L 던지기 (반대 방향+L = 뒤로)', '청록색으로 번쩍이며 ! 가 뜨면 강한 공격 예고', '대쉬 중 J = 몸통 박치기', '무기·팔다리·머리는 L로 줍고 J로 휘두르기', '드럼통·오토바이는 L로 들어 던지기',
   '날아차기·내려찍기·더블 점프는 정비소에서 해금', '주차된 차는 때리면 폭발한다',
 ];
 let helpT = 0;
@@ -219,10 +229,11 @@ function showBanner(text, dur) {
 
 // ------------------------------------------------------------ 입력 (메뉴)
 screen.addEventListener('click', e => {
-  const t = e.target.closest('[data-act],[data-buy],[data-perk],[data-cls]');
+  const t = e.target.closest('[data-act],[data-buy],[data-perk],[data-cls],[data-heat]');
   if (!t) return;
   playSfx('ui');
   if (t.dataset.cls) { meta.botClass = t.dataset.cls; saveMeta(meta); preview(); showHub(`볼트를 ${BOT.classes[t.dataset.cls].name}으로 바꿨습니다.`); return; }
+  if (t.dataset.heat) { meta.heat = Math.max(0, Math.min(heatMax(meta), (meta.heat || 0) + +t.dataset.heat)); saveMeta(meta); showHub(); return; }
   if (t.dataset.buy) { if (buyUpgrade(meta, t.dataset.buy)) showHub('업그레이드 완료!'); return; }
   if (t.dataset.perk) { choosePerk(+t.dataset.perk); return; }
   act(t.dataset.act);

@@ -28,6 +28,11 @@ b { color: var(--accent); }
 .ftext.big { font-size: 26px; }
 .ftext.heal { color: var(--hp); }
 .ftext.item { color: #fff3a0; font-size: 15px; }
+.ftext.warn { color: #7ff6ff; font-size: 30px; font-weight: 900; text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 0 0 8px #7ff6ff; }
+/* L 키로 지금 무엇을 집거나 잡는지 대상 위에 표시 */
+#lhint { position: absolute; left: 0; top: 0; pointer-events: none; white-space: nowrap; font-size: 12px; padding: 1px 7px; border-radius: 3px;
+  background: rgba(10, 12, 18, .72); border: 2px solid var(--accent); color: #fff; text-shadow: 1px 1px 0 #000; z-index: 3; }
+#lhint b { color: var(--accent); }
 .ftext.say { color: #ffd9b0; font-size: 14px; background: rgba(0,0,0,.55); padding: 2px 6px; text-shadow: none; }
 
 /* ---------- HUD ---------- */
@@ -156,6 +161,10 @@ h3 small { color: var(--bot); }
 .hub .row { position: sticky; bottom: -22px; background: var(--panel); padding: 10px 0 4px; margin-bottom: -4px; }
 @media (max-height: 520px) { .hub .row { bottom: -12px; padding: 6px 0 2px; } }
 
+/* 위험 등급 */
+.heat { margin: 0 0 10px; font-size: 14px; display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.heat .hv { color: #ff6b5a; font-size: 18px; }
+.heat .btn.small { padding: 2px 8px; }
 /* 볼트 클래스 선택 */
 .clspick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
 .cls { font-family: var(--font); text-align: left; background: rgba(0,0,0,.35); color: var(--dim); border: 2px solid #333; padding: 8px 10px; cursor: pointer; display: grid; gap: 3px; }

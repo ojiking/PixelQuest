@@ -100,7 +100,7 @@ export function applyHit(game, v, h) {
   let dmg = h.dmg;
   let back = false;
   // 맨홀 방패병: 정면 공격을 막음 (위에서, 뒤에서, 폭발·화염은 통과). 강한 넘어뜨리기 공격은 가드 브레이크
-  if (v.shieldUp?.() && h.attacker && !h.explosion && !h.ignite && v.facing === -h.dir && v.guardBroken <= 0
+  if (v.shieldUp?.() && h.attacker && !h.explosion && !h.ignite && !h.grab && v.facing === -h.dir && v.guardBroken <= 0
       && h.attacker.y < v.y + 0.7 && v.state !== 'down') {
     if (h.knockdown && Math.abs(h.knock) >= 5) {
       v.guardBroken = 1.2; dmg *= 0.5;
@@ -158,6 +158,8 @@ export function applyHit(game, v, h) {
   if (v.mounted && (knockdown || dmg >= 14 || h.explosion)) game.dismount(v, h.dir);
   else if (v.mounted) { v.bikePhase = 'line'; v.bikeT = 0; v.revving = false; }
   v.interrupt();
+  if (v.grabbing) game.releaseGrab(v);                                          // 잡고 있다가 맞으면 놓침
+  if (v.grabbedBy && !h.grab && (knockdown || h.explosion)) game.releaseGrab(v.grabbedBy); // 잡힌 적이 다른 공격에 날아감
   if (v.carry?.kind === 'barrel' || v.carry?.kind === 'moto') game.dropCarry(v);
   if (!v.blocks) v.facing = -h.dir; // 방패병은 맞아도 바로 돌아서지 않음 (뒤잡기 유지)
   if (knockdown) {

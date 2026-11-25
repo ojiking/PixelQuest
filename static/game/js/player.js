@@ -75,7 +75,21 @@ export class Player extends Actor {
     if (this.updateCommon(dt)) { this.pose(dt); return; }
 
     const mx = inp.axisX(), mz = inp.axisZ();
+    if (this.grabbing && this.state === 'idle') this.state = 'grab'; // 무릎 차기 후 다시 잡은 자세로
     switch (this.state) {
+      case 'grab': {
+        const e = this.grabbing;
+        if (!e || e.dead || e.grabbedBy !== this) { g.releaseGrab(this); break; }
+        this.vx = this.vz = 0;
+        this.grabT += dt;
+        if (this.grabT > e.grabEscape) { g.releaseGrab(this, true); break; }
+        if (inp.pressed('KeyL')) {
+          // 반대 방향을 누르고 던지면 뒤로 던지기
+          if (mx && Math.sign(mx) !== this.facing) { this.facing = -this.facing; e.facing = -this.facing; }
+          this.startAttack('grabThrow');
+        } else if (this.buffer > 0) { this.buffer = 0; this.startAttack('grabKnee'); }
+        break;
+      }
       case 'idle':
       case 'walk': {
         const slow = this.carry?.kind === 'barrel' ? 0.78 : this.carry?.kind === 'moto' ? 0.68 : 1;

@@ -187,7 +187,14 @@ export class Texts {
     this.list.push({ el, x, y, z, t: 0, life: cls.includes('big') ? 1.2 : 0.8 });
     if (this.list.length > 40) this.list.shift().el.remove();
   }
-  clear() { this.list.forEach(t => t.el.remove()); this.list = []; }
+  clear() { this.list.forEach(t => t.el.remove()); this.list = []; this.setHint(null); }
+  // 따라다니는 안내 라벨 하나 (L 키 대상)
+  setHint(h) {
+    if (!this.hintEl) { this.hintEl = document.createElement('div'); this.hintEl.id = 'lhint'; this.root.appendChild(this.hintEl); }
+    this.hint = h;
+    this.hintEl.style.display = h ? '' : 'none';
+    if (h && this.hintEl.dataset.k !== h.html) { this.hintEl.innerHTML = h.html; this.hintEl.dataset.k = h.html; }
+  }
   update(dt, vp) {
     const W = this.root.clientWidth || window.innerWidth, H = this.root.clientHeight || window.innerHeight;
     for (let i = this.list.length - 1; i >= 0; i--) {
@@ -201,6 +208,13 @@ export class Texts {
       const sx = (cx / cw * 0.5 + 0.5) * W, sy = (1 - (cy / cw * 0.5 + 0.5)) * H;
       t.el.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, -50%)`;
       t.el.style.opacity = String(Math.min(1, (t.life - t.t) * 4));
+    }
+    const h = this.hint;
+    if (h && this.hintEl) {
+      const cx = vp[0] * h.x + vp[4] * h.y + vp[8] * h.z + vp[12];
+      const cy = vp[1] * h.x + vp[5] * h.y + vp[9] * h.z + vp[13];
+      const cw = vp[3] * h.x + vp[7] * h.y + vp[11] * h.z + vp[15];
+      this.hintEl.style.transform = `translate(${(cx / cw * 0.5 + 0.5) * W}px, ${(1 - (cy / cw * 0.5 + 0.5)) * H}px) translate(-50%, -100%)`;
     }
   }
 }

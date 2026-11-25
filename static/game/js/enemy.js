@@ -2,6 +2,7 @@
 import { Actor } from './actor.js';
 import { ENEMIES, ATTACKS, LANE, WEAPONS } from './config.js';
 import { clamp, rand } from './math.js';
+import { weaponOk } from './game.js';
 
 export class Enemy extends Actor {
   constructor(game, type, x, z, hpMul = 1) {
@@ -25,8 +26,9 @@ export class Enemy extends Actor {
     if (def.katana) this.weapon = { type: 'katana', dur: 999 };
     if (def.saw) this.weapon = { type: 'chainsaw', dur: 9999 }; // 팔에 달린 전기톱 (팔을 자르면 떨어짐)
     // 처음부터 무기를 들고 나오는 적
-    if (def.armed && Math.random() < def.armed.chance) {
-      const t = def.armed.types[Math.floor(Math.random() * def.armed.types.length)];
+    const armedTypes = def.armed?.types.filter(weaponOk) ?? [];   // 아직 해금 안 된 무기는 들고 나오지 않음
+    if (armedTypes.length && Math.random() < def.armed.chance) {
+      const t = armedTypes[Math.floor(Math.random() * armedTypes.length)];
       this.weapon = { type: t, dur: Math.ceil(WEAPONS[t].dur * 0.6) };
     }
   }
@@ -76,6 +78,16 @@ export class Enemy extends Actor {
 
   update(dt) {
     const g = this.game;
+    // 멱살 잡힘: 잡은 쪽 앞에 붙어서 꼼짝 못함
+    if (this.grabbedBy) {
+      const p = this.grabbedBy;
+      if (p.grabbing !== this || p.state === 'ko' || p.state === 'down' || p.state === 'hurt') { this.grabbedBy = null; if (p.grabbing === this) p.grabbing = null; this.setState('idle'); }
+      else {
+        this.x = p.x + p.facing * 0.55 * Math.max(1, this.scale * 0.9); this.z = p.z; this.y = p.y; this.vx = this.vz = this.vy = 0;
+        this.facing = -p.facing; if (this.state !== 'hurt') this.setState('hurt'); this.hitstun = 99;
+        this.pose(dt); return;
+      }
+    }
     this.physics(dt);
     if (this.flipping) { this.flip += dt * 13; if (this.grounded) { this.flipping = false; this.flip = 0; } }
     if (this.updateCommon(dt)) { g.releaseToken(this); this.pose(dt); return; }
@@ -130,6 +142,13 @@ export class Enemy extends Actor {
     this.pose(dt);
   }
 
+  // 위험 공격 예고: 머리 위 '!' + 청록 불꽃
+  warnMark() {
+    const g = this.game;
+    g.debris.sparks(this.x, 2.1 * this.scale, this.z, 0x7ff6ff, 6, 1.5);
+    g.texts.add(this.x, this.y + 2.35 * this.scale, this.z, '!', 'warn');
+  }
+
   face(t) { this.facing = t.x > this.x ? 1 : -1; }
 
   // 화면 안에 margin만큼 들어와 있는가
@@ -155,7 +174,7 @@ export class Enemy extends Actor {
     if (d.needArms && !this.hasArms()) key = 'eKick';
     if (d.needLegs && this.legCount() < 2) key = this.hasArms() ? 'ePunch' : 'eKick';
     this.startAttack(key);
-    if (ATTACKS[key].telegraph) this.game.debris.sparks(this.x, 2.1 * this.scale, this.z, 0xff4a2a, 5, 1.5);
+    if (ATTACKS[key].telegraph) this.warnMark();
   }
 
   brawler(dt, t) {
@@ -215,7 +234,7 @@ export class Enemy extends Actor {
       this.face(t);
       const dx = Math.abs(t.x - this.x);
       if (this.cool <= 0 && this.onScreen(0.3) && dx > 2.4 && (Math.abs(this.z - t.z) < 0.35 || this.bikeT > 3.5)) {
-        go('rev'); g.sfx?.('engine');
+        go('rev'); g.sfx?.('engine'); this.warnMark();
       }
     } else if (ph === 'rev') {
       this.vx = this.vz = 0; this.revving = true; this.face(t);
