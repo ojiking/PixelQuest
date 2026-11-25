@@ -245,7 +245,8 @@ export class Stage {
       const waves = [];
       // 스테이지마다 마지막 구역은 보스: 1스테이지 철거반장, 도심(마지막) 사이보그 폭주왕
       const isBoss = zi === triggers.length - 1;
-      if (isBoss && this.biome.city) {
+      const bossType = game.run.bosses?.[index] ?? 'boss';
+      if (isBoss && bossType === 'cyborg') {
         waves.push(['grunt', 'biker', 'thrower', 'grunt']);
         waves.push(['cyborg']);
       } else if (isBoss) {

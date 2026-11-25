@@ -49,7 +49,7 @@ export class Game {
     this.stats = stats;
     this.run = {
       stage: 0, scrap: 0, kills: 0, severs: 0, maxCombo: 0, time: 0,
-      perks: new Set(), biomes: [pick(Object.keys(BIOMES).filter(k => k !== 'city')), 'city'], rescueUsed: false, // 두 번째 스테이지는 도심
+      perks: new Set(), biomes: shuffle(Object.keys(BIOMES)).slice(0, 2), bosses: shuffle(['boss', 'cyborg']), rescueUsed: false, // 바이옴·보스 순서 모두 무작위
     };
     this.player = new Player(this, stats.player);
     this.bot = new Companion(this, stats.bot);
@@ -154,6 +154,7 @@ export class Game {
       for (let j = i + 1; j < list.length; j++) {
         const b = list[j];
         if (b.dead || b.state === 'down' || b.state === 'ko') continue;
+        if (a.team === 'hero' && b.team === 'hero') continue; // 주인공 ↔ 볼트: 충돌 없음 (겹쳐 지나감)
         const dx = b.x - a.x, dz = b.z - a.z;
         const minX = (a.radius + b.radius) * 0.9;
         if (Math.abs(dx) < minX && Math.abs(dz) < 0.32) {
