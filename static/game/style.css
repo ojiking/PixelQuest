@@ -166,12 +166,13 @@ h3 small { color: var(--bot); }
 @media (max-height: 520px) { .cls { padding: 5px 8px; } .cls span { font-size: 10px; } }
 
 /* 조작법 안내 바 (처음 몇 판 동안 화면 아래) */
-#helpbar { position: absolute; left: 50%; bottom: 1.2cqh; transform: translateX(-50%); width: min(96%, 980px); background: rgba(10, 12, 18, .72);
-  border-top: 3px solid var(--accent); padding: 6px 12px; font-size: 13px; line-height: 1.6; text-align: center; pointer-events: none; z-index: 4; }
+/* 조작법 안내: 화면 맨 아래 얇은 한 줄 + 짧은 팁 하나 (게임 화면을 가리지 않게) */
+#helpbar { position: absolute; left: 50%; bottom: .6cqh; transform: translateX(-50%); width: max-content; max-width: 96%;
+  background: rgba(10, 12, 18, .5); border-radius: 4px; padding: 2px 10px; font-size: clamp(9px, 1.7cqh, 12px); line-height: 1.45;
+  text-align: center; pointer-events: none; z-index: 4; white-space: nowrap; text-shadow: 1px 1px 0 #000; }
 #helpbar b { color: var(--accent); }
-#helpbar .dim { font-size: 11px; }
-.mobile #helpbar { left: 61%; width: 30cqw; bottom: 3cqh; font-size: 10px; padding: 4px 6px; }
-.mobile #helpbar .dim { font-size: 9px; }
+#helpbar .dim { font-size: .88em; opacity: .85; }
+.mobile #helpbar { left: 47%; bottom: 1.5cqh; font-size: 9px; max-width: 34cqw; white-space: normal; } /* 조이스틱과 버튼 사이 */
 .mobile #stage-info { bottom: auto; top: 13cqh; left: 50%; }
 
 /* 타이틀 로고: 메탈펀치(작게) / 뱀돌이(크게) 두 줄 */

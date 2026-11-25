@@ -125,15 +125,21 @@ function startRun() {
 }
 
 // 화면 아래 조작법 안내
-const HELP_DESKTOP = `<div><b>이동</b> WASD/방향키 · <b>공격</b> J 연타 · <b>점프</b> K · <b>대쉬</b> Shift(좌우 두 번) · <b>줍기/던지기</b> L · <b>볼트 전술</b> T · <b>일시정지</b> Esc · <b>도움말</b> H</div>
-  <div class="dim">대쉬 중 J = 몸통 박치기 · 무기·팔다리·머리는 L로 줍고 J로 휘두르기 · 드럼통은 L로 들고 던지기 · 날아차기·내려찍기·더블 점프는 정비소에서 해금</div>`;
-const HELP_MOBILE = `<div><b>조이스틱</b> 이동 · <b>공격</b> 연타(전기톱은 누르기) · <b>점프</b> · <b>대쉬</b> · <b>줍기</b> 줍기/던지기</div>
-  <div class="dim">대쉬 중 공격 = 몸통 박치기 · 날아차기 등은 정비소에서 해금</div>`;
+const HELP_DESKTOP = `<b>이동</b> WASD · <b>공격</b> J · <b>점프</b> K · <b>대쉬</b> Shift · <b>줍기/던지기</b> L · <b>전술</b> T · <b>도움말 끄기</b> H`;
+const HELP_MOBILE = `<b>대쉬</b> 중 <b>공격</b> = 박치기 · <b>줍기</b> = 줍기/던지기`;
+// 한 번에 하나씩 돌아가며 보여주는 팁
+const HELP_TIPS = IS_MOBILE ? [] : [
+  '대쉬 중 J = 몸통 박치기', '무기·팔다리·머리는 L로 줍고 J로 휘두르기', '드럼통·오토바이는 L로 들어 던지기',
+  '날아차기·내려찍기·더블 점프는 정비소에서 해금', '주차된 차는 때리면 폭발한다',
+];
 let helpT = 0;
 const helpBar = document.createElement('div');
 helpBar.id = 'helpbar';
 helpBar.className = 'hidden';
+const helpTip = document.createElement('div');
+helpTip.className = 'dim';
 helpBar.innerHTML = IS_MOBILE ? HELP_MOBILE : HELP_DESKTOP;
+if (HELP_TIPS.length) helpBar.appendChild(helpTip);
 $('stage').appendChild(helpBar);
 
 function showPerks() {
@@ -266,6 +272,7 @@ function setWidth(id, ratio) {
 
 function updateHud(dt) {
   if (mode === 'run' && helpT > 0) helpT -= dt;
+  if (HELP_TIPS.length) { const tip = '팁: ' + HELP_TIPS[Math.floor(performance.now() / 7000) % HELP_TIPS.length]; if (helpTip.textContent !== tip) helpTip.textContent = tip; }
   helpBar.classList.toggle('hidden', !((mode === 'run' || mode === 'pause') && helpT > 0));
   helpBar.style.opacity = String(Math.min(1, helpT / 2));
   if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) $('banner').classList.add('hidden'); }
