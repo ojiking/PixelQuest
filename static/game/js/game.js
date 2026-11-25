@@ -182,7 +182,14 @@ export class Game {
       for (const p of this.props) {
         if (p.broken) continue;
         const dx = a.x - p.x, dz = (a.z - p.z) * 1.4, d = Math.hypot(dx, dz), min = a.radius + p.radius;
-        if (d < min && d > 0.0001 && a.y < 0.8) { a.x += dx / d * (min - d); a.z += dz / d * (min - d) / 1.4; }
+        if (d < min && d > 0.0001 && a.y < 0.8) {
+          a.x += dx / d * (min - d); a.z += dz / d * (min - d) / 1.4;
+          // 정면으로 밀고 들어가면 옆으로 미끄러져 돌아감 (상자·드럼통에 꽉 막히지 않게)
+          if (Math.abs(a.vx) > 0.5 && Math.sign(a.vx) === -Math.sign(dx) && Math.abs(dz) < min * 0.8) {
+            const side = Math.abs(dz) > 0.02 ? Math.sign(dz) : (p.z > 1 ? -1 : 1);
+            a.z = clamp(a.z + side * 2.2 * (1 / 60), LANE.zMin, LANE.zMax);
+          }
+        }
       }
     }
   }
