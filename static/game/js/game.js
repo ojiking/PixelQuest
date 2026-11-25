@@ -576,7 +576,7 @@ export class Game {
       // 옆 부위로 번짐 (과장)
       const NB = { head: ['torso'], torso: ['head', 'armF', 'armB', 'legF'], armF: ['torso', 'handF'], armB: ['torso', 'handB'], handF: ['armF'], handB: ['armB'],
         legF: ['torso', 'shinF'], legB: ['torso', 'shinB'], shinF: ['legF'], shinB: ['legB'] };
-      for (const n of NB[k] || []) a.addBlood(n, amt * BLOOD.spread);
+      for (const n of NB[k] || []) a.addBlood(n, amt * (a.team === 'hero' ? BLOOD.spread : BLOOD.enemySpread));
       return Math.random() > BLOOD.passThrough;
     }
     return false;

@@ -590,7 +590,8 @@ export class Actor {
   addBlood(k, amt) {
     if (!this.parts[k]?.alive) k = 'torso';
     this.blood ??= {};
-    this.blood[k] = Math.min(1, (this.blood[k] || 0) + amt);
+    const cap = this.team === 'enemy' && !this.dead ? BLOOD.enemyMax : 1;
+    this.blood[k] = Math.max(this.blood[k] || 0, Math.min(cap, (this.blood[k] || 0) + amt));
   }
   splatFor(k) {
     const v = this.blood?.[k];
