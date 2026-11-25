@@ -151,10 +151,15 @@ export class Debris {
 
 // 배경에 남는 핏자국: 표면 바로 안쪽에 묻힌 얇은 큐브 (표면에 페인트처럼 보임). 스테이지 끝까지 유지
 export class Stains {
-  constructor(cap = 18000) { this.cap = cap; this.n = 0; this.head = 0; this.inst = new Float32Array(cap * 7); }
-  clear() { this.n = 0; this.head = 0; }
+  constructor(cap = 18000) { this.cap = cap; this.n = 0; this.head = 0; this.inst = new Float32Array(cap * 7); this.vis = new Float32Array(cap * 7); this.dens = new Map(); }
+  clear() { this.n = 0; this.head = 0; this.dens.clear(); }
   // axis: 0 = x면(벽 옆), 1 = 바닥(위), 2 = z면(벽 앞) / sign: 표면이 바라보는 쪽의 반대(피가 날아온 방향)
   add(x, y, z, axis, sign, size, r, g, b) {
+    // 같은 자리(약 20cm 칸)에 이미 충분히 묻었으면 더 쌓지 않음 → 보기엔 같고 개수는 크게 줄어듦
+    const key = axis + ':' + Math.round(x * 5) + ':' + Math.round(y * 5) + ':' + Math.round(z * 5);
+    const c = this.dens.get(key) || 0;
+    if (c >= 3 && size < 0.3) return;
+    this.dens.set(key, c + 1);
     const d = this.inst, o = this.head * 7, e = 0.008;
     const off = size / 2 - e;
     if (axis === 1) { y -= off; }
@@ -165,6 +170,19 @@ export class Stains {
     d[o + 4] = r * k; d[o + 5] = g * k; d[o + 6] = b * k;
     this.head = (this.head + 1) % this.cap;
     this.n = Math.min(this.n + 1, this.cap);
+  }
+  // 화면 근처 핏자국만 골라서 그릴 버퍼로 (화면 밖까지 다 그리면 느려짐)
+  visible(cx, half) {
+    const d = this.inst, v = this.vis;
+    let m = 0;
+    for (let i = 0; i < this.n; i++) {
+      const o = i * 7;
+      if (d[o + 3] <= 0 || Math.abs(d[o] - cx) > half) continue;
+      const w = m * 7;
+      for (let k = 0; k < 7; k++) v[w + k] = d[o + k];
+      m++;
+    }
+    return m;
   }
   // 영역 안 핏자국 제거 (차가 폭발해 지붕이 사라질 때 등)
   removeBox(x0, x1, z0, z1, yMin) {

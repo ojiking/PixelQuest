@@ -1057,7 +1057,7 @@ export class Game {
     r.begin(this.vp, eye, { sky: b.sky, fog: b.fog, fogNear: 34, fogFar: 80 });
     r.drawMesh(this.stage.terrain, IDENT, null, 8);
     this.drawCity(r);
-    r.drawInstances(this.stains.inst, this.stains.n);
+    r.drawInstances(this.stains.vis, this.stains.visible(this.camX, this.viewHalf + 3));
     for (const t of this.traps) t.draw(r, this);
     for (const p of this.props) p.draw(r, this);
     for (const it of this.items) it.draw(r, this);
