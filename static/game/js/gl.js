@@ -136,7 +136,7 @@ export class Renderer {
     this.mesh = link(gl, VS, FS);
     this.inst = link(gl, IVS, IFS);
     this.pixelScale = 3;
-    this.instCap = 8000;
+    this.instCap = 20000;
     this._buildCube();
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);

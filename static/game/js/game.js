@@ -1,6 +1,6 @@
 // 게임 월드: 스테이지 진행, 카메라, 웨이브, 투사체, 폭발, 렌더링
 import { mat4, clamp, rand, randi, sign, shuffle, pick, weightedPick } from './math.js';
-import { BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
+import { BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
 import { Debris, Stains } from './fx.js';
 import { Gibs, bleed } from './gibs.js';
 import { getModel, WEAPON_MODEL } from './models.js';
@@ -571,8 +571,13 @@ export class Game {
       else if (f > 0.45) k = ['torso', 'torso', 'arm' + F, 'hand' + F][Math.floor(Math.random() * 4)];
       else if (f > 0.22) k = 'leg' + F;
       else k = 'shin' + F;
-      a.addBlood(k, a.team === 'hero' ? 0.09 : 0.07);
-      return Math.random() < 0.65;
+      const amt = a.team === 'hero' ? BLOOD.heroAmt : BLOOD.enemyAmt;
+      a.addBlood(k, amt);
+      // 옆 부위로 번짐 (과장)
+      const NB = { head: ['torso'], torso: ['head', 'armF', 'armB', 'legF'], armF: ['torso', 'handF'], armB: ['torso', 'handB'], handF: ['armF'], handB: ['armB'],
+        legF: ['torso', 'shinF'], legB: ['torso', 'shinB'], shinF: ['legF'], shinB: ['legB'] };
+      for (const n of NB[k] || []) a.addBlood(n, amt * BLOOD.spread);
+      return Math.random() > BLOOD.passThrough;
     }
     return false;
   }

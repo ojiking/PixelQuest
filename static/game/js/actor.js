@@ -1,6 +1,6 @@
 // 모든 캐릭터(플레이어/동료/적)의 공통 기반: 물리, 상태, 공격 진행, 절차적 애니메이션, 부위 렌더링
 import { mat4, clamp } from './math.js';
-import { GRAVITY, LANE, ATTACKS, WEAPONS, LIMB_WEAPONS, FLEX } from './config.js';
+import { BLOOD, GRAVITY, LANE, ATTACKS, WEAPONS, LIMB_WEAPONS, FLEX } from './config.js';
 import { hexToRgb } from './voxel.js';
 import { getModel, WEAPON_MODEL } from './models.js';
 import { tryHits } from './combat.js';
@@ -604,7 +604,7 @@ export class Actor {
   // 주인공·볼트는 서서히 원래 색으로, 살아 있는 적은 아주 천천히, 시체는 그대로
   updateBlood(dt) {
     if (!this.blood || this.dead) return;
-    const rate = this.team === 'hero' ? 0.11 : 0.02;
+    const rate = this.team === 'hero' ? BLOOD.heroFade : BLOOD.enemyFade;
     for (const k in this.blood) this.blood[k] = Math.max(0, this.blood[k] - rate * dt);
   }
 

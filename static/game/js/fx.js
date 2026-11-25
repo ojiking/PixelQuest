@@ -2,6 +2,7 @@
 import { mat4, rand } from './math.js';
 import { hexToRgb } from './voxel.js';
 import { WOUND } from './models.js';
+import { BLOOD } from './config.js';
 
 // 피(상처 색) 복셀인지: 이런 파편은 닿는 곳에 얼룩을 남김
 const WOUND_KEYS = new Set(WOUND);
@@ -94,16 +95,35 @@ export class Debris {
         if (fl > y + 0.04 && fl - y < 6 && floorAt(ox, oz) <= oy + 0.04) {
           const s = this.s[i] * rand(1.1, 1.8);
           const xCell = Math.floor(ox) !== Math.floor(x) && floorAt(x, oz) > y + 0.04;
-          if (xCell) { const bx = this.v[i3] > 0 ? Math.floor(x) : Math.floor(ox); blood.stain(bx, Math.min(y, fl - s / 2), z, 0, this.v[i3] > 0 ? 1 : -1, s, this.c[i3], this.c[i3 + 1], this.c[i3 + 2]); }
-          else { const bz = this.v[i3 + 2] > 0 ? Math.floor(z) : Math.floor(oz); blood.stain(x, Math.min(y, fl - s / 2), bz, 2, this.v[i3 + 2] > 0 ? 1 : -1, s, this.c[i3], this.c[i3 + 1], this.c[i3 + 2]); }
+          const sw = s * BLOOD.wallSize / 1.45;
+          let sx = x, sy = Math.min(y, fl - sw / 2), sz = z, axis = 2, sg = this.v[i3 + 2] > 0 ? 1 : -1;
+          if (xCell) { sx = this.v[i3] > 0 ? Math.floor(x) : Math.floor(ox); axis = 0; sg = this.v[i3] > 0 ? 1 : -1; }
+          else sz = this.v[i3 + 2] > 0 ? Math.floor(z) : Math.floor(oz);
+          blood.stain(sx, sy, sz, axis, sg, sw, this.c[i3], this.c[i3 + 1], this.c[i3 + 2]);
+          // 주변 튄 방울 + 아래로 흘러내리는 줄기
+          for (let k = 0; k < 3; k++) {
+            const t = axis === 0 ? [0, rand(-1, 1), rand(-1, 1)] : [rand(-1, 1), rand(-1, 1), 0];
+            blood.stain(sx + t[0] * sw * .9, sy + t[1] * sw * .9, sz + t[2] * sw * .9, axis, sg, sw * rand(.3, .55), this.c[i3], this.c[i3 + 1], this.c[i3 + 2]);
+          }
+          const nd = Math.floor(rand(BLOOD.drip[0], BLOOD.drip[1] + 1)), dw = sw * rand(.3, .45);
+          for (let k = 1; k <= nd && sy - k * dw > 0.02; k++) blood.stain(sx, sy - sw / 2 - (k - .5) * dw, sz, axis, sg, dw * (1 - k * .08), this.c[i3] * .85, this.c[i3 + 1], this.c[i3 + 2]);
           this.life[i] = 0.0001; continue;
         }
         // 3) 바닥에 떨어짐: 튕기지 않고 얼룩이 됨 (빠를수록 길게 번짐)
         if (fl > -50 && this.v[i3 + 1] < 0 && y < fl + half && y > fl - 0.4) {
-          const sp = Math.hypot(this.v[i3], this.v[i3 + 2]), n = sp > 3 ? 3 : sp > 1.5 ? 2 : 1;
+          const sp = Math.hypot(this.v[i3], this.v[i3 + 2]), base = this.s[i] * BLOOD.floorSize;
+          const n = Math.min(BLOOD.streak, 1 + Math.floor(sp / 1.2));
+          const ux = sp ? this.v[i3] / sp : 0, uz = sp ? this.v[i3 + 2] / sp : 0;
           for (let k = 0; k < n; k++) {
-            const u = k * 0.07;
-            blood.stain(x + (sp ? this.v[i3] / sp * u : 0), fl, z + (sp ? this.v[i3 + 2] / sp * u : 0), 1, 1, this.s[i] * rand(1.0, 1.7) * (1 - k * 0.2), this.c[i3], this.c[i3 + 1], this.c[i3 + 2]);
+            const u = k * base * 0.55;
+            blood.stain(x + ux * u, fl, z + uz * u, 1, 1, base * rand(.85, 1.2) * (1 - k * 0.15), this.c[i3], this.c[i3 + 1], this.c[i3 + 2]);
+          }
+          // 사방으로 흩뿌려진 작은 방울
+          const ns = Math.floor(rand(BLOOD.satellites[0], BLOOD.satellites[1] + 1));
+          for (let k = 0; k < ns; k++) {
+            const a = Math.random() * Math.PI * 2, d = rand(.4, 1) * BLOOD.satRadius;
+            const px = x + Math.cos(a) * d + ux * d * .6, pz = z + Math.sin(a) * d * .7 + uz * d * .6;
+            if (floorAt(px, pz) === fl) blood.stain(px, fl, pz, 1, 1, base * rand(.2, .42), this.c[i3], this.c[i3 + 1], this.c[i3 + 2]);
           }
           this.life[i] = 0.0001; continue;
         }
@@ -131,7 +151,7 @@ export class Debris {
 
 // 배경에 남는 핏자국: 표면 바로 안쪽에 묻힌 얇은 큐브 (표면에 페인트처럼 보임). 스테이지 끝까지 유지
 export class Stains {
-  constructor(cap = 6000) { this.cap = cap; this.n = 0; this.head = 0; this.inst = new Float32Array(cap * 7); }
+  constructor(cap = 18000) { this.cap = cap; this.n = 0; this.head = 0; this.inst = new Float32Array(cap * 7); }
   clear() { this.n = 0; this.head = 0; }
   // axis: 0 = x면(벽 옆), 1 = 바닥(위), 2 = z면(벽 앞) / sign: 표면이 바라보는 쪽의 반대(피가 날아온 방향)
   add(x, y, z, axis, sign, size, r, g, b) {
