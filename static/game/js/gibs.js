@@ -115,11 +115,23 @@ export class Gibs {
         if (fl > -50 && g.pos[1] < fl + g.r && g.pos[1] > fl - 0.5) {
           g.pos[1] = fl + g.r;
           g.thrown = null;
-          if (Math.abs(g.vel[1]) < 2 && Math.hypot(g.vel[0], g.vel[2]) < 0.8) {
+          // 머리·팔·다리는 바닥에서 몇 번 통통 튀다가 멈춤 (몸통은 무겁게 털썩)
+          const limb = g.part !== 'torso' && g.part !== 'upper' && g.part !== 'lower';
+          g.bounces = (g.bounces || 0) + 1;
+          const minB = !limb ? 1 : g.part === 'head' ? 4 : 3;
+          if (g.bounces > minB && Math.abs(g.vel[1]) < 2 && Math.hypot(g.vel[0], g.vel[2]) < 0.8) {
             g.rest = true;
           } else {
-            g.vel[1] *= -0.35; g.vel[0] *= 0.55; g.vel[2] *= 0.55;
-            g.wx *= 0.5; g.wz *= 0.5;
+            let up = -g.vel[1] * (limb ? 0.62 : 0.35);
+            if (limb && g.bounces <= minB) up = Math.max(up, (g.part === 'head' ? 4.2 : 3.4) - g.bounces * 0.85);
+            g.vel[1] = up;
+            const f = limb ? 0.72 : 0.55;
+            g.vel[0] *= f; g.vel[2] *= f;
+            g.wx *= limb ? 0.75 : 0.5; g.wz *= limb ? 0.75 : 0.5;
+            if (limb && up > 1.2) {
+              this.game.bleed(g.pos[0], fl + 0.08, g.pos[2], g.vel[0] >= 0 ? 1 : -1, 3);   // 튈 때마다 핏방울
+              if (g.part === 'head' && g.bounces === 1) this.game.sfx?.('land');
+            }
           }
         }
       }
