@@ -54,7 +54,6 @@ export class Gibs {
       g.vel = [att.facing * 15, 4.2, 0];
       g.wx = rand(-25, 25); g.wz = rand(-25, 25);
       g.thrown = { owner: att, team: att.team, golf: true };
-      this.game.texts.add(g.pos[0], g.pos[1] + 0.8, g.pos[2], '나이스 샷!', 'sever');
       this.game.bleed(g.pos[0], g.pos[1], g.pos[2], att.facing, 10);
       this.game.sfx?.('heavy');
     }
@@ -153,7 +152,7 @@ export class Gibs {
           attacker: th.owner, dmg: 20 * (th.owner.power ?? 1) * (th.owner.wpow ?? 1), knock: 6.5, dir, zone: 'head',
           knockdown: true, sever: 1.2, mode: 'knock', fling: 2, hitstop: .1, shake: .15,
         });
-        game.texts.add(a.x, a.y + 2.4 * a.scale, a.z, '헤드샷!', 'sever big');
+        if (th.owner === game.player) game.goreBonus(a, 'golf');
         game.stat('golf');
       } else applyHit(game, a, {
         attacker: th.owner, dmg: GIB_THROW.dmg * (th.owner.power ?? 1) * (th.owner.st8?.throwMul ?? 1), knock: GIB_THROW.knock, dir, zone: 'high',

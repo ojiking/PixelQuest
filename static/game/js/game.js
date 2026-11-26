@@ -1,6 +1,6 @@
 // 게임 월드: 스테이지 진행, 카메라, 웨이브, 투사체, 폭발, 렌더링
 import { mat4, clamp, rand, randi, sign, shuffle, pick, weightedPick } from './math.js';
-import { CHAPTER, STAGE_HEAL, ZONE_HEAL, EARLY_CHARGER_MAX, HERO_BLAST, HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
+import { GORE_BONUS, CHAPTER, STAGE_HEAL, ZONE_HEAL, EARLY_CHARGER_MAX, HERO_BLAST, HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
 import { Debris, Stains } from './fx.js';
 import { Gibs, bleed } from './gibs.js';
 import { getModel, WEAPON_MODEL } from './models.js';
@@ -13,8 +13,6 @@ const CAR_FLASH = [1, 1, 1, .6], CAR_WARN = [1, .5, .1, .5], CAR_ALARM = [1, .85
 import { applyHit } from './combat.js';
 
 export const PART_NAME = { head: '머리', armF: '팔', armB: '팔', handF: '아래팔', handB: '아래팔', legF: '다리', legB: '다리', shinF: '정강이', shinB: '정강이', torso: '몸통', upper: '상반신', lower: '하반신' };
-const SEVER_TEXT = { head: '목 절단!', armF: '팔 절단!', armB: '팔 절단!', handF: '손목 절단!', handB: '손목 절단!', legF: '다리 절단!', legB: '다리 절단!', shinF: '정강이 절단!', shinB: '정강이 절단!' };
-const CRUSH_TEXT = { head: '헤드 크러시!!', armF: '팔 분쇄!', armB: '팔 분쇄!', handF: '손 분쇄!', handB: '손 분쇄!', legF: '다리 분쇄!', legB: '다리 분쇄!', shinF: '정강이 분쇄!', shinB: '정강이 분쇄!' };
 
 // 가중치 기반 무기 뽑기
 // 이번 런에 나올 수 있는 무기 (정비소 해금에 따라)
@@ -139,7 +137,7 @@ export class Game {
     this.curSeg = null;
     this.running = true;
     this.banner(`STAGE ${i + 1} — ${this.stage.biome.name}`, 2.4);
-    if (this.stageHealMsg) { this.texts.add(3, 2.6, 0, `${this.stageHealMsg} 회복`, 'heal big'); this.stageHealMsg = null; }
+    if (this.stageHealMsg) { this.texts.add(3, 2.6, 0, `${this.stageHealMsg} 회복`, 'heal'); this.stageHealMsg = null; }
   }
 
   // ------------------------------------------------ 메인 업데이트
@@ -318,7 +316,7 @@ export class Game {
       const p = this.player;
       if (p.alive && ZONE_HEAL > 0) {
         const heal = Math.min(p.maxHp - p.hp, Math.round(p.maxHp * ZONE_HEAL));
-        if (heal > 0) { p.hp += heal; this.texts.add(p.x, p.y + 2.4, p.z, `+${heal}`, 'heal big'); this.debris.puff(p.x, p.y + 1, p.z, [0x7af08f, 0xc8ffd0], 14, 1.6, .1, .6, -0.6); }
+        if (heal > 0) { p.hp += heal; this.texts.add(p.x, p.y + 2.4, p.z, `+${heal}`, 'heal'); this.debris.puff(p.x, p.y + 1, p.z, [0x7af08f, 0xc8ffd0], 14, 1.6, .1, .6, -0.6); }
       }
     }
   }
@@ -425,7 +423,18 @@ export class Game {
     if (h.ignite) return; // 화염 지속 피해 숫자는 생략 (화면이 지저분해짐)
     const cls = v.team === 'hero' ? 'hurt' : (dmg >= 18 ? 'crit' : '');
     this.texts.add(v.x, v.y + 1.9 * v.scale, v.z, String(dmg), cls);
-    if (back) this.texts.add(v.x, v.y + 2.4 * v.scale, v.z, '백어택!', 'back');
+  }
+
+  // 고어 보너스: 작은 글씨로 '머리 절단 +3', 동전이 반짝이며 튐. 실제 부품(돈) 지급
+  goreBonus(v, key) {
+    const b = GORE_BONUS[key];
+    if (!b || !this.run) return;
+    const n = Math.max(1, Math.round(b.v * this.stats.player.scrapMul * (1 + HEAT.scrap * this.heat)));
+    this.run.scrap += n;
+    const y = (v.y ?? 0) + 2.2 * (v.scale ?? 1);
+    this.texts.add(v.x, y, v.z, `${b.label} +${n}`, 'coin');
+    for (let i = 0; i < 3 + n; i++) this.debris.spawn(v.x, y - 0.4, v.z, (Math.random() - .5) * 2.5, 3 + Math.random() * 2.5, (Math.random() - .5) * 1.2, 1, .84, 0, .09, .7, .8);
+    this.sfx?.('coin');
   }
 
   severPart(v, k, dir, h = {}) {
@@ -434,8 +443,10 @@ export class Game {
     this.run.severs++; this.stat('severs');
     this.sfx?.(h.mode === 'crush' ? 'crush' : 'splat');
     const crush = h.mode === 'crush';
-    const fly = h.fling > 2 && k === 'head' ? '홈런!!' : null;
-    this.texts.add(v.x, v.y + 2.2 * v.scale, v.z, fly ?? (crush ? CRUSH_TEXT[k] : SEVER_TEXT[k]) ?? '부위 파괴!', k === 'head' ? 'sever big' : 'sever');
+    if (h.attacker === this.player) {
+      const part = k.replace(/[FB]$/, '');
+      this.goreBonus(v, h.fling > 2 && k === 'head' ? 'homerun' : crush ? (k === 'head' ? 'crushHead' : 'crush') : part);
+    }
     if (k === 'head' && !v.dead) this.kill(v, { ...h, dir, knock: 3, bisect: 0 });
   }
 
@@ -473,7 +484,7 @@ export class Game {
     if (v.goItem) { v.goItem.claimed = null; v.goItem = null; }
     this.releaseToken(v);
     this.run.kills++;
-    if (h.explosion) this.stat('blast');
+    if (h.explosion) { this.stat('blast'); this.goreBonus(v, 'blast'); }
     if (v.isBoss) { this.stat('boss_' + v.type); if (this.player.hp <= 10 && this.player.alive) this.stat('clutch'); }
     if (this.run.perks.has('ration')) this.player.hp = Math.min(this.player.maxHp, this.player.hp + 3);
     const [a, b] = v.def.scrap;
@@ -486,14 +497,14 @@ export class Game {
     // 샷건으로 처치: 산산조각 (부위가 사방으로 멀리 날아감)
     if (h.mode === 'blast' && v.destructible && !v.remove) {
       v.blastApart(h.dir);
-      this.texts.add(v.x, v.y + 2.4 * v.scale, v.z, '산산조각!!', 'sever big');
+      if (h.attacker === this.player) this.goreBonus(v, 'shatter');
       this.hitstop(0.1);
       return;
     }
     // 전기톱/도끼 마무리: 허리가 두 동강
     if (h.bisect && v.destructible && !v.remove && Math.random() < h.bisect) {
       v.bisect(h.dir);
-      this.texts.add(v.x, v.y + 2.4 * v.scale, v.z, '두 동강!!', 'sever big');
+      if (h.attacker === this.player) this.goreBonus(v, 'bisect');
       this.hitstop(0.12); this.shake(0.3);
     }
   }
@@ -534,7 +545,7 @@ export class Game {
     for (let i = 0; i < 4; i++) this.bleed(cx, cy + Math.random() * 0.6, cz, i % 2 ? 1 : -1, 90);
     this.debris.puff(cx, cy, cz, [0xc81e24, 0x9e1219, 0xe0382c, 0x6a0a10], 80, 6, .22, 1.6, 1);
     p.hidden = true;
-    this.texts.add(cx, cy + 1.5, cz, '뱀돌이 사망', 'hurt big');
+
     this.hitstop(0.3); this.shake(0.8);
     this.sfx?.('death');
   }
@@ -560,7 +571,7 @@ export class Game {
         if (o.flung) o.flung.hit.add(a);
         if (!a.dead) { a.hp -= 5; if (a.hp <= 0) this.kill(a, { dir, knock: spd * 0.4 }); }
         a.vx *= 0.45;
-        this.texts.add(o.x, o.y + 2.1 * o.scale, o.z, '충돌!', 'back');
+
         this.sfx?.('thud');
       }
       for (const p of this.props) {
@@ -576,7 +587,7 @@ export class Game {
 
   wallSlam(a) {
     const dmg = Math.round(Math.abs(a.vx) * 1.2);
-    this.texts.add(a.x, a.y + 2, a.z, '벽꽝!', 'back');
+
     this.shake(0.15); this.hitstop(0.05);
     this.debris.puff(a.x + Math.sign(a.vx) * .3, a.y + 1, a.z, [0xbdb6a6, 0x8a8478], 10, 2, .14, .4, 0.3);
     this.sfx?.('thud');
@@ -604,7 +615,7 @@ export class Game {
         a.dead = true;
         this.releaseToken(a);
         this.run.kills++;
-        this.texts.add(a.x, 0.5, a.z, '추락!', 'sever');
+
       }
       a.remove = true;
       return;
@@ -620,10 +631,10 @@ export class Game {
     if (this.stats.player.fx?.has('parachute') && !this.run.fallSaved && a.hp > 30) {
       this.run.fallSaved = true;
       a.x = safe.x; a.z = safe.z; a.y = safe.y; a.vy = 0; a.fellOut = false; a.hp -= 30; a.invuln = 1.5;
-      this.texts.add(a.x, a.y + 2.4, a.z, '추락 전문가! -30', 'hurt big');
+      this.texts.add(a.x, a.y + 2.4, a.z, '추락 전문가! -30', 'hurt');
       return;
     }
-    this.texts.add(a.x, 0.5, a.z, '추락!!', 'hurt big');
+
     a.hp = 0; a.interrupt(); a.setState('ko');
     if (a.weapon) a.weapon = null;
     if (a.carry) a.carry = null; // 낭떠러지로 같이 떨어짐
@@ -643,7 +654,7 @@ export class Game {
     this.rescuePending = false;
     p.hp = Math.round(p.maxHp * BOT.rescueHpRatio);
     p.setState('getup');
-    this.texts.add(p.x, 2.4, p.z, '부활!', 'sever big');
+    this.texts.add(p.x, 2.4, p.z, '부활!', 'heal');
   }
 
   onShatter(v) {
@@ -728,7 +739,7 @@ export class Game {
     this.debris.sparks(cx - dir * c.len * 0.4, 0.9, cz + 0.6, 0xfff3a0, 8, 3);
     this.debris.puff(cx, 1.2, cz + 0.4, [0xbfe6ff, 0x8fc8ee, 0xe8f6ff], 6, 2.5, .07, .5, 0.05); // 유리 파편
     if (first) { this.sfx?.('alarm'); c.alarmT = 2.5; }
-    if (c.hp <= 0 && c.fuse < 0) { c.fuse = TRAPS.car.fuse; this.texts.add(cx, 2.2, cz, '펑!?', 'back'); }
+    if (c.hp <= 0 && c.fuse < 0) { c.fuse = TRAPS.car.fuse;}
   }
   updateCars(dt) {
     if (!this.stage.biome.city) return;
@@ -762,7 +773,7 @@ export class Game {
     this.stains.removeBox(c.x, c.x + c.len, c.z, c.z + c.dep, 0.9);  // 지붕 위 핏자국은 함께 날아감
     for (let x = c.x; x < c.x + c.len; x++) for (let z = c.z; z < c.z + c.dep; z++) this.stage.solid.set(x + ',' + z, 1.0);
     this.debris.puff(cx, 1.4, cz, [0xffe14a, 0xff8a1f, 0xd94a2a, 0x333333], 60, 7, .3, 1.1, -0.1);
-    this.texts.add(cx, 2.6, cz, '차량 폭발!', 'sever');
+
     this.explode(cx, cz, TRAPS.car.radius, TRAPS.car.dmg, null);
     this.shake(0.7);
   }
@@ -795,7 +806,7 @@ export class Game {
   eatFood(p, it) {
     const heal = Math.min(p.maxHp - p.hp, 30);
     p.hp += heal;
-    this.texts.add(p.x, p.y + 2.3, p.z, `+${heal}`, 'heal big');
+    this.texts.add(p.x, p.y + 2.3, p.z, `+${heal}`, 'heal');
     this.debris.puff(p.x, p.y + 1, p.z, [0x7af08f, 0xc8ffd0], 10, 1.4, .1, .5, -0.6);
     this.sfx?.('pickup');
   }
@@ -877,7 +888,7 @@ export class Game {
     p.setState('grab');
     // 덩치(슈퍼아머)는 금방 뿌리침
     e.grabEscape = e.def.poise ? 0.95 : 2.1;
-    this.texts.add(e.x, e.y + 2.2 * e.scale, e.z, '잡았다!', 'back');
+
     this.sfx?.('thud');
   }
 
@@ -907,7 +918,7 @@ export class Game {
     });
     if (!fin && !e.dead && e.grabbedBy === p) { e.setState('hurt'); e.hitstun = 99; }
     this.addCombo();
-    if (fin) { this.texts.add(e.x, e.y + 2.4 * e.scale, e.z, '니킥!', 'sever'); this.stat('knee'); }
+    if (fin) { this.stat('knee'); this.goreBonus(e, 'knee'); }
   }
 
   // 잡은 상태에서 L: 던지기 → 날아가는 몸이 되어 다른 적과 충돌
@@ -922,7 +933,7 @@ export class Game {
       knockdown: true, launch: 5, sever: 0.5, hitstop: .08, shake: .2,
     });
     this.addCombo();
-    this.texts.add(e.x, e.y + 2.4 * e.scale, e.z, '던지기!', 'sever');
+
     this.sfx?.('heavy');
   }
 
@@ -991,7 +1002,7 @@ export class Game {
     const saw = b.isBoss && b.weapon?.type === 'chainsaw';   // 보스: 전기톱 팔을 내밀고 지나감
     applyHit(this, a, { attacker: b, dmg: (a.team === 'enemy' ? 14 : 16) * (b.isBoss ? 1.4 : 1), knock: b.isBoss ? 9 : 8, dir: b.facing, zone: saw ? 'mid' : 'low', knockdown: true, sever: saw ? 2.4 : 1.3, mode: saw ? 'saw' : 'knock', launch: 6.5, hitstop: .06, shake: .2 });
     if (saw) this.bleed(a.x, a.y + 1.1 * a.scale, a.z + .2, b.facing, 14);
-    this.texts.add(a.x, a.y + 2.2 * a.scale, a.z, '치였다!', 'back');
+
   }
 
   // 폭주족이 오토바이에서 떨어짐 → 오토바이는 바닥 오브젝트(주워서 던지기 가능)
@@ -1005,7 +1016,7 @@ export class Game {
     this.debris.sparks(v.x, 0.4, v.z + 0.2, 0xfff3a0, 14, 4);
     this.sfx?.('clang');
     if (!dying) {
-      this.texts.add(v.x, v.y + 2.3, v.z, '낙차!', 'back');
+
       if (!v.weapon && Math.random() < 0.5) v.weapon = { type: pick(['chain', 'bat', 'pipe']), dur: 6 };
     }
   }
@@ -1113,7 +1124,7 @@ export class Game {
       const T = TRAPS.moto;
       mat4.identity(M); mat4.translate(M, pr.x, Math.max(0.3, pr.y), pr.z);
       this.debris.burst(getModel(this.r, 'moto').voxels, M, { frac: .7, size: .12, spread: 5 });
-      this.texts.add(pr.x, 2.4, pr.z, '오토바이 폭탄!', 'sever');
+
       this.explode(pr.x, pr.z, T.throwRadius, T.throwDmg * (pr.owner === this.player ? this.stats.player.throwMul : 1), null, pr.team);
       return;
     }

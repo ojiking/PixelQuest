@@ -176,6 +176,13 @@ export const TROPHIES = [
 export const HERO_BLAST = .55;
 // 회복: 스테이지 클리어 시 최대 체력의 20% 자동 회복 (+ 응급 처치 업그레이드). 구역 정리 회복은 없음(0)
 export const STAGE_HEAL = .2;
+// 고어 보너스: 뱀돌이가 직접 잔혹한 짓을 하면 부품(돈)을 줌 (작은 글씨 + 반짝이는 동전)
+export const GORE_BONUS = {
+  head:   { label: '머리 절단', v: 3 }, arm: { label: '팔 절단', v: 1 }, hand: { label: '손목 절단', v: 1 }, leg: { label: '다리 절단', v: 1 }, shin: { label: '정강이 절단', v: 1 },
+  crushHead: { label: '머리 분쇄', v: 3 }, crush: { label: '분쇄', v: 1 },
+  homerun: { label: '홈런', v: 4 }, golf: { label: '헤드샷', v: 3 }, shatter: { label: '산산조각', v: 4 }, bisect: { label: '두 동강', v: 4 },
+  blast: { label: '폭사', v: 2 }, knee: { label: '니킥', v: 1 },
+};
 export const ZONE_HEAL = 0;
 // 초반(첫 스테이지)에 동시에 나올 수 있는 돌격 헬멧 수
 export const EARLY_CHARGER_MAX = 1;

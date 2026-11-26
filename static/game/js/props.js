@@ -7,6 +7,7 @@ import { applyHit } from './combat.js';
 const M = mat4.create();
 const FLASH = [1, 1, 1, .7];
 const WARN = [1, .85, .2, .45];
+const COIN_GLINT = [1, 1, .8, .6];
 
 export class Prop {
   constructor(kind, x, z) {
@@ -122,7 +123,9 @@ export class Item {
     mat4.identity(M);
     const bob = this.kind === 'weapon' ? 0.05 : 0.12 + Math.sin(game.time * 4 + this.x) * 0.06;
     mat4.translate(M, this.x, this.y + bob, this.z);
-    mat4.rotateY(M, this.kind === 'weapon' ? 0.4 : game.time * 2);
-    r.drawMesh(getModel(r, this.modelKey).mesh, M);
+    mat4.rotateY(M, this.kind === 'weapon' ? 0.4 : game.time * (this.kind === 'scrap' ? 5 : 2) + this.x);
+    // 동전: 주기적으로 번쩍여서 눈에 띄게
+    const glint = this.kind === 'scrap' && ((game.time * 1.7 + this.x * .37) % 1) < 0.12 ? COIN_GLINT : null;
+    r.drawMesh(getModel(r, this.modelKey).mesh, M, glint);
   }
 }

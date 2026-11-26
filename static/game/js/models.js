@@ -513,8 +513,13 @@ const BUILDERS = {
     g.fill(0, 0, 0, 2, 3, 2, 0xd9442b);
     g.fill(0, 3, 0, 2, 3, 2, 0xc8c8c8); g.fill(0, 0, 0, 2, 0, 2, 0xc8c8c8);
   }),
-  scrap: r => single(r, 3, 3, 3, [1.5, 0, 1.5], g => {
-    g.fill(1, 0, 0, 1, 2, 2, 0xd8b04a); g.fill(0, 1, 0, 2, 1, 2, 0xd8b04a); g.fill(0, 0, 1, 2, 2, 1, 0xb88a2a);
+  // 동전(부품): 채도 높은 노란색 동전, 테두리는 진한 금색
+  scrap: r => single(r, 5, 5, 1, [2.5, 0, 0.5], g => {
+    for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) {
+      const d = (x - 2) ** 2 + (y - 2) ** 2;
+      if (d > 5) continue;
+      g.set(x, y, 0, d > 3 ? 0xe09a00 : (x === 1 && y === 3) || (x === 2 && y === 3) ? 0xfff58a : 0xffd400);
+    }
   }),
   crate: r => single(r, 9, 9, 9, [4.5, 0, 4.5], g => {
     g.fill(0, 0, 0, 8, 8, 8, 0xa77b4b);

@@ -22,10 +22,12 @@ b { color: var(--accent); }
 #texts { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .ftext { position: absolute; left: 0; top: 0; font-weight: 700; font-size: 18px; color: #fff; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000; white-space: nowrap; }
 .ftext.hurt { color: #ff6b5a; }
-.ftext.crit { color: var(--accent); font-size: 22px; }
+.ftext.crit { color: #ffe08a; font-size: 18px; }
 .ftext.back { color: #ffb03a; font-size: 14px; }
 .ftext.sever { color: #7df0ff; font-size: 16px; }
-.ftext.big { font-size: 26px; }
+.ftext.big { font-size: 18px; }
+/* 고어 보너스: 작고 또렷한 노란 글씨 */
+.ftext.coin { color: #ffd400; font-size: 13px; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 0 0 4px rgba(255, 212, 0, .7); }
 .ftext.heal { color: var(--hp); }
 .ftext.item { color: #fff3a0; font-size: 15px; }
 .ftext.warn { color: #7ff6ff; font-size: 30px; font-weight: 900; text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 0 0 8px #7ff6ff; }
