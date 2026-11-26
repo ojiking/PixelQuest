@@ -149,48 +149,63 @@ export class Debris {
   }
 }
 
-// 배경에 남는 핏자국: 표면 바로 안쪽에 묻힌 얇은 큐브 (표면에 페인트처럼 보임). 스테이지 끝까지 유지
+// 배경 핏자국: 스테이지 전체를 덮는 3D 맵(10cm 칸)에 직접 칠함 → 바닥·벽·차 표면이 그 색을 읽어 그림
+// 아무리 많이 묻어도 그리는 비용은 늘지 않음 (바뀐 칸만 GPU로 올림)
 export class Stains {
-  constructor(cap = 18000) { this.cap = cap; this.n = 0; this.head = 0; this.inst = new Float32Array(cap * 7); this.vis = new Float32Array(cap * 7); this.dens = new Map(); }
-  clear() { this.n = 0; this.head = 0; this.dens.clear(); }
-  // axis: 0 = x면(벽 옆), 1 = 바닥(위), 2 = z면(벽 앞) / sign: 표면이 바라보는 쪽의 반대(피가 날아온 방향)
-  add(x, y, z, axis, sign, size, r, g, b) {
-    // 같은 자리(약 20cm 칸)에 이미 충분히 묻었으면 더 쌓지 않음 → 보기엔 같고 개수는 크게 줄어듦
-    const key = axis + ':' + Math.round(x * 5) + ':' + Math.round(y * 5) + ':' + Math.round(z * 5);
-    const c = this.dens.get(key) || 0;
-    if (c >= 3 && size < 0.3) return;
-    this.dens.set(key, c + 1);
-    const d = this.inst, o = this.head * 7, e = 0.008;
-    const off = size / 2 - e;
-    if (axis === 1) { y -= off; }
-    else if (axis === 0) { x += sign * off; }
-    else { z += sign * off; }
-    const k = rand(0.62, 1.0);            // 마른 피~선홍색
-    d[o] = x; d[o + 1] = y; d[o + 2] = z; d[o + 3] = size;
-    d[o + 4] = r * k; d[o + 5] = g * k; d[o + 6] = b * k;
-    this.head = (this.head + 1) % this.cap;
-    this.n = Math.min(this.n + 1, this.cap);
+  constructor(r) { this.r = r; this.n = 0; this.data = null; }
+  init(L) {
+    this.res = 10;
+    this.o = [-1, -0.5, -6];                       // 월드 원점
+    this.W = Math.ceil((L + 2) * this.res); this.H = Math.ceil(3.5 * this.res); this.D = Math.ceil(14 * this.res);
+    this.data = new Uint8Array(this.W * this.H * this.D);
+    this.dirty = null; this.n = 0;
+    this.r.setStainVolume(this.data, this.W, this.H, this.D, this.o, this.res);
   }
-  // 화면 근처 핏자국만 골라서 그릴 버퍼로 (화면 밖까지 다 그리면 느려짐)
-  visible(cx, half) {
-    const d = this.inst, v = this.vis;
-    let m = 0;
-    for (let i = 0; i < this.n; i++) {
-      const o = i * 7;
-      if (d[o + 3] <= 0 || Math.abs(d[o] - cx) > half) continue;
-      const w = m * 7;
-      for (let k = 0; k < 7; k++) v[w + k] = d[o + k];
-      m++;
+  clear() { if (this.data) { this.data.fill(0); this.dirty = [0, this.W - 1, 0, this.H - 1, 0, this.D - 1]; } this.n = 0; }
+  cell(x, y, z) { return [Math.floor((x - this.o[0]) * this.res), Math.floor((y - this.o[1]) * this.res), Math.floor((z - this.o[2]) * this.res)]; }
+  put(ix, iy, iz, v) {
+    if (ix < 0 || iy < 0 || iz < 0 || ix >= this.W || iy >= this.H || iz >= this.D) return;
+    const k = ix + this.W * (iy + this.H * iz);
+    this.data[k] = Math.min(255, this.data[k] + v);
+    const d = this.dirty;
+    if (!d) this.dirty = [ix, ix, iy, iy, iz, iz];
+    else { if (ix < d[0]) d[0] = ix; if (ix > d[1]) d[1] = ix; if (iy < d[2]) d[2] = iy; if (iy > d[3]) d[3] = iy; if (iz < d[4]) d[4] = iz; if (iz > d[5]) d[5] = iz; }
+  }
+  // axis: 0 = x면(벽 옆), 1 = 바닥(위), 2 = z면(벽 앞) / sign: 피가 날아간 방향 (벽 안쪽)
+  add(x, y, z, axis, sign, size) {
+    if (!this.data) return;
+    this.n++;
+    const e = 0.03, rad = Math.max(0.6, size * 0.55 * this.res);   // 칸 단위 반지름
+    const R = Math.ceil(rad + 1);
+    let c, ua, ub;                                 // 칠할 평면의 두 축
+    if (axis === 1) { c = this.cell(x, y - e, z); ua = 0; ub = 2; }
+    else if (axis === 0) { c = this.cell(x + sign * e, y, z); ua = 1; ub = 2; }
+    else { c = this.cell(x, y, z + sign * e); ua = 0; ub = 1; }
+    for (let a = -R; a <= R; a++) for (let b = -R; b <= R; b++) {
+      const d = Math.hypot(a, b) / rad;
+      if (d > 1.25) continue;
+      const v = Math.max(0, 1.25 - d) * (0.6 + Math.random() * 0.6);
+      if (v < 0.15) continue;
+      const p = [c[0], c[1], c[2]]; p[ua] += a; p[ub] += b;
+      const amt = Math.round(v * 150);
+      this.put(p[0], p[1], p[2], amt);
+      if (axis === 1) this.put(p[0], p[1] - 1, p[2], amt >> 1);   // 블록 위 높이가 조금 달라도 묻게 한 층 더
     }
-    return m;
   }
   // 영역 안 핏자국 제거 (차가 폭발해 지붕이 사라질 때 등)
   removeBox(x0, x1, z0, z1, yMin) {
-    const d = this.inst;
-    for (let i = 0; i < this.n; i++) {
-      const o = i * 7;
-      if (d[o] >= x0 && d[o] <= x1 && d[o + 2] >= z0 && d[o + 2] <= z1 && d[o + 1] > yMin) d[o + 3] = 0;
+    if (!this.data) return;
+    const a = this.cell(x0, yMin, z0), b = this.cell(x1, 3, z1);
+    for (let iz = Math.max(0, a[2]); iz <= Math.min(this.D - 1, b[2]); iz++) for (let iy = Math.max(0, a[1]); iy < this.H; iy++) for (let ix = Math.max(0, a[0]); ix <= Math.min(this.W - 1, b[0]); ix++) {
+      this.data[ix + this.W * (iy + this.H * iz)] = 0;
     }
+    this.dirty = [0, this.W - 1, 0, this.H - 1, 0, this.D - 1];
+  }
+  // 프레임마다 바뀐 영역만 GPU로
+  flush() {
+    if (!this.dirty || !this.data) return;
+    this.r.updateStainVolume(this.data, this.dirty);
+    this.dirty = null;
   }
 }
 

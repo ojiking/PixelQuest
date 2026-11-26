@@ -33,7 +33,7 @@ export class Game {
   constructor(renderer, input, texts, hooks) {
     this.r = renderer; this.input = input; this.texts = texts; this.hooks = hooks;
     this.debris = new Debris();
-    this.stains = new Stains();
+    this.stains = new Stains(renderer);
     // 피 입자가 닿았을 때: 캐릭터 부위에 묻히거나 배경에 자국을 남김
     this.bloodHooks = {
       actor: (x, y, z) => this.bloodHitActor(x, y, z),
@@ -75,9 +75,10 @@ export class Game {
     if (this.stage) this.stage.dispose(this.r);
     this.run.stage = i;
     this.stage = new Stage(this, i, this.run.biomes[i]);
+    this.stains.init(this.stage.L);   // 스테이지 크기에 맞는 새 핏자국 맵
     this.props = this.stage.props; this.traps = this.stage.traps; this.items = this.stage.items;
     this.projectiles = []; this.enemies = []; this.tokens.clear();
-    this.debris.clear(); this.gibs.clear(); this.texts.clear(); this.stains.clear();
+    this.debris.clear(); this.gibs.clear(); this.texts.clear();
     for (const h of [this.player, this.bot]) {
       h.vx = h.vy = h.vz = 0; h.y = 0; h.grounded = true; h.fellOut = false; h.hidden = false; h.facing = 1; h.attack = null; h.weapon = h === this.player ? h.weapon : null;
       if (h.state !== 'ko') h.setState('idle');
@@ -1083,7 +1084,7 @@ export class Game {
         else if (s.alarmT > 0 && Math.floor(this.time * 6) % 2) tint = CAR_ALARM;
         if (s.fuse >= 0) mat4.translate(M, (Math.random() - .5) * .08, 0, 0);
       }
-      r.drawMesh(getModel(r, s.model).mesh, M, tint);
+      r.drawMesh(getModel(r, s.model).mesh, M, tint, 0, 1, null, true);
     }
     for (const p of st.poles) {
       if (!near(p.x)) continue;
@@ -1109,9 +1110,9 @@ export class Game {
     mat4.multiply(this.vp, this.proj, this.view);
     const b = this.stage.biome;
     r.begin(this.vp, eye, { sky: b.sky, fog: b.fog, fogNear: 34, fogFar: 80 });
-    r.drawMesh(this.stage.terrain, IDENT, null, 8);
+    this.stains.flush();
+    r.drawMesh(this.stage.terrain, IDENT, null, 8, 1, null, true);
     this.drawCity(r);
-    r.drawInstances(this.stains.vis, this.stains.visible(this.camX, this.viewHalf + 3));
     if (this.stage.hazardN) r.drawInstances(this.stage.hazard, this.stage.hazardN);
     for (const t of this.traps) t.draw(r, this);
     for (const p of this.props) p.draw(r, this);

@@ -39,8 +39,12 @@ void main() {
 
 const FS = `#version 300 es
 precision highp float;
+precision highp sampler3D;
 in vec3 vColor; in vec3 vColor2; in float vStrip; in vec3 vNormal; in vec3 vWorld; in vec3 vLocal;
 uniform vec4 uTint;
+uniform sampler3D uStain;  // 배경에 칠해진 핏자국 (월드 좌표 3D 맵)
+uniform vec3 uStainO, uStainS;
+uniform float uStainOn;
 uniform vec4 uSplat;   // x = 묻은 양(0~1), yzw = 무늬 시드
 uniform float uTex;
 uniform float uAlpha;
@@ -63,6 +67,18 @@ void main() {
       if (fy > edge) col = vColor2;
     }
     col *= 0.88 + 0.22 * hash(q);
+  }
+  if (uStainOn > 0.5) {
+    // 표면 바로 안쪽 지점의 핏자국 양을 읽어 칠함 (픽셀 단위로 또렷하게)
+    vec3 sp = (vWorld - n * 0.03 - uStainO) * uStainS;
+    if (all(greaterThanEqual(sp, vec3(0.0))) && all(lessThan(sp, vec3(1.0)))) {
+      float v = texture(uStain, sp).r;
+      if (v > 0.06) {
+        float h = hash(floor((vWorld - n * 0.03) * 20.0));
+        vec3 blood = vec3(0.34 + 0.24 * h, 0.012, 0.025) * (1.12 - v * 0.42);   // 많이 묻을수록 검붉게
+        col = mix(col, blood, min(0.96, 0.55 + v * 0.6));
+      }
+    }
   }
   if (uSplat.x > 0.0) {
     // 핏자국: 반 복셀 크기 칸마다 묻었는지 결정 → 양이 늘면 얼룩이 번지고, 줄면 듬성듬성 사라짐
@@ -237,7 +253,7 @@ export class Renderer {
     this.current = null;
   }
 
-  drawMesh(mesh, model = IDENTITY, tint = NO_TINT, tex = 0, alpha = 1, splat = NO_SPLAT) {
+  drawMesh(mesh, model = IDENTITY, tint = NO_TINT, tex = 0, alpha = 1, splat = NO_SPLAT, stained = false) {
     const gl = this.gl;
     const pr = this.mesh;
     if (this.current !== pr) { gl.useProgram(pr.p); this.current = pr; }
@@ -246,8 +262,44 @@ export class Renderer {
     gl.uniform1f(pr.u.uTex, tex);
     gl.uniform1f(pr.u.uAlpha, alpha);
     gl.uniform4fv(pr.u.uSplat, splat || NO_SPLAT);
+    gl.uniform1f(pr.u.uStainOn, stained && this.stainTex ? 1 : 0);
     gl.bindVertexArray(mesh.vao);
     gl.drawElements(gl.TRIANGLES, mesh.count, gl.UNSIGNED_INT, 0);
+  }
+
+  // 배경 핏자국 3D 맵 (R8, 한 칸 = 1/res m). origin/size는 월드 좌표
+  setStainVolume(data, W, H, D, origin, res) {
+    const gl = this.gl;
+    if (this.stainTex) gl.deleteTexture(this.stainTex);
+    const t = this.stainTex = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_3D, t);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    for (const w of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T, gl.TEXTURE_WRAP_R]) gl.texParameteri(gl.TEXTURE_3D, w, gl.CLAMP_TO_EDGE);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8, W, H, D, 0, gl.RED, gl.UNSIGNED_BYTE, data);
+    gl.activeTexture(gl.TEXTURE0);
+    this.stainDims = [W, H, D];
+    gl.useProgram(this.mesh.p); this.current = this.mesh;
+    gl.uniform1i(this.mesh.u.uStain, 1);
+    gl.uniform3f(this.mesh.u.uStainO, origin[0], origin[1], origin[2]);
+    gl.uniform3f(this.mesh.u.uStainS, res / W, res / H, res / D);
+  }
+  // 바뀐 상자 영역만 올림 (x0..x1, y0..y1, z0..z1 칸, 끝 포함)
+  updateStainVolume(data, b) {
+    const gl = this.gl, [W, H] = this.stainDims;
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_3D, this.stainTex);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.pixelStorei(gl.UNPACK_ROW_LENGTH, W);
+    gl.pixelStorei(gl.UNPACK_IMAGE_HEIGHT, H);
+    gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, b[0]);
+    gl.pixelStorei(gl.UNPACK_SKIP_ROWS, b[2]);
+    gl.pixelStorei(gl.UNPACK_SKIP_IMAGES, b[4]);
+    gl.texSubImage3D(gl.TEXTURE_3D, 0, b[0], b[2], b[4], b[1] - b[0] + 1, b[3] - b[2] + 1, b[5] - b[4] + 1, gl.RED, gl.UNSIGNED_BYTE, data);
+    for (const p of [gl.UNPACK_ROW_LENGTH, gl.UNPACK_IMAGE_HEIGHT, gl.UNPACK_SKIP_PIXELS, gl.UNPACK_SKIP_ROWS, gl.UNPACK_SKIP_IMAGES]) gl.pixelStorei(p, 0);
+    gl.activeTexture(gl.TEXTURE0);
   }
 
   // data: [x,y,z,size,r,g,b] * count
