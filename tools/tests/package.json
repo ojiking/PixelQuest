@@ -1,0 +1,12 @@
+{
+  "name": "baemdori-tests",
+  "private": true,
+  "description": "메탈펀치 뱀돌이 자동 테스트 (Playwright)",
+  "scripts": {
+    "test": "node full_run.js",
+    "play": "node play.js"
+  },
+  "dependencies": {
+    "playwright": "^1.50.0"
+  }
+}

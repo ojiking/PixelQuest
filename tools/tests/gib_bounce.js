@@ -1,0 +1,26 @@
+const { chromium } = require('playwright');
+const fs = require('fs'), path = require('path');
+const ROOT = path.resolve(__dirname, '../../static/game');
+const SP = path.join(__dirname, 'out'); require('fs').mkdirSync(SP, { recursive: true });
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
+(async () => {
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const errs = []; page.on('pageerror', e => errs.push(e.message + '\n' + e.stack));
+  await page.route('http://game.test/**', route => { const rel = new URL(route.request().url()).pathname.replace(/^\/+/, '') || 'index.html'; route.fulfill({ status: 200, contentType: TYPES[path.extname(rel)], body: fs.readFileSync(path.join(ROOT, rel)) }); });
+  await page.goto('http://game.test/index.html'); await page.waitForTimeout(1200);
+  await page.keyboard.press('Enter'); await page.waitForTimeout(800);
+  const ev = (f, a) => page.evaluate(f, a);
+  await ev(() => { const g = window.__game, p = g.player; for (const e of g.enemies) { e.remove = true; e.dead = true; } g.zoneIdx = g.stage.zones.length; g.lock = null; g.stage.hmap.clear(); p.x = 8; g.camX = 11;
+    const e = g.spawnEnemy('grunt', 1); e.x = 11; e.z = 0.5; e.dead = true; e.vx = 2; e.shatter(); g.kill(e, { dir: 1, knock: 3 });
+    window.__log = []; const t0 = performance.now();
+    window.__iv = setInterval(() => { const list = g.gibs.list.filter(q => q.part !== 'torso'); window.__log.push(list.map(q => q.pos[1].toFixed(2) + (q.rest ? 'R' : '') + ':' + (q.bounces || 0))); }, 120); });
+  await page.waitForTimeout(500); await page.screenshot({ path: SP + '/88_bounce.png' });
+  await page.waitForTimeout(2500);
+  const log = await ev(() => { clearInterval(window.__iv); return window.__log; });
+  const last = log[log.length - 1];
+  console.log('parts (height:bounces) at end:', last.join(' '));
+  console.log('first part height over time:', log.map(r => r[0]).join(' '));
+  console.log('errors', errs.length ? errs : 'none');
+  await browser.close();
+})();

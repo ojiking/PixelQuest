@@ -1,0 +1,21 @@
+const { chromium } = require('playwright');
+const fs = require('fs'), path = require('path');
+const ROOT = path.resolve(__dirname, '../../static/game');
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
+(async () => {
+  const browser = await chromium.launch({ args: process.env.GPU ? ['--enable-gpu', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : [] });
+  const page = await browser.newPage({ viewport: { width: +(process.env.W || 1280), height: +(process.env.H || 720) } });
+  await page.route('http://game.test/**', route => { const rel = new URL(route.request().url()).pathname.replace(/^\/+/, '') || 'index.html'; route.fulfill({ status: 200, contentType: TYPES[path.extname(rel)], body: fs.readFileSync(path.join(ROOT, rel)) }); });
+  await page.goto('http://game.test/index.html'); await page.waitForTimeout(1200);
+  await page.keyboard.press('Enter'); await page.waitForTimeout(1500);
+  const measure = () => page.evaluate(() => new Promise(res => { const g = window.__game; const r = g.render.bind(g), u = g.update.bind(g); let rt = 0, ut = 0, n = 0;
+    g.render = (...a) => { const t = performance.now(); const o = r(...a); rt += performance.now() - t; return o; };
+    g.update = (...a) => { const t = performance.now(); const o = u(...a); ut += performance.now() - t; n++; return o; };
+    let f = 0, t0 = performance.now(); const step = () => { if (++f < 60) requestAnimationFrame(step); else { g.render = r; g.update = u; res({ frame: +((performance.now() - t0) / 60).toFixed(1), render: +(rt / 60).toFixed(1), update: +(ut / Math.max(1, n)).toFixed(2) }); } }; requestAnimationFrame(step); }));
+  console.log('base', JSON.stringify(await measure()));
+  await page.evaluate(() => { const g = window.__game; for (let i = 0; i < 15000; i++) g.stains.add(g.camX + Math.random() * 16 - 8, 0, Math.random() * 7 - 3, 1, 1, 0.3, .6, 0, 0); });
+  console.log('15000 stains', JSON.stringify(await measure()));
+  await page.evaluate(() => { const g = window.__game; g.stains.clear(); });
+  console.log('cleared', JSON.stringify(await measure()));
+  await browser.close();
+})();
