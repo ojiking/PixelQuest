@@ -185,8 +185,8 @@ const SEG = {
   cliffFront(h, a, b) { fill(h, a, b, 3, PIT_Z1, PIT); },                 // 앞쪽 두 줄이 낭떠러지 (길이 넓어져 6칸 남음)
   cliffBack(h, a, b) { fill(h, a, b, PIT_Z0, -4, PIT); },                 // 뒤쪽 한 줄이 낭떠러지
   bridge(h, a, b) { fill(h, a, b, PIT_Z0, -4, PIT); fill(h, a, b, 3, PIT_Z1, PIT); }, // 다리 (6칸 폭: 피할 공간 확보)
-  gaps(h, a, b) {                                                           // 점프로 건너야 하는 틈
-    for (let x = a + 2; x + 2 <= b - 2; x += randi(4, 6)) fill(h, x, x + 2, PIT_Z0, PIT_Z1, PIT);
+  gaps(h, a, b) {                                                           // 점프로 건너야 하는 틈: 자연스럽게 구불구불한 균열
+    for (let x = a + 2; x + 3 <= b - 2; x += randi(5, 7)) crack(h, x, a + 1, b - 1);
   },
   barrier(h, a, b) {                                                        // 길을 막는 낮은 벽 (점프)
     for (let x = a + 2; x < b - 2; x += randi(4, 6)) fill(h, x, x + 1, LANE_Z0, LANE_Z1, 1);
@@ -199,6 +199,26 @@ const SEG = {
     }
   },
 };
+// 땅이 갈라진 균열: 줄(z)마다 좌우로 1칸씩 구불거리고 폭은 2~3칸 (항상 점프로 건널 수 있음)
+// 이웃 줄끼리 최소 1칸은 겹쳐서 대각선으로 빠져나갈 틈이 없음
+function crack(h, x0, lo, hi) {
+  let left = x0, trend = Math.random() < 0.5 ? -1 : 1, prevL = x0, prevR = x0 + 2;
+  for (let z = PIT_Z0; z <= PIT_Z1; z++) {
+    if (Math.random() < 0.45) left += Math.random() < 0.65 ? trend : -trend;   // 한쪽으로 비스듬히 흐르다가 가끔 꺾임
+    if (Math.random() < 0.15) trend = -trend;
+    left = Math.max(x0 - 1, Math.min(x0 + 1, left));
+    let w = Math.random() < 0.3 ? 3 : 2;
+    left = Math.max(lo, Math.min(hi - w, left));
+    // 이웃 줄과 겹치게 보정
+    if (left > prevR - 1) left = prevR - 1;
+    if (left + w < prevL + 1) w = prevL + 1 - left;
+    w = Math.min(3, w);
+    for (let x = left; x < left + w; x++) h.set(x + ',' + z, PIT);
+    // 가장자리가 부서진 듯한 홈 (폭 2일 때만, 총 3칸을 넘지 않게)
+    if (w === 2 && Math.random() < 0.18) h.set((Math.random() < .5 ? left - 1 : left + 2) + ',' + z, PIT);
+    prevL = left; prevR = left + w;
+  }
+}
 function fill(h, x0, x1, z0, z1, v) {
   for (let x = x0; x < x1; x++) for (let z = z0; z <= z1; z++) h.set(x + ',' + z, v);
 }
