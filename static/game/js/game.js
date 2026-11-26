@@ -92,7 +92,7 @@ export class Game {
       if (this.bot.state === 'ko') { this.bot.setState('idle'); this.bot.hp = Math.round(this.bot.maxHp * 0.5); }
     }
     this.actors = [this.player, this.bot];
-    this.camX = 0; this.lock = null; this.zoneIdx = 0;
+    this.camX = 0; this.camMax = 0; this.lock = null; this.zoneIdx = 0;
     this.lastSafe = { x: 3, z: 0, y: 0 };
     this.curSeg = null;
     this.running = true;
@@ -139,6 +139,7 @@ export class Game {
 
     this.updateZones(dt);
     this.updateCamera(dt);
+    this.cullBehind(dt);
     if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0) this.combo = 0; }
     if (this.goT > 0) this.goT -= dt;
 
@@ -213,6 +214,22 @@ export class Game {
     target = clamp(target, this.viewHalf - 1.5, this.stage.L - this.viewHalf + 1);
     if (this.camX === 0) this.camX = target;
     this.camX += (target - this.camX) * Math.min(1, dt * 4);
+  }
+
+  // 화면은 뒤로 돌아가지 않으므로, 지나온 화면 밖(왼쪽)의 시체·부위·아이템·오브젝트는 정리 (다시 볼 일이 없음)
+  cullBehind(dt) {
+    this.camMax = Math.max(this.camMax || 0, this.camX);
+    this.cullT = (this.cullT || 0) - dt;
+    if (this.cullT > 0) return;
+    this.cullT = 0.5;
+    const cut = this.camMax - this.viewHalf - 3;     // 전투 구역 고정 때 화면이 살짝 되돌아오는 만큼 여유
+    const g0 = this.gibs.list.length;
+    this.gibs.list = this.gibs.list.filter(g => g.pos[0] > cut);
+    this.gibs.spurts = this.gibs.spurts.filter(s => s.actor.x > cut);
+    for (const a of this.actors) if (a.team === 'enemy' && a.dead && a.x < cut) a.remove = true;
+    for (const it of this.items) if (it.x < cut) it.remove = true;
+    for (const p of this.props) if (p.x < cut && p.fuse < 0) p.broken = true;
+    this.culled = (this.culled || 0) + g0 - this.gibs.list.length;
   }
 
   // ------------------------------------------------ 전투 구역 / 웨이브
