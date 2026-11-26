@@ -153,8 +153,9 @@ export const BASE_UNLOCKS = { weapons: ['pipe', 'machete', 'block', 'golf', 'bat
 // 위험 등급(클리어할 때마다 한 단계씩 열림, 최대 5): 등급당 효과
 // 주변 폭발(드럼통·차·오토바이·폭죽 꼬마)이 뱀돌이·볼트에게 주는 피해 배율 (자기가 터뜨린 폭발에 너무 쉽게 죽지 않게)
 export const HERO_BLAST = .55;
-// 회복: 전투 구역을 정리할 때마다 최대 체력의 일부 자동 회복 (스테이지 사이 회복은 별도 25% + 응급 처치)
-export const ZONE_HEAL = .2;
+// 회복: 스테이지 클리어 시 최대 체력의 20% 자동 회복 (+ 응급 처치 업그레이드). 구역 정리 회복은 없음(0)
+export const STAGE_HEAL = .2;
+export const ZONE_HEAL = 0;
 // 초반(첫 스테이지)에 동시에 나올 수 있는 돌격 헬멧 수
 export const EARLY_CHARGER_MAX = 1;
 export const HEAT = { max: 5, enemyHp: .2, enemyPow: .12, scrap: .25 };

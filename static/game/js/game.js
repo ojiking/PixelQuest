@@ -1,6 +1,6 @@
 // 게임 월드: 스테이지 진행, 카메라, 웨이브, 투사체, 폭발, 렌더링
 import { mat4, clamp, rand, randi, sign, shuffle, pick, weightedPick } from './math.js';
-import { ZONE_HEAL, EARLY_CHARGER_MAX, HERO_BLAST, HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
+import { STAGE_HEAL, ZONE_HEAL, EARLY_CHARGER_MAX, HERO_BLAST, HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
 import { Debris, Stains } from './fx.js';
 import { Gibs, bleed } from './gibs.js';
 import { getModel, WEAPON_MODEL } from './models.js';
@@ -85,7 +85,7 @@ export class Game {
     this.player.x = 3; this.player.z = 0;
     this.bot.x = 1.6; this.bot.z = 0.9;
     if (i > 0) {
-      const heal = Math.min(this.player.maxHp - this.player.hp, Math.round(this.player.maxHp * (0.25 + this.stats.player.regen)));
+      const heal = Math.min(this.player.maxHp - this.player.hp, Math.round(this.player.maxHp * (STAGE_HEAL + this.stats.player.regen)));
       this.player.hp += heal;
       if (heal > 0) this.stageHealMsg = `+${heal}`;
       if (this.bot.state === 'ko') { this.bot.setState('idle'); this.bot.hp = Math.round(this.bot.maxHp * 0.5); }
@@ -256,7 +256,7 @@ export class Game {
       this.goT = 2.5;
       // 구역 정리 보상: 체력 회복
       const p = this.player;
-      if (p.alive) {
+      if (p.alive && ZONE_HEAL > 0) {
         const heal = Math.min(p.maxHp - p.hp, Math.round(p.maxHp * ZONE_HEAL));
         if (heal > 0) { p.hp += heal; this.texts.add(p.x, p.y + 2.4, p.z, `+${heal}`, 'heal big'); this.debris.puff(p.x, p.y + 1, p.z, [0x7af08f, 0xc8ffd0], 14, 1.6, .1, .6, -0.6); }
       }
