@@ -3,9 +3,10 @@ import { Renderer } from './gl.js';
 import { Input } from './input.js';
 import { Texts } from './fx.js';
 import { Game } from './game.js';
-import { PERKS, UPGRADES, WEAPONS, BOT, HEAT } from './config.js';
+import { PERKS, UPGRADES, WEAPONS, BOT, HEAT, TROPHIES, TROPHY_SLOTS } from './config.js';
+import { Hideout } from './hideout.js';
 import { STAGE_COUNT } from './level.js';
-import { loadMeta, saveMeta, resetMeta, computeStats, upgradeCost, buyUpgrade, level, botLevel, heatMax } from './meta.js';
+import { loadMeta, saveMeta, resetMeta, computeStats, upgradeCost, buyUpgrade, level, botLevel, heatMax, mergeRunStats, toggleEquip, unlocked } from './meta.js';
 import { shuffle } from './math.js';
 import { setupTouch, IS_MOBILE } from './touch.js';
 import { play as playSfx, sawLoop, isMuted, setMuted } from './sfx.js';
@@ -31,10 +32,13 @@ let pausedFrom = null;
 let perkChoices = [];
 let bannerT = 0;
 let resetArmed = false;
+let hubCont = false;      // 보스를 잡고 아지트에 온 경우: 다음 챕터로 이어서
+let panel = null;         // 아지트에서 열린 창: hero / bot / diff / trophy
+const hideout = new Hideout(renderer);
 
 const game = new Game(renderer, input, texts, {
   banner: (text, dur) => showBanner(text, dur),
-  onStageClear: final => (final ? finishRun(true) : showPerks()),
+  onStageClear: final => (final ? finishChapter() : showPerks()),
   onRunEnd: () => finishRun(false),
 });
 game.sfx = playSfx;
@@ -82,51 +86,91 @@ function showTitle() {
     </div>`);
 }
 
+// ------------------------------------------------------------ 아지트 (정비소)
+// 3D 아지트 장면 위에 버튼을 띄우고, 누르면 해당 창이 열림
+const hubUI = document.createElement('div');
+hubUI.id = 'hubui'; hubUI.className = 'hidden';
+$('stage').appendChild(hubUI);
+
+function upgradeCard(u) {
+  const lv = level(meta, u.id), cost = upgradeCost(meta, u);
+  const can = cost != null && meta.scrap >= cost;
+  return `<div class="ucard ${cost == null ? 'max' : ''}">
+    <div class="uname">${u.name} <span class="pips">${u.max > 5 ? `Lv ${lv}/${u.max}` : '■'.repeat(lv) + '□'.repeat(u.max - lv)}</span></div>
+    <div class="udesc">${u.desc}</div>
+    <button class="btn small" data-buy="${u.id}" ${can ? '' : 'disabled'}>${cost == null ? (u.unlock ? '해금됨' : 'MAX') : `⚙ ${cost}`}</button>
+  </div>`;
+}
+function groupCards(names) {
+  const cls = meta.botClass === 'tank' ? 'tank' : 'attack';
+  return names.map(g => {
+    const list = UPGRADES.filter(u => u.group === g && (!u.cls || u.cls === cls));
+    return list.length ? `<div class="ugroup"><h3>${g}</h3>${list.map(upgradeCard).join('')}</div>` : '';
+  }).join('');
+}
+
+function panelHtml(kind, msg) {
+  const bank = `<div class="bank">보유 부품 <b>⚙ ${Math.floor(meta.scrap)}</b></div>${msg ? `<div class="msg">${msg}</div>` : ''}`;
+  const close = `<div class="row"><button class="btn primary" data-act="close">닫기 (Esc)</button></div>`;
+  if (kind === 'hero') return `<div class="panel hub"><h1>주인공 단련</h1>${bank}<div class="ugrid">${groupCards(['해금 · 무기고', '뱀돌이 · 기본', '뱀돌이 · 무기', '뱀돌이 · 기술'])}</div>${close}</div>`;
+  if (kind === 'bot') {
+    const cls = meta.botClass === 'tank' ? 'tank' : 'attack';
+    const pick = `<div class="clspick">${Object.entries(BOT.classes).map(([k, c]) => `<button class="cls ${k === cls ? 'on' : ''}" data-cls="${k}"><b>${c.name}</b><span>${c.desc}</span></button>`).join('')}</div>`;
+    return `<div class="panel hub"><h1>볼트 업그레이드 <small class="dim">Lv ${botLevel(meta)} · ${BOT.classes[cls].name}</small></h1>${bank}${pick}<div class="ugrid">${groupCards(['볼트'])}</div>${close}</div>`;
+  }
+  if (kind === 'diff') return `<div class="panel hub"><h1>난이도 선택</h1>${bank}${heatRow()}<div class="ugrid">${groupCards(['해금 · 지역·적'])}</div>${close}</div>`;
+  if (kind === 'trophy') {
+    const got = TROPHIES.filter(t => meta.trophies[t.id]).length;
+    const cards = TROPHIES.map(t => {
+      const has = meta.trophies[t.id], on = meta.equip.includes(t.id), isTitle = meta.title === t.id;
+      return `<div class="ucard tcard ${has ? '' : 'locked'} ${on ? 'on' : ''}">
+        <div class="uname">${has ? t.name : '???'} <span class="pips">${t.kind === 'title' ? '호칭' : '전리품'}</span></div>
+        <div class="udesc">${has ? '' : '조건: '}${t.cond}${t.fx ? `<br><span class="fx">효과: ${t.fxDesc}</span>` : ''}</div>
+        <div class="tbtns">${has && t.fx ? `<button class="btn small" data-equip="${t.id}" ${!on && meta.equip.length >= TROPHY_SLOTS ? 'disabled' : ''}>${on ? '장착 해제' : '장착'}</button>` : ''}
+        ${has && t.kind === 'title' ? `<button class="btn small ghost" data-title="${t.id}">${isTitle ? '호칭 해제' : '호칭 달기'}</button>` : ''}</div>
+      </div>`;
+    }).join('');
+    return `<div class="panel hub"><h1>전리품 진열대 <small class="dim">${got} / ${TROPHIES.length}</small></h1>
+      <div class="bank">효과 장착 <b>${meta.equip.length} / ${TROPHY_SLOTS}</b> <span class="dim">· 호칭은 체력바 옆에 표시됩니다</span></div>${msg ? `<div class="msg">${msg}</div>` : ''}
+      <div class="ugrid tgrid">${cards}</div>${close}</div>`;
+  }
+  return '';
+}
+
 function showHub(msg = '') {
   mode = 'hub';
   hud.classList.add('hidden');
-  const groups = {};
-  const cls = meta.botClass === 'tank' ? 'tank' : 'attack';
-  for (const u of UPGRADES) if (!u.cls || u.cls === cls) (groups[u.group] ||= []).push(u);
-  const clsPick = `<div class="clspick">${Object.entries(BOT.classes).map(([k, c]) => `
-      <button class="cls ${k === cls ? 'on' : ''}" data-cls="${k}"><b>${c.name}</b><span>${c.desc}</span></button>`).join('')}</div>`;
-  const cards = Object.entries(groups).map(([g, list]) => `
-    <div class="ugroup"><h3>${g}${g === '볼트' ? ` <small>Lv ${botLevel(meta)} · ${BOT.classes[cls].name}</small>` : ''}</h3>
-      ${g === '볼트' ? clsPick : ''}
-      ${list.map(u => {
-        const lv = level(meta, u.id), cost = upgradeCost(meta, u);
-        const can = cost != null && meta.scrap >= cost;
-        return `<div class="ucard ${cost == null ? 'max' : ''}">
-          <div class="uname">${u.name} <span class="pips">${u.max > 5 ? `Lv ${lv}/${u.max}` : '■'.repeat(lv) + '□'.repeat(u.max - lv)}</span></div>
-          <div class="udesc">${u.desc}</div>
-          <button class="btn small" data-buy="${u.id}" ${can ? '' : 'disabled'}>${cost == null ? (u.unlock ? '해금됨' : 'MAX') : `⚙ ${cost}`}</button>
-        </div>`;
-      }).join('')}
-    </div>`).join('');
-  setScreen(`
-    <div class="panel hub">
-      <h1>정비소</h1>
-      <div class="bank">보유 부품 <b>⚙ ${Math.floor(meta.scrap)}</b> <span class="dim">· 출동 ${meta.runs}회 · 클리어 ${meta.wins}회</span></div>
-      ${msg ? `<div class="msg">${msg}</div>` : ''}
-      ${heatRow()}
-      <div class="ugrid">${cards}</div>
-      <div class="row">
-        <button class="btn primary" data-act="start">출동 (Enter)</button>
-        <button class="btn ghost" data-act="reset">기록 초기화</button>
-      </div>
-    </div>`, 'wide');
+  $('banner').classList.add('hidden'); bannerT = 0;
+  hideout.setState(meta, BOT.classes[meta.botClass === 'tank' ? 'tank' : 'attack'].model, unlocked(meta).bosses);
+  const ch = game.run?.chapter || 1;
+  hubUI.innerHTML = `
+    <div class="hinfo"><b>⚙ ${Math.floor(meta.scrap)}</b> <span class="dim">· 출동 ${meta.runs}회 · 최고 챕터 ${meta.bestChapter || 0}</span>
+      ${hubCont ? `<div class="hcont">CHAPTER ${ch} 클리어! 업그레이드 후 다음 챕터로</div>` : ''}${!panel && msg ? `<div class="msg">${msg}</div>` : ''}</div>
+    <button class="hbtn" data-open="hero" data-anchor="hero">💪 주인공 단련</button>
+    <button class="hbtn" data-open="bot" data-anchor="bot">🔧 볼트 업그레이드</button>
+    <button class="hbtn" data-open="diff" data-anchor="wanted">☠ 난이도 선택${meta.heat ? ` (${meta.heat})` : ''}</button>
+    <button class="hbtn" data-open="trophy" data-anchor="trophy">🏆 전리품 진열대</button>
+    <button class="btn primary hgo" data-act="start">${hubCont ? `다음 스테이지로 ▶ CHAPTER ${ch + 1}` : '새 게임 시작'} (Enter)</button>
+    <button class="btn ghost small hreset" data-act="reset">기록 초기화</button>`;
+  if (IS_MOBILE) hubUI.innerHTML = hubUI.innerHTML.replace(/ \((Enter|Esc)\)/g, '');
+  hubUI.classList.remove('hidden');
+  if (panel) setScreen(panelHtml(panel, msg), 'wide hubpanel');
+  else setScreen('');
 }
+function openPanel(kind, msg = '') { panel = kind; showHub(msg); }
+function leaveHub() { panel = null; hubUI.classList.add('hidden'); }
 
-// 위험 등급 선택 (클리어할 때마다 한 단계씩 열림)
+// 난이도 선택 (클리어할 때마다 한 단계씩 열림)
 function heatRow() {
   const mx = heatMax(meta), h = meta.heat || 0;
-  if (!mx) return `<div class="heat dim">위험 등급: 첫 클리어 시 해금 — 적이 강해지는 대신 부품을 더 얻음</div>`;
-  return `<div class="heat">위험 등급 <button class="btn small" data-heat="-1" ${h <= 0 ? 'disabled' : ''}>◀</button>
+  if (!mx) return `<div class="heat dim">난이도: 보스를 처음 잡으면 해금 — 적이 강해지는 대신 부품을 더 얻음</div>`;
+  return `<div class="heat">난이도 <button class="btn small" data-heat="-1" ${h <= 0 ? 'disabled' : ''}>◀</button>
     <b class="hv">${h}</b> / ${mx} <button class="btn small" data-heat="1" ${h >= mx ? 'disabled' : ''}>▶</button>
     <span class="dim">적 체력 +${Math.round(HEAT.enemyHp * h * 100)}% · 공격력 +${Math.round(HEAT.enemyPow * h * 100)}% · 부품 +${Math.round(HEAT.scrap * h * 100)}%</span></div>`;
 }
 
 function startRun() {
+  leaveHub(); hubCont = false;
   game.startRun(computeStats(meta));
   mode = 'run';
   setScreen('');
@@ -170,38 +214,75 @@ function choosePerk(i) {
   const p = perkChoices[i];
   if (!p) return;
   game.run.perks.add(p.id);
-  const pl = game.player, bot = game.bot;
-  if (p.id === 'tough') { pl.maxHp += 25; pl.hp = pl.maxHp; }
-  if (p.id === 'overclock') { bot.atkSpeed *= 1.25; bot.speed *= 1.25; }
-  if (p.id === 'botpower') bot.power *= 1.35;
+  game.applyPerks(p.id);
   setScreen('');
   mode = 'run';
   game.loadStage(game.run.stage + 1);
 }
 
+// 결과 공통: 부품을 저장하고 기록을 누적, 새 전리품 표시
+function bankRun(bonus) {
+  const r = game.run;
+  const gained = Math.floor(r.scrap) + bonus;
+  meta.scrap += gained;
+  r.banked = (r.banked || 0) + gained;
+  r.scrap = 0;
+  return gained;
+}
+function trophyLine(got) {
+  return got.length ? `<div class="newt">🏆 새 전리품: ${got.map(t => `<b>${t.name}</b>`).join(', ')} <span class="dim">(아지트 진열대에서 확인)</span></div>` : '';
+}
+function runStats(r) {
+  const t = Math.floor(r.time);
+  return `<div>처치 <b>${r.kills}</b> · 부위 파괴 <b>${r.severs}</b> · 최대 콤보 <b>${r.maxCombo}</b></div>
+    <div>플레이 시간 <b>${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}</b></div>
+    <div class="dim">특성: ${[...r.perks].map(id => PERKS.find(p => p.id === id).name).join(', ') || '없음'}</div>`;
+}
+
+// 보스를 잡음 → 챕터 클리어 → 아지트에서 정비 후 다음 챕터로
+function finishChapter() {
+  mode = 'result';
+  const r = game.run;
+  const gained = bankRun(25);
+  meta.wins++;
+  meta.bestChapter = Math.max(meta.bestChapter || 0, r.chapter);
+  const got = mergeRunStats(meta, r);
+  saveMeta(meta);
+  hubCont = true;
+  setScreen(`
+    <div class="panel">
+      <h1 class="win">CHAPTER ${r.chapter} 클리어!</h1>
+      <div class="stats">
+        <div>이번 챕터 부품 <b>⚙ ${gained}</b> <span class="dim">(보스 보너스 25 포함)</span></div>
+        ${runStats(r)}
+      </div>
+      ${trophyLine(got)}
+      <p class="dim">아지트에서 정비하고 다음 챕터로. 챕터가 오를수록 적이 강해집니다.</p>
+      <button class="btn primary" data-act="hub">아지트로 (Enter)</button>
+    </div>`);
+}
+
 function finishRun(win) {
   mode = 'result';
   const r = game.run;
-  const bonus = win ? 25 : 0;
-  const gained = Math.floor(r.scrap) + bonus;
-  meta.scrap += gained;
+  const gained = bankRun(0);
   meta.runs++;
-  if (win) meta.wins++;
-  meta.bestStage = Math.max(meta.bestStage, r.stage + (win ? 1 : 0));
+  meta.bestStage = Math.max(meta.bestStage, r.stage + 1);
+  meta.bestChapter = Math.max(meta.bestChapter || 0, (r.chapter || 1) - 1);
+  const got = mergeRunStats(meta, r);
   saveMeta(meta);
-  const t = Math.floor(r.time);
+  hubCont = false;
   setScreen(`
     <div class="panel">
-      <h1 class="${win ? 'win' : 'lose'}">${win ? '작전 성공!' : '뱀돌이 쓰러짐…'}</h1>
+      <h1 class="lose">뱀돌이 쓰러짐…</h1>
       <div class="stats">
-        <div>도달 스테이지 <b>${r.stage + 1} / ${STAGE_COUNT}</b></div>
-        <div>처치 <b>${r.kills}</b> · 부위 파괴 <b>${r.severs}</b> · 최대 콤보 <b>${r.maxCombo}</b></div>
-        <div>플레이 시간 <b>${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}</b></div>
-        <div>획득 부품 <b>⚙ ${Math.floor(r.scrap)}</b>${bonus ? ` + 클리어 보너스 ${bonus}` : ''}</div>
-        <div class="dim">특성: ${[...r.perks].map(id => PERKS.find(p => p.id === id).name).join(', ') || '없음'}</div>
+        <div>도달 <b>CHAPTER ${r.chapter || 1} · STAGE ${r.stage + 1} / ${STAGE_COUNT}</b></div>
+        ${runStats(r)}
+        <div>획득 부품 <b>⚙ ${(r.banked || 0)}</b> <span class="dim">(이번 판 전체)</span></div>
       </div>
-      <p class="dim">죽어도 부품은 남습니다. 정비소에서 뱀돌이와 볼트를 강화하세요.</p>
-      <button class="btn primary" data-act="hub">정비소로 (Enter)</button>
+      ${trophyLine(got)}
+      <p class="dim">죽어도 부품은 남습니다. 아지트에서 뱀돌이와 볼트를 강화하고 처음부터 다시.</p>
+      <button class="btn primary" data-act="hub">아지트로 (Enter)</button>
     </div>`);
 }
 
@@ -229,26 +310,42 @@ function showBanner(text, dur) {
 
 // ------------------------------------------------------------ 입력 (메뉴)
 screen.addEventListener('click', e => {
-  const t = e.target.closest('[data-act],[data-buy],[data-perk],[data-cls],[data-heat]');
+  const t = e.target.closest('[data-act],[data-buy],[data-perk],[data-cls],[data-heat],[data-open],[data-equip],[data-title]');
   if (!t) return;
   playSfx('ui');
-  if (t.dataset.cls) { meta.botClass = t.dataset.cls; saveMeta(meta); preview(); showHub(`볼트를 ${BOT.classes[t.dataset.cls].name}으로 바꿨습니다.`); return; }
+  if (t.dataset.open) { openPanel(t.dataset.open); return; }
+  if (t.dataset.equip) { toggleEquip(meta, t.dataset.equip); showHub(); return; }
+  if (t.dataset.title) { meta.title = meta.title === t.dataset.title ? null : t.dataset.title; saveMeta(meta); showHub(); return; }
+  if (t.dataset.cls) { meta.botClass = t.dataset.cls; saveMeta(meta); showHub(`볼트를 ${BOT.classes[t.dataset.cls].name}으로 바꿨습니다.`); return; }
   if (t.dataset.heat) { meta.heat = Math.max(0, Math.min(heatMax(meta), (meta.heat || 0) + +t.dataset.heat)); saveMeta(meta); showHub(); return; }
   if (t.dataset.buy) { if (buyUpgrade(meta, t.dataset.buy)) showHub('업그레이드 완료!'); return; }
   if (t.dataset.perk) { choosePerk(+t.dataset.perk); return; }
   act(t.dataset.act);
 });
 
+
+hubUI.addEventListener('click', e => {
+  const t = e.target.closest('[data-act],[data-open]');
+  if (!t) return;
+  playSfx('ui');
+  if (t.dataset.open) { openPanel(t.dataset.open); return; }
+  act(t.dataset.act);
+});
+
 function act(a) {
   if (a !== 'reset') resetArmed = false;
   switch (a) {
-    case 'hub': showHub(); break;
-    case 'start': startRun(); break;
+    case 'hub': panel = null; showHub(); break;
+    case 'close': panel = null; showHub(); break;
+    case 'start':
+      if (mode === 'hub' && hubCont && game.run) { leaveHub(); setScreen(''); hubCont = false; game.continueRun(computeStats(meta)); mode = 'run'; hud.classList.remove('hidden'); }
+      else startRun();
+      break;
     case 'resume': togglePause(); break;
     case 'mute': setMuted(!isMuted()); mode = 'run'; togglePause(); break;
     case 'giveup': game.running = false; finishRun(false); break;
     case 'reset':
-      if (resetArmed) { resetArmed = false; meta = resetMeta(); showHub('기록을 초기화했습니다.'); }
+      if (resetArmed) { resetArmed = false; meta = resetMeta(); hubCont = false; showHub('기록을 초기화했습니다.'); }
       else { resetArmed = true; showHub('한 번 더 누르면 부품과 업그레이드 기록이 모두 지워집니다.'); }
       break;
   }
@@ -261,13 +358,13 @@ addEventListener('keydown', e => {
     renderer.pixelScale = order[(order.indexOf(renderer.pixelScale) + 1) % order.length];
     showBanner(`픽셀 크기 x${renderer.pixelScale}`, 1);
   }
-  if (e.code === 'Escape') togglePause();
+  if (e.code === 'Escape') { if (mode === 'hub' && panel) { panel = null; showHub(); } else togglePause(); }
   if (e.code === 'KeyH' && mode === 'run') helpT = helpT > 0 ? 0 : 9999;
   if (e.code === 'KeyM') { setMuted(!isMuted()); showBanner(isMuted() ? '효과음 꺼짐' : '효과음 켜짐', 1); }
   if (e.code === 'Enter') {
     if (mode === 'title') startRun();
-    else if (mode === 'result') showHub();
-    else if (mode === 'hub') startRun();
+    else if (mode === 'result') { panel = null; showHub(); }
+    else if (mode === 'hub' && !panel) act('start');
   }
   if (mode === 'perk' && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) choosePerk(+e.code.slice(5) - 1);
 });
@@ -304,7 +401,8 @@ function updateHud(dt) {
   setText('tactic', b.state === 'ko' ? `수리 중 ${Math.ceil(b.koT)}s` : game.rescuePending ? '구조 중!' : b.tacticDef.name);
   setText('scrap-n', String(Math.floor(game.run.scrap)));
   const z = game.stage.zones.length;
-  setText('stage-info', `STAGE ${game.run.stage + 1}/${STAGE_COUNT} · ${game.stage.biome.name} · 구역 ${Math.min(game.zoneIdx + 1, z)}/${z}`);
+  setText('stage-info', `CHAPTER ${game.run.chapter || 1} · STAGE ${game.run.stage + 1}/${STAGE_COUNT} · ${game.stage.biome.name} · 구역 ${Math.min(game.zoneIdx + 1, z)}/${z}`);
+  setText('ptitle', game.stats.title ? `「${game.stats.title}」 ` : '');
   const boss = game.enemies.find(e => e.isBoss && !e.dead);
   $('boss').classList.toggle('hidden', !boss);
   if (boss) { setText('boss-name', boss.def.name); setWidth('hp-boss', boss.hp / boss.maxHp); }
@@ -313,6 +411,15 @@ function updateHud(dt) {
   c.classList.toggle('hidden', game.combo < 2);
   if (game.combo >= 2) setText('combo', `${game.combo} HIT`);
   $('perks-hud').textContent = [...game.run.perks].map(id => PERKS.find(x => x.id === id).name).join(' · ');
+}
+
+// 아지트 버튼을 3D 장면 속 위치에 붙임
+function placeHubButtons() {
+  const st = $('stage'), W = st.clientWidth, H = st.clientHeight, A = hideout.anchors();
+  for (const b of hubUI.querySelectorAll('[data-anchor]')) {
+    const [x, y] = hideout.project(A[b.dataset.anchor], W, H);
+    b.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+  }
 }
 
 // ------------------------------------------------------------ 루프
@@ -333,7 +440,11 @@ function frame(now) {
       if (game.camX > game.stage.L - 12) game.camX = 9;
     }
   }
-  if (game.stage) {
+  if (mode === 'hub') {
+    hideout.update(dt);
+    hideout.render(renderer.resize());
+    placeHubButtons();
+  } else if (game.stage) {
     game.render();
     texts.update(mode === 'run' ? dt : 0, game.vp);
   }

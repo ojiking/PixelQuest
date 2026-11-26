@@ -92,7 +92,8 @@ export class Player extends Actor {
       }
       case 'idle':
       case 'walk': {
-        const slow = this.carry?.kind === 'barrel' ? 0.78 : this.carry?.kind === 'moto' ? 0.68 : 1;
+        let slow = this.carry?.kind === 'barrel' ? 0.78 : this.carry?.kind === 'moto' ? 0.68 : 1;
+        if (this.st8.fx?.has('bloodrush') && this.blood) { const v = Object.values(this.blood); slow *= 1 + 0.15 * v.reduce((a, b) => a + b, 0) / 10; }   // 전리품: 피범벅
         this.vx = mx * this.spd * slow;
         this.vz = mz * this.zspd * slow;
         if (mx) this.facing = mx > 0 ? 1 : -1;

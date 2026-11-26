@@ -1,6 +1,6 @@
 // 게임 월드: 스테이지 진행, 카메라, 웨이브, 투사체, 폭발, 렌더링
 import { mat4, clamp, rand, randi, sign, shuffle, pick, weightedPick } from './math.js';
-import { STAGE_HEAL, ZONE_HEAL, EARLY_CHARGER_MAX, HERO_BLAST, HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
+import { CHAPTER, STAGE_HEAL, ZONE_HEAL, EARLY_CHARGER_MAX, HERO_BLAST, HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
 import { Debris, Stains } from './fx.js';
 import { Gibs, bleed } from './gibs.js';
 import { getModel, WEAPON_MODEL } from './models.js';
@@ -18,11 +18,11 @@ const CRUSH_TEXT = { head: '헤드 크러시!!', armF: '팔 분쇄!', armB: '팔
 
 // 가중치 기반 무기 뽑기
 // 이번 런에 나올 수 있는 무기 (정비소 해금에 따라)
-let WEAPON_POOL = null;
+let WEAPON_POOL = null, WEAPON_MUL = {};
 export const weaponOk = k => !WEAPON_POOL || WEAPON_POOL.includes(k);
 export function rollWeapon(exclude = []) {
   const w = {};
-  for (const [k, d] of Object.entries(WEAPONS)) if (!exclude.includes(k) && weaponOk(k)) w[k] = d.weight ?? 1;
+  for (const [k, d] of Object.entries(WEAPONS)) if (!exclude.includes(k) && weaponOk(k)) w[k] = (d.weight ?? 1) * (WEAPON_MUL[k] ?? 1);
   if (!Object.values(w).some(v => v > 0)) return 'pipe';
   return weightedPick(w);
 }
@@ -60,15 +60,57 @@ export class Game {
     const U = stats.unlocked ?? { biomes: Object.keys(BIOMES), bosses: ['boss', 'cyborg'], weapons: null };
     WEAPON_POOL = U.weapons;
     this.heat = stats.heat || 0;
+    WEAPON_MUL = stats.player.fx?.has('golfLuck') ? { golf: 3 } : {};
     this.run = {
-      stage: 0, scrap: 0, kills: 0, severs: 0, maxCombo: 0, time: 0,
+      chapter: 1, stat: {}, stage: 0, scrap: 0, kills: 0, severs: 0, maxCombo: 0, time: 0,
       perks: new Set(), biomes: shuffle([...U.biomes]).slice(0, 2), boss: pick(U.bosses), introduced: new Set(), seen: new Set(), rescueUsed: false, // 바이옴 순서·최종 보스 무작위
     };
     this.player = new Player(this, stats.player);
     this.bot = new Companion(this, stats.bot);
+    this.giveStartWeapon();
     this.rescuePending = false;
     this.endTimer = -1;
     this.loadStage(0);
+  }
+
+  // 전리품 효과: 시작 무기
+  giveStartWeapon() {
+    const fx = this.stats.player.fx;
+    if (fx?.has('startSaw')) this.player.weapon = { type: 'chainsaw', dur: Math.round(WEAPONS.chainsaw.dur / 2) };
+    else if (fx?.has('startLid')) this.player.weapon = { type: 'manhole', dur: WEAPONS.manhole.dur };
+  }
+  stat(k, n = 1) { if (this.run?.stat) this.run.stat[k] = (this.run.stat[k] || 0) + n; }
+
+  // 보스를 잡고 아지트에 다녀온 뒤: 같은 판을 이어서 다음 챕터 (특성·처치 기록 유지, 업그레이드 반영)
+  continueRun(stats) {
+    const prev = this.player, ratio = prev ? Math.max(0.2, prev.hp / prev.maxHp) : 1;
+    this.stats = stats;
+    const U = stats.unlocked;
+    WEAPON_POOL = U.weapons;
+    WEAPON_MUL = stats.player.fx?.has('golfLuck') ? { golf: 3 } : {};
+    this.heat = stats.heat || 0;
+    const r = this.run;
+    const bosses = U.bosses.length > 1 ? U.bosses.filter(b => b !== r.boss) : U.bosses;
+    Object.assign(r, { chapter: r.chapter + 1, stage: 0, scrap: 0, biomes: shuffle([...U.biomes]).slice(0, 2), boss: pick(bosses), rescueUsed: false, fallSaved: false });
+    this.player = new Player(this, stats.player);
+    this.bot = new Companion(this, stats.bot);
+    this.applyPerks();
+    this.player.hp = Math.min(this.player.maxHp, Math.round(this.player.maxHp * (ratio + STAGE_HEAL + stats.player.regen)));
+    this.giveStartWeapon();
+    this.rescuePending = false;
+    this.endTimer = -1;
+    this.loadStage(0);
+    this.banner(`CHAPTER ${r.chapter} — ${this.stage.biome.name}`, 2.6);
+  }
+
+  // 판 중에 고른 특성의 즉시 효과 (새로 만든 뱀돌이·볼트에 다시 적용)
+  applyPerks(only = null) {
+    const pl = this.player, bot = this.bot;
+    for (const id of only ? [only] : this.run.perks) {
+      if (id === 'tough') { pl.maxHp += 25; pl.hp = pl.maxHp; }
+      if (id === 'overclock') { bot.atkSpeed *= 1.25; bot.speed *= 1.25; }
+      if (id === 'botpower') bot.power *= 1.35;
+    }
   }
 
   loadStage(i) {
@@ -336,8 +378,9 @@ export class Game {
     let spot = this.stage.safeSpot(cx + side * (this.viewHalf + 1.2), rand(LANE.zMin + 0.2, LANE.zMax - 0.2));
     // 플레이어 쪽으로 걸어올 길이 낭떠러지로 끊겨 있으면 화면 가장자리 안쪽에서 등장
     if (!this.reachable(spot.x, cx, spot.z)) spot = this.stage.safeSpot(cx + side * (this.viewHalf - 1.2), spot.z);
-    const e = new Enemy(this, type, spot.x, spot.z, (1 + this.run.stage * 0.15) * (1 + HEAT.enemyHp * this.heat));
-    e.power *= 1 + HEAT.enemyPow * this.heat;   // 위험 등급
+    const ch = (this.run.chapter || 1) - 1;
+    const e = new Enemy(this, type, spot.x, spot.z, (1 + this.run.stage * 0.15) * (1 + HEAT.enemyHp * this.heat) * (1 + CHAPTER.enemyHp * ch));
+    e.power *= (1 + HEAT.enemyPow * this.heat) * (1 + CHAPTER.enemyPow * ch);   // 난이도 · 챕터
     // 처음 보는 적은 이름을 알려줌 (기본 적 제외)
     if (this.run.seen && !this.run.seen.has(type)) {
       this.run.seen.add(type);
@@ -388,7 +431,7 @@ export class Game {
   severPart(v, k, dir, h = {}) {
     v.severPart(k, dir, h);
     if (v.mounted && /^(leg|shin)/.test(k)) this.dismount(v, dir);
-    this.run.severs++;
+    this.run.severs++; this.stat('severs');
     this.sfx?.(h.mode === 'crush' ? 'crush' : 'splat');
     const crush = h.mode === 'crush';
     const fly = h.fling > 2 && k === 'head' ? '홈런!!' : null;
@@ -430,6 +473,8 @@ export class Game {
     if (v.goItem) { v.goItem.claimed = null; v.goItem = null; }
     this.releaseToken(v);
     this.run.kills++;
+    if (h.explosion) this.stat('blast');
+    if (v.isBoss) { this.stat('boss_' + v.type); if (this.player.hp <= 10 && this.player.alive) this.stat('clutch'); }
     if (this.run.perks.has('ration')) this.player.hp = Math.min(this.player.maxHp, this.player.hp + 3);
     const [a, b] = v.def.scrap;
     const n = randi(a, b);
@@ -571,6 +616,13 @@ export class Game {
       if (a.state !== 'ko') { a.hp = 0; a.interrupt(); a.setState('ko'); a.koT = BOT.koTime; this.say(a, '추락… 자가 수리 중'); }
       return;
     }
+    this.stat('fall');
+    if (this.stats.player.fx?.has('parachute') && !this.run.fallSaved && a.hp > 30) {
+      this.run.fallSaved = true;
+      a.x = safe.x; a.z = safe.z; a.y = safe.y; a.vy = 0; a.fellOut = false; a.hp -= 30; a.invuln = 1.5;
+      this.texts.add(a.x, a.y + 2.4, a.z, '추락 전문가! -30', 'hurt big');
+      return;
+    }
     this.texts.add(a.x, 0.5, a.z, '추락!!', 'hurt big');
     a.hp = 0; a.interrupt(); a.setState('ko');
     if (a.weapon) a.weapon = null;
@@ -602,6 +654,7 @@ export class Game {
   }
 
   explode(x, z, radius, dmg, source, spareTeam = null) {
+    if (this.stats?.player.fx?.has('pyro')) radius *= 1.25;
     if (source && source.type === 'bomber') {
       source.exploded = true;
       source.dead = true;
@@ -764,6 +817,7 @@ export class Game {
           const fresh = o.dur === WEAPONS[o.type].dur;
           const dur = o.dur * (fresh && this.run.perks.has('durable') ? 1.6 : 1) * (fresh ? this.stats.player.durMul : 1);
           p.weapon = { type: o.type, dur: Math.round(dur) };
+          if (o.type === 'manhole') this.stat('manhole');
           this.texts.add(p.x, 2.3, p.z, WEAPONS[o.type].name, 'item');
         }
         return;
@@ -848,12 +902,12 @@ export class Game {
     const fin = p.knees >= 3;
     if (fin) this.releaseGrab(p);
     applyHit(this, e, {
-      attacker: p, grab: true, dmg: (fin ? 15 : 8) * p.power, knock: fin ? 7 : 0, dir: p.facing, zone: fin ? 'head' : 'mid',
+      attacker: p, grab: true, dmg: (fin ? 15 : 8) * p.power * (this.stats.player.fx?.has('knee') ? 1.4 : 1), knock: fin ? 7 : 0, dir: p.facing, zone: fin ? 'head' : 'mid',
       knockdown: fin, launch: fin ? 6 : undefined, sever: fin ? 1.0 : 0.4, hitstop: fin ? .1 : .06, shake: fin ? .15 : .06, hitstun: 99,
     });
     if (!fin && !e.dead && e.grabbedBy === p) { e.setState('hurt'); e.hitstun = 99; }
     this.addCombo();
-    if (fin) this.texts.add(e.x, e.y + 2.4 * e.scale, e.z, '니킥!', 'sever');
+    if (fin) { this.texts.add(e.x, e.y + 2.4 * e.scale, e.z, '니킥!', 'sever'); this.stat('knee'); }
   }
 
   // 잡은 상태에서 L: 던지기 → 날아가는 몸이 되어 다른 적과 충돌
@@ -1072,7 +1126,7 @@ export class Game {
     }
   }
 
-  bleed(x, y, z, dir, n) { bleed(this.debris, x, y, z, dir, n); }
+  bleed(x, y, z, dir, n) { bleed(this.debris, x, y, z, dir, this.stats?.player.fx?.has('gore2') ? n * 2 : n); }
 
   // ------------------------------------------------ 연출
   hitstop(t) { this.hitstopT = Math.max(this.hitstopT, t); }

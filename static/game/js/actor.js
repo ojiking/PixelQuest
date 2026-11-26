@@ -178,6 +178,7 @@ export class Actor {
     if (d.projectile === 'barrel') {
       if (!a.spawned) {
         a.spawned = true;
+        if (this.carry?.kind === 'moto' && this.team === 'hero') g.stat('moto');
         if (HEAVY.has(this.carry?.kind)) g.spawnProjectile({ kind: this.carry.kind, x: this.x + this.facing * 0.5, y: 1.7 * this.scale, z: this.z, dir: this.facing, team: this.team, dmg: 0, owner: this });
         this.carry = null;
       }
@@ -617,6 +618,7 @@ export class Actor {
   updateBlood(dt) {
     if (!this.blood || this.dead) return;
     const rate = this.team === 'hero' ? BLOOD.heroFade : BLOOD.enemyFade;
+    if (this === this.game.player && !this.bathed && Object.keys(this.parts).filter(k => this.parts[k].alive).every(k => (this.blood[k] || 0) >= 0.85)) { this.bathed = true; this.game.stat('bath'); }
     for (const k in this.blood) this.blood[k] = Math.max(0, this.blood[k] - rate * dt);
   }
 

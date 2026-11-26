@@ -265,7 +265,7 @@ export class Stage {
         waves.push(['grunt', 'thrower', 'grunt']);
         waves.push(['boss', 'grunt']);
       } else {
-        waves.push(...this.curveWaves(game, zoneT(index, zi), zi === triggers.length - 1));
+        waves.push(...this.curveWaves(game, Math.min(1, zoneT(index, zi) + ((game.run.chapter || 1) - 1)), zi === triggers.length - 1));
       }
       this.zones.push({ trigger: tx, waves, boss: isBoss });
       // 구역 근처 폭발 드럼통
@@ -329,7 +329,7 @@ export class Stage {
     for (const k of run.introduced) {
       const c = ENEMY_CURVE[k];
       const u = Math.min(1, Math.max(0, (t - c.from) / Math.max(.01, 1 - c.from)));
-      pool[k] = (c.w[0] + (c.w[1] - c.w[0]) * u) * (this.biome.city && c.city ? c.city : 1);
+      pool[k] = (c.w[0] + (c.w[1] - c.w[0]) * u) * (this.biome.city && c.city ? c.city : 1) * (k === 'biker' && game.stats?.player.fx?.has('bikers') ? 2 : 1);
     }
     const W = WAVE_CURVE;
     const nWaves = Math.round(W.waves[0] + (W.waves[1] - W.waves[0]) * t) + (lastOfStage && t < .5 ? 1 : 0);

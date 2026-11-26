@@ -50,6 +50,7 @@ function buildHit(att, d, v) {
   if (held && att.wpow) dmg *= att.wpow;                       // 무기 숙련
   if (d.anim === 'dashAtk' && att.dashLv) dmg *= 1 + 0.25 * att.dashLv; // 대쉬 숙련
   if (att.perk('sever')) sever *= 1.6;
+  if (att.st8?.fx?.has('clutch') && att.hp < att.maxHp * 0.25) dmg *= 1.35;   // 전리품: 구사일생
   const dir = d.aoe ? (sign(v.x - att.x) || att.facing) : att.facing;
   return {
     attacker: att, dmg, knock, dir, zone, knockdown: !!d.knockdown, sever, mode, fling, bisect,

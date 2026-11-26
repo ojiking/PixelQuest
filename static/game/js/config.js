@@ -150,7 +150,28 @@ export const WAVE_CURVE = { size: [3, 6.5], waves: [2, 3] };
 
 // ---------------- 해금 전 기본 콘텐츠 ----------------
 export const BASE_UNLOCKS = { weapons: ['pipe', 'machete', 'block', 'golf', 'bat', 'katana', 'manhole'], biomes: ['plains', 'city'], bosses: ['boss'] };
-// 위험 등급(클리어할 때마다 한 단계씩 열림, 최대 5): 등급당 효과
+// 챕터: 스테이지 2개 + 보스. 보스를 잡으면 아지트를 거쳐 다음 챕터로 (챕터마다 강해짐)
+export const CHAPTER = { enemyHp: .25, enemyPow: .12 };
+
+// 전리품 진열대: 조건을 달성하면 얻음. fx가 있는 것은 아지트에서 최대 3개까지 장착 (도움 또는 괴상한 효과)
+//  kind: title(호칭, HUD 이름 옆에 표시 가능) / item(진열 물건)
+export const TROPHY_SLOTS = 3;
+export const TROPHIES = [
+  { id: 'rookie',   kind: 'title', name: '신참 해결사',     model: 'medal',     cond: '첫 출동을 마침',                     test: s => s.runs >= 1 },
+  { id: 'butcher',  kind: 'title', name: '정육점 주인',     model: 'w_machete', cond: '누적 부위 절단 150회',               test: s => (s.severs || 0) >= 150, fx: 'gore2', fxDesc: '피가 두 배로 튄다 (괴상)' },
+  { id: 'homerun',  kind: 'item',  name: '황금 골프공',     model: 'goldball',  cond: '골프 헤드샷 5회',                    test: s => (s.golf || 0) >= 5, fx: 'golfLuck', fxDesc: '골프채가 세 배 자주 나온다' },
+  { id: 'kneeking', kind: 'title', name: '니킥 장인',       model: 'medal',     cond: '세 번째 무릎(니킥) 30회',            test: s => (s.knee || 0) >= 30, fx: 'knee', fxDesc: '무릎 차기 피해 +40%' },
+  { id: 'pyro',     kind: 'item',  name: '그을린 라이터',   model: 'lighter',   cond: '폭발로 적 30명 처치',                test: s => (s.blast || 0) >= 30, fx: 'pyro', fxDesc: '모든 폭발 범위 +25% (내 쪽도 위험)' },
+  { id: 'biker',    kind: 'item',  name: '훔친 오토바이 열쇠', model: 'key',    cond: '오토바이 5대 던지기',                test: s => (s.moto || 0) >= 5, fx: 'bikers', fxDesc: '폭주족이 두 배로 몰려온다 (괴상)' },
+  { id: 'manhole',  kind: 'item',  name: '맨홀 뚜껑',       model: 'manhole',   cond: '맨홀 뚜껑 3번 획득',                 test: s => (s.manhole || 0) >= 3, fx: 'startLid', fxDesc: '맨홀 뚜껑을 들고 시작' },
+  { id: 'demo',     kind: 'item',  name: '철거반장의 안전모', model: 'hardhat', cond: '철거반장 처치',                      test: s => (s.boss_boss || 0) >= 1, fx: 'hp15', fxDesc: '최대 체력 +15' },
+  { id: 'saw',      kind: 'item',  name: '쇠톱의 전기톱 팔', model: 'w_chainsaw', cond: '사이보그 폭주왕 처치',             test: s => (s.boss_cyborg || 0) >= 1, fx: 'startSaw', fxDesc: '전기톱을 들고 시작 (내구도 절반)' },
+  { id: 'clutch',   kind: 'title', name: '구사일생',        model: 'medal',     cond: '체력 10 이하로 보스 처치',           test: s => (s.clutch || 0) >= 1, fx: 'clutch', fxDesc: '체력 25% 이하일 때 공격력 +35%' },
+  { id: 'bath',     kind: 'title', name: '피범벅',          model: 'medal',     cond: '온몸이 피로 물듦',                   test: s => (s.bath || 0) >= 1, fx: 'bloodrush', fxDesc: '피에 젖을수록 빨라짐 (최대 +15%)' },
+  { id: 'faller',   kind: 'title', name: '추락 전문가',     model: 'medal',     cond: '낭떠러지에 5번 떨어짐',              test: s => (s.fall || 0) >= 5, fx: 'parachute', fxDesc: '판마다 한 번, 떨어져도 살아남음 (체력 -30)' },
+];
+
+// 난이도(클리어할 때마다 한 단계씩 열림, 최대 5): 단계당 효과
 // 주변 폭발(드럼통·차·오토바이·폭죽 꼬마)이 뱀돌이·볼트에게 주는 피해 배율 (자기가 터뜨린 폭발에 너무 쉽게 죽지 않게)
 export const HERO_BLAST = .55;
 // 회복: 스테이지 클리어 시 최대 체력의 20% 자동 회복 (+ 응급 처치 업그레이드). 구역 정리 회복은 없음(0)

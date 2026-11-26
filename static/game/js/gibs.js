@@ -154,6 +154,7 @@ export class Gibs {
           knockdown: true, sever: 1.2, mode: 'knock', fling: 2, hitstop: .1, shake: .15,
         });
         game.texts.add(a.x, a.y + 2.4 * a.scale, a.z, '헤드샷!', 'sever big');
+        game.stat('golf');
       } else applyHit(game, a, {
         attacker: th.owner, dmg: GIB_THROW.dmg * (th.owner.power ?? 1) * (th.owner.st8?.throwMul ?? 1), knock: GIB_THROW.knock, dir, zone: 'high',
         knockdown: false, sever: 0.3, hitstop: .04, shake: .05, hitstun: GIB_THROW.hitstun,
