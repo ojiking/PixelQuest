@@ -154,7 +154,12 @@ export class Game {
     const P = this.player;
     // 새 지형 구간에 들어서면 짧게 안내
     const seg = this.stage.segments.find(sg => P.x >= sg.a && P.x < sg.b);
-    if (seg && seg !== this.curSeg) { this.curSeg = seg; if (SEG_HINTS[seg.type]) this.banner(SEG_HINTS[seg.type], 1.6); }
+    // 지형 안내는 한 판에 종류별로 처음 한 번만 (같은 종류 구간이 여러 번 나오거나 경계를 오가도 다시 안 뜸)
+    if (seg && seg !== this.curSeg) {
+      this.curSeg = seg;
+      this.run.hintSeen ??= new Set();
+      if (SEG_HINTS[seg.type] && !this.run.hintSeen.has(seg.type)) { this.run.hintSeen.add(seg.type); this.banner(SEG_HINTS[seg.type], 1.6); }
+    }
     if (P.grounded && P.floor >= 0 && P.state !== 'ko' && [-.4, .4].every(d => this.floorAt(P.x + d, P.z) >= 0 && this.floorAt(P.x, P.z + d * .7) >= 0)) {
       this.lastSafe = { x: P.x, z: P.z, y: P.floor };
     }
