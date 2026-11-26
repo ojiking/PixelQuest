@@ -100,6 +100,15 @@ export class Item {
       if (this.y <= fl && this.y > fl - 0.5) { this.y = fl; this.vy = Math.abs(this.vy) > 3 ? -this.vy * 0.3 : 0; this.vx *= 0.5; }
       if (this.y < -6) { this.remove = true; return; }
     }
+    // 음식(체력 회복): 가까이 가면 자동으로 먹음. 체력이 가득이면 남겨 둠
+    if (this.kind === 'food' && this.vy === 0) {
+      const p = game.player;
+      if (!p.alive || p.hp >= p.maxHp) return;
+      const dx = p.x - this.x, dz = p.z - this.z, d = Math.hypot(dx, dz);
+      if (d < 1.3 && d > 0.01) { this.x += dx / d * dt * 4; this.z += dz / d * dt * 4; }   // 살짝 끌려옴
+      if (d < 0.5 && Math.abs(p.y - this.y) < 1) { this.remove = true; game.eatFood(p, this); }
+      return;
+    }
     if (this.kind === 'scrap') {
       const p = game.player;
       if (p.state === 'ko') return;

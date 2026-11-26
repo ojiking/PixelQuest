@@ -701,7 +701,7 @@ export class Game {
   lAction(p) {
     let best = null, bd = 1e9;
     for (const it of this.items) {
-      if (it.kind === 'scrap') continue;
+      if (it.kind === 'scrap' || it.kind === 'food') continue;   // 음식은 닿으면 자동으로 먹음
       const dx = Math.abs(it.x - p.x), dz = Math.abs(it.z - p.z);
       if (dx < 0.9 && dz < 0.6 && dx + dz < bd) { best = it; bd = dx + dz; }
     }
@@ -719,6 +719,14 @@ export class Game {
     const gib = this.gibs.nearest(p.x, p.z);
     if (gib) return { type: 'gib', obj: gib, x: gib.pos[0], y: gib.pos[1] + 0.6, z: gib.pos[2], verb: '줍기', label: PART_NAME[gib.part] ?? '조각' };
     return null;
+  }
+
+  eatFood(p, it) {
+    const heal = Math.min(p.maxHp - p.hp, 30);
+    p.hp += heal;
+    this.texts.add(p.x, p.y + 2.3, p.z, `+${heal}`, 'heal big');
+    this.debris.puff(p.x, p.y + 1, p.z, [0x7af08f, 0xc8ffd0], 10, 1.4, .1, .5, -0.6);
+    this.sfx?.('pickup');
   }
 
   interact(p) {
