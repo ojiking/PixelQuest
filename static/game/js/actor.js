@@ -16,6 +16,7 @@ const CHAR = [.08, .05, .03, .7];
 const HEAVY = new Set(['barrel', 'moto']); // 머리 위로 들어 던지는 물건
 const BURN = [1, .45, .08, .35];
 const WARN = [.55, 1, 1, .62];   // 공격 예고: 피(빨강)와 겹치지 않는 밝은 청록
+const GHOST = [.6, .9, 1, .7];   // 숄더 태클 잔상 색
 
 export class Actor {
   constructor(game, modelKey, o) {
@@ -546,9 +547,14 @@ export class Actor {
         T.torso = -.15; T.twist = Math.sin(t * 50) * .03;
         T.legF = .4; T.legB = -.35; T.shinB = -.25; break;
       }
-      case 'dashAtk': // 어깨 박치기 + 무릎
-        T.torso = -.6; T.armF = 1.2; T.handF = 1.5; T.armB = -.6; T.handB = .8;
-        T.legF = 1.1; T.shinF = -1.1; T.legB = -.5; T.shinB = -.4; T.twist = -.35; T.head = .25; break;
+      case 'dashAtk': { // 숄더 태클: 상체를 깊게 숙이고 앞 어깨·팔뚝을 방패처럼 내밀어 들이받음
+        const run = Math.sin(t * 30);
+        T.torso = S ? -.45 : -.95; T.head = .55;
+        T.armF = 1.75; T.handF = 2.5;           // 앞팔: 팔꿈치를 앞으로, 팔뚝은 가슴 앞에 접음
+        T.armB = -1.0; T.handB = .5;            // 뒷팔: 뒤로 크게 젖힘
+        T.legF = .9 + run * .5; T.shinF = -1.0 - Math.max(0, run) * .6; T.legB = -.7 - run * .4; T.shinB = -.6;
+        T.twist = -.5; break;
+      }
       case 'stomp': // 두 발로 내려찍기
         T.legF = S ? .9 : .15; T.shinF = S ? -1.4 : -.1; T.legB = S ? .7 : -.15; T.shinB = S ? -1.4 : -.1;
         T.armF = 2.4; T.armB = 2.2; T.torso = .15; break;
@@ -635,6 +641,17 @@ export class Actor {
   draw(r) {
     if (this.hidden) return;
     if (this.invuln > 0 && this.team === 'hero' && Math.floor(this.game.time * 20) % 2) return;
+    // 숄더 태클: 뒤로 늘어지는 청백색 잔상
+    if (this.attack?.def.anim === 'dashAtk' && this.attack.t < this.attack.def.startup + this.attack.def.active) {
+      const x0 = this.x;
+      for (let i = 3; i >= 1; i--) {
+        this.x = x0 - this.facing * 0.42 * i;
+        const gm = this.rootMatrix(M);
+        GHOST[3] = 0.85 - i * 0.12;
+        for (const k of PART_ORDER) if (this.parts[k].alive) { this.partMatrix(k, gm, PM); r.drawMesh(this.model.parts[k].mesh, PM, GHOST); }
+      }
+      this.x = x0;
+    }
     const root = this.rootMatrix(M);
     const tint = this.tint();
     if (this.mounted) {

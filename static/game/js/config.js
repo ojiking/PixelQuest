@@ -50,7 +50,8 @@ export const ATTACKS = {
   kick:    { startup: .09, active: .10, recovery: .22, range: [.1, 1.5], depth: .55, dmg: 14, knock: 5.5, zone: 'mid',  hitstop: .10, anim: 'kick', knockdown: true, finisher: true },
   flykick: { startup: .04, active: .40, recovery: .10, range: [0, 1.3],  depth: .55, dmg: 13, knock: 8,   zone: 'high', hitstop: .09, anim: 'flykick', knockdown: true },
   // 대쉬 어택: 몸통 박치기. 맞은 적이 멀리 날아가 다른 적과 부딪힘
-  dashAtk: { startup: .03, active: .22, recovery: .28, range: [0, 1.25], depth: .6,  dmg: 12, knock: 12,  zone: 'mid',  hitstop: .12, anim: 'dashAtk', knockdown: true, launch: 3.2, momentum: true, shake: .18 },
+  // 숄더 태클: 몸을 낮추고 어깨로 들이받는 돌진기 (돌진 중 무적, 맞은 적은 날아가 다른 적과 충돌)
+  dashAtk: { startup: .04, active: .26, recovery: .26, range: [0, 1.35], depth: .65, dmg: 17, knock: 13.5, zone: 'mid',  hitstop: .14, anim: 'dashAtk', knockdown: true, launch: 4.2, momentum: true, shake: .28, armor: true },
   // 공중 무기 휘두르기
   airSlash: { startup: .06, active: .14, recovery: .12, range: [.1, 1.0], depth: .6, dmg: 1.2, knock: 5,   zone: 'high', hitstop: .09, anim: 'swing', weapon: true, knockdown: true },
   // 내려찍기: 공중에서 아래+공격. 착지 충격으로 쓰러진 적까지 짓밟음

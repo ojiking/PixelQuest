@@ -97,6 +97,7 @@ export function tryHits(game, att, a) {
 
 export function applyHit(game, v, h) {
   if (v.dead || v.invuln > 0 || v.state === 'ko') return false;
+  if (v.attack?.def.armor && v.attack.t < v.attack.def.startup + v.attack.def.active) return false;   // 숄더 태클 돌진 중엔 무적
   if ((v.state === 'down' || v.state === 'getup' || v.state === 'ko') && !h.explosion && !(h.otg && v.state === 'down')) return false;
   let dmg = h.dmg;
   let back = false;

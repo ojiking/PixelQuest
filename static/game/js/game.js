@@ -425,6 +425,23 @@ export class Game {
     this.texts.add(v.x, v.y + 1.9 * v.scale, v.z, String(dmg), cls);
   }
 
+  // 숄더 태클 시작: 뒤로 흙먼지 + 앞으로 바람 줄기
+  dashBurst(p) {
+    const d = p.facing;
+    this.debris.puff(p.x - d * .3, p.y + .15, p.z, [0xd8d0c0, 0xb8b0a0, 0xffffff], 14, 2.2, .16, .45, -0.3);
+    for (let i = 0; i < 16; i++) this.debris.spawn(p.x + d * (0.3 + Math.random() * .6), p.y + 0.4 + Math.random() * 1.2, p.z + (Math.random() - .5) * .4, -d * (7 + Math.random() * 5), 0, 0, .9, .97, 1, .05, .18 + Math.random() * .1, 0);
+    this.sfx?.('dash');
+  }
+  // 숄더 태클 명중: 충격파 고리 + 섬광 + 묵직한 소리
+  dashImpact(p, v) {
+    const x = (p.x + v.x) / 2, y = p.y + 1.0, z = v.z;
+    for (let i = 0; i < 26; i++) { const a = i / 26 * Math.PI * 2; this.debris.spawn(x, y, z, Math.cos(a) * 6, Math.sin(a) * 6, (Math.random() - .5) * 1.5, 1, .95, .7, .09, .22, 0); }
+    this.debris.sparks(x, y, z + .2, 0xffffff, 18, 7);
+    this.debris.puff(v.x, v.y + .1, v.z, [0xd8d0c0, 0x9c958a], 12, 2.5, .18, .5, -0.2);
+    this.shake(0.32); this.hitstop(0.15);
+    this.sfx?.('heavy'); this.sfx?.('thud');
+  }
+
   // 고어 보너스: 작은 글씨로 '머리 절단 +3', 동전이 반짝이며 튐. 실제 부품(돈) 지급
   goreBonus(v, key) {
     const b = GORE_BONUS[key];

@@ -52,7 +52,8 @@ export class Player extends Actor {
     const air = !this.grounded;
     this.startAttack('dashAtk');
     this.attack.air = air;
-    this.vx = this.dashDir * 9;
+    this.vx = this.dashDir * 11.5;
+    this.game.dashBurst(this);
   }
 
   perk(id) { return this.game.run.perks.has(id); }
@@ -217,6 +218,7 @@ export class Player extends Actor {
   }
 
   onHitLanded(v, d) {
+    if (d.anim === 'dashAtk' && this.attack && this.attack.hit.size === 1) this.game.dashImpact(this, v);
     this.lastTarget = v;
     this.lastTargetT = 3;
     this.game.addCombo();
