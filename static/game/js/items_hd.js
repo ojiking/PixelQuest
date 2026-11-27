@@ -83,7 +83,7 @@ export const ITEM_BUILDERS = {
   }),
   // ---------------- 전기톱: 주황 본체(냉각 핀·손잡이 고리·시동줄) + 긴 날 + 톱니 체인
   w_chainsaw: r => single(r, 37, 11, 8, [4, 4, 4], g => {
-    const OR = desat(0xc8661e, .28), ORT = rusty(tone(OR, .26, .12), .08);
+    const OR = desat(0xb06a32, .4), ORT = rusty(tone(OR, .26, .12), .08);
     rbox(g, 0, 0, 0, 11, 8, 7, ORT, 2);
     for (let x = 1; x <= 9; x += 2) for (let y = 2; y <= 6; y++) { g.set(x, y, 0, 0x2a2a2c); g.set(x, y, 7, 0x2a2a2c); }   // 냉각 핀
     for (let x = 1; x <= 9; x++) { g.set(x, 10, 3, 0x2a2a2c); g.set(x, 10, 4, 0x2a2a2c); } g.fill(1, 9, 3, 1, 9, 4, 0x2a2a2c); g.fill(9, 9, 3, 9, 9, 4, 0x2a2a2c);   // 손잡이 고리
@@ -152,7 +152,7 @@ export const ITEM_BUILDERS = {
     g.set(27, 6, 4, 0xff8a1f); g.set(27, 7, 4, 0xffd040);
   }),
   // ---------------- 맨홀 방패 (몸 앞에 세워 듦: 원판이 y-z면, 바깥 = +x)
-  manhole: r => single(r, 5, 22, 22, [2, 11, 11], g => manholeDisc((u, v, t, c) => g.set(t, v, u, c), 22, 4)),   // 턱~무릎을 가리는 큰 원판 (지름 약 1m)
+  manhole: r => single(r, 5, 22, 22, [2, 11, 11], g => manholeDisc((u, v, t, c) => g.set(t, v, 21 - u, c), 22, 4)),   // 턱~무릎을 가리는 큰 원판 (지름 약 1m)
   // ---------------- 맨홀 휘두를 때: 원판이 x-z면, 손에서 +x로
   w_manhole: r => single(r, 20, 5, 20, [0, 2, 10], g => paintManhole(g, (u, v, t, c) => g.set(u, t, v, c))),
   // ---------------- 카타나: 붉은·검은 마름모 손잡이 + 금색 코등이 + 긴 칼날(날 끝선·물결 무늬)

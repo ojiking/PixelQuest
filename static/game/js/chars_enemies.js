@@ -88,7 +88,8 @@ function grunt(r) {
   const cloth = (x, y, z) => shade(HO, 1 + Math.sin(y * .8 + Math.abs(z - 8.5) * .35) * .05 - (x < 8 ? .06 : 0) + (hash3(x, y, z) < .08 ? -.06 : 0));
   const inFace = (x, y, z) => x >= 13 && y <= 9 && z >= 3 && z <= 14;
   ell(s, 11.6, 8.8, 8.5, 8.6, 10.2, 9.4, cloth, (x, y, z) => !inFace(x, y, z) && s.get(x, y, z) < 0 && y >= 0);
-  for (const [x, y, rr] of [[7, 16, 4.2], [5, 18, 3.2], [3, 19.6, 2.2], [1.6, 20.6, 1.3]]) ell(s, x, y, 8.5, rr, rr * .9, rr, cloth, (a, b, c) => s.get(a, b, c) < 0);   // 뒤로 솟은 뾰족한 끝
+  ell(s, 7.5, 13.5, 8.5, 5.2, 5.4, 6.2, cloth, (a, b, c) => s.get(a, b, c) < 0);                         // 둥글게 뒤로 늘어진 정수리 (뾰족하지 않게)
+  ell(s, 9.5, 1.2, 8.5, 8.2, 2.6, 11.2, cloth, (a, b, c) => !inFace(a, b, c) && a < 16 && s.get(a, b, c) < 0);   // 어깨까지 흘러내린 천
   // 얼굴 구멍: 안쪽 안감은 아주 어둡게, 가장 바깥 테두리는 밝게 → 어두운 틀이 얼굴을 감쌈
   for (let y = 0; y <= 12; y++) for (let z = 0; z <= 17; z++) {
     let fx = -1; for (let x = 21; x >= 13; x--) if (s.get(x, y, z) >= 0) { fx = x; break; }
@@ -204,15 +205,15 @@ function thrower(r) {
   for (let y = 5; y <= 9; y++) for (let z = 3; z <= 14; z++) { recolor(s, 7, y, z, 0x4a2c18); recolor(s, 8, y, z, 0x4a2c18); }   // 뒷머리
   // 모자: 둥근 정수리 + 앞으로 뻗은 챙 + 앞 패치
   // 야구 모자: 머리에 꼭 맞는 높은 돔(여섯 쪽 솔기·꼭지 단추) + 앞으로만 뻗은 휜 챙 — 옆·뒤로는 챙 없음
-  ell(s, 12.2, 9, 8.5, 6.1, 7.2, 6.7, (x, y, z) => (Math.abs(z - 8.5) < .6 || Math.abs(x - 12.2) < .6) && y >= 12 ? shade(CAP, .84) : CT(x, y, z), (x, y) => y >= 9);
+  ell(s, 12.2, 9, 8.5, 6.2, 5.0, 6.8, (x, y, z) => (Math.abs(z - 8.5) < .6 || Math.abs(x - 12.2) < .6) && y >= 12 ? shade(CAP, .84) : CT(x, y, z), (x, y) => y >= 9);   // 낮고 납작한 정수리
   for (let x = 5; x <= 18; x++) for (let z = 1; z <= 16; z++) if (s.get(x, 9, z) >= 0 && (s.get(x + 1, 9, z) < 0 || s.get(x, 9, z + 1) < 0 || s.get(x, 9, z - 1) < 0 || x === 18)) s.set(x, 9, z, shade(CAP, .8));   // 띠
-  for (let x = 18; x <= 22; x++) for (let z = 4; z <= 13; z++) {                                           // 챙 (가장자리는 아래로 휨)
-    if (x === 22 && (z === 4 || z === 13)) continue;
+  for (let x = 18; x <= 24; x++) for (let z = 4; z <= 13; z++) {                                           // 길게 앞으로 뻗은 챙 (가장자리는 아래로 휨)
+    if (x >= 23 && (z === 4 || z === 13)) continue;
     const y = (z <= 4 || z >= 13) ? 8 : 9;
-    s.set(x, y, z, x === 22 ? shade(CAP, .72) : shade(CAP, .9)); if (y === 9) s.set(x, 8, z, 0x4a3a1a);
+    s.set(x, y, z, x === 24 ? shade(CAP, .72) : shade(CAP, .9)); if (y === 9) s.set(x, 8, z, 0x4a3a1a);
   }
   stamp(s, ['###', '#.#', '###'], 18, 13, 7, 'x', 0x6a3a1a); s.set(18, 12, 8, 0xd8c8a0);                    // 앞 패치
-  s.fill(12, 16, 8, 12, 16, 9, shade(CAP, .7));
+  s.fill(12, 14, 8, 12, 14, 9, shade(CAP, .7));
   for (let z = 6; z <= 11; z++) recolor(s, 6, 10, z, 0x3a3a3a);                                           // 뒤 조절끈
   // 몸통 + 큰 배낭(뒤로 9칸) + 벽돌 더미
   const T = { X: 10, TH: 9, D: 18 }; const tg = torsoGrid(T, 13, 30, 9); const t = tg.s;
@@ -299,7 +300,7 @@ function shielder(r) {
   bootDeco(leg, LEG_N, { lace: 0x8a7a60, collar: 0x36241a });
   rip(leg, 9, 10, 11, 4, 6, skin);
   for (const z of [0, 8]) pocket(leg, z, 2, 7, 11, 15, PANT);
-  return assemble(r, { ...NORMAL, head: hd, torso: tg, armF, armB, leg });
+  return assemble(r, { ...NORMAL, head: hd, torso: tg, armF, armB, leg, opts: { brawl: { arm: .5, hand: .5, leg: .24 }, armSpread: -.2 } });   // 두 팔을 앞으로 뻗어 방패 뒤에 둠
 }
 
 // =====================================================================================
@@ -362,14 +363,14 @@ function biker(r) {
   const leg = legShape({ ...LEG_N, cuff: 2 }, (rg, x, y, z) => rg === 'pant' ? JT(x, y, z) : rg === 'cuff' ? (y === 8 ? 0x7a8aa4 : 0x5e6e8a) : rg === 'sole' ? 0x1e1c1c : tone(0x262222)(x, y, z));
   bootDeco(leg, LEG_N, { buckle: 0x4a4a4e, collar: 0x161414, toe: () => 0x3a3a3e });
   rip(leg, 9, 10, 12, 2, 6, skin); rip(leg, 9, 15, 15, 3, 5, skin); rip(leg, 4, 13, 14, 0, 0, skin);
-  return assemble(r, { ...NORMAL, head: hd, torso: tg, armF, armB, leg });
+  return assemble(r, { ...NORMAL, head: hd, torso: tg, armF, armB, leg, opts: { brawl: { arm: .05, hand: .55, leg: .24 }, armSpread: .36, ride: { arm: .45, hand: .5 } } });   // 큰 팔: 주먹을 더 낮게, 오토바이에선 팔을 낮게 뻗어 핸들
 }
 
 // =====================================================================================
 // 6) 그림자 닌자 — 검은 두건·복면 + 뒤로 길게 날리는 빨간 머리띠 꼬리 + 등에 멘 칼집 + 빨간 허리띠
 // =====================================================================================
 function ninja(r) {
-  const skin = SK.tan, CL = 0x3a3638, CT = tone(CL, .3, .16, .8, 1.22), RED = desat(0x9a1c1c, .18), RT = tone(RED, .26, .12);
+  const skin = SK.tan, CL = 0x3a3638, CT = tone(CL, .3, .16, .8, 1.22), GI = tone(0x423e40, .3, .16, .82, 1.2), GI2 = tone(0x524c4c, .3, .14, .85, 1.15), PNT = 0x2c2829, RED = desat(0x9a1c1c, .18), RT = tone(RED, .26, .12);
   const hd = headGrid(34, 30, 28, 12, 5); const s = hd.s;
   faceBase(s, { skin, mouth: 'none', nose: false, brow: 0x140c08, stub: 0, ears: false });
   // 두건: 머리를 감싸고 눈만 드러남 (복면은 코까지)
@@ -389,8 +390,9 @@ function ninja(r) {
   torsoShape(t, T, (rg, x, y, z) => {
     if (y <= 2 && rg !== 'trap') return RT(x, y, z);
     if (rg === 'trap') return CT(x, y, z);
-    if ((x >= 9) && Math.abs(z - (17 - y * 1.3)) < 1) return shade(CL, 1.35);                               // 여밈선
-    return CT(x, y, z);
+    if ((x >= 9) && Math.abs(z - (17 - y * 1.3)) < 1) return shade(CL, 1.55);                               // 여밈선 (밝게)
+    if (x >= 9 && z > 17 - y * 1.3) return GI2(x, y, z);                                                    // 겹친 앞판 (한 톤 밝게)
+    return y % 3 === 0 ? shade(CL, .82) : GI(x, y, z);                                                      // 가로 주름
   });
   for (let y = 0; y <= 2; y++) for (let x = 2; x <= 9; x++) { recolor(t, x, y, 3, RT(x, y, 3)); }
   for (let i = 0; i < 5; i++) { t.set(8 - (i >> 1), -i * .8 | 0, 15, RT(8, i, 15)); t.set(9 - (i >> 1), -(i * .8 | 0), 16, shade(RED, .75)); }   // 늘어진 매듭 꼬리
@@ -405,15 +407,15 @@ function ninja(r) {
     t.set(x, y, z, c); t.set(x - 1, y, z, shade(c, .85)); if (i === 14) { t.set(x, y, z + 1, c); t.set(x, y, z - 1, c); t.set(x - 1, y, z + 1, c); t.set(x - 1, y, z - 1, c); }
   }
   // 팔: 헐렁한 검은 소매 + 회색 팔 붕대 + 맨주먹
-  const WR = 0x4a4644;
+  const WR = 0x5e5a56;
   const mkArm = front => armShape({ ...ARM_N, foIn: 1 }, (rg, x, y, z) => {
     if (rg === 'fist') return skinT(skin)(x, y, z);
     if (rg === 'wrist' || rg === 'fore') return (y + (x + z > 8 ? 1 : 0)) % 2 ? WR : shade(WR, .8);
-    return CT(x, y, z);
+    return y === 9 || y === 12 ? shade(CL, .78) : GI(x, y, z);                                               // 소매 주름
   }, front);
   const armF = mkArm(true), armB = mkArm(false);
   const leg = legShape({ ...LEG_N, cuff: 0 }, (rg, x, y, z) => {
-    if (rg === 'pant') return y >= 9 && y <= 12 ? ((y + z) % 3 ? WR : shade(WR, .78)) : CT(x, y, z);      // 정강이 붕대
+    if (rg === 'pant') return y >= 9 && y <= 12 ? ((y + z) % 3 ? WR : shade(WR, .78)) : tone(PNT, .3, .16, .8, 1.25)(x, y, z);      // 정강이 붕대
     return rg === 'sole' ? 0x161214 : tone(0x1e1a1c)(x, y, z);
   });
   for (let y = 13; y <= 17; y++) for (let z = 0; z < 9; z++) { if (leg.get(10, y, z) < 0 && y <= 15) leg.set(10, y, z, CT(10, y, z)); }   // 헐렁한 바지
@@ -532,7 +534,7 @@ function brute(r) {
 // 9) 철거반장 굴삭 (보스, 큰 체형) — 전등 달린 노란 안전모 + 큰 콧수염 + 형광 조끼 + 배불뚝이 + 노란 장갑 + 공구 허리띠
 // =====================================================================================
 function boss(r) {
-  const skin = SK.ruddy, HAT = desat(0xc8a024, .22), VEST = desat(0xc8601c, .2), REF = 0xb4b2a8, UNDER = 0xcac2ac, PANT = 0x34405e, GLV = desat(0xc09a2c, .22);
+  const skin = SK.ruddy, HAT = desat(0xc8a024, .22), VEST = desat(0xb8602a, .38), REF = 0xa8a69c, UNDER = 0xa49a84, PANT = 0x34405e, GLV = desat(0xc09a2c, .22);
   const hd = headGrid(); const s = hd.s;
   faceBase(s, { skin, stache: 0x5a3418, bushy: true, mouth: 'none', brow: 0x3a2214, thickBrow: true, bigNose: true, noseC: 0xc0604e, stub: 0x8a6a54, beardH: 1, jaw: true });
   // 안전모: 높은 돔 + 앞뒤로 지나는 가운데 돋은 줄 + 짧은 챙(앞만 조금 길게) + 이마 전등
@@ -547,10 +549,11 @@ function boss(r) {
   for (let x = 18; x <= 21; x++) for (let z = 3; z <= 14; z++) if (s.get(x, 9, z) < 0) s.set(x, 9, z, 0x3a3020);   // 챙 밑 그늘
   s.fill(18, 12, 7, 19, 15, 10, 0x4a4a4e); s.fill(20, 12, 7, 20, 15, 10, 0x3a3a3e); s.fill(20, 13, 8, 20, 14, 9, 0xf0e8b0); s.fill(19, 16, 8, 19, 16, 9, 0x3a3a3e);   // 전등
   // 몸통 (큰 체형 + 배): 흰 속셔츠 + 열린 형광 주황 조끼(반사띠) + 공구 허리띠
-  const T = { ...TOR_B, belly: [0, 9, 5] }; const tg = torsoGrid(T); const t = tg.s;   // 배불뚝이
+  const T = { ...TOR_B, belly: [0, 9, 7], chestY: [7, 9] }; const tg = torsoGrid(T, 5, 20, 7); const t = tg.s;   // 둥글게 튀어나온 배불뚝이
   const VT = tone(VEST, .26, .14);
   torsoShape(t, T, (rg, x, y, z) => {
     if (rg === 'belt') return z >= 10 && z <= 11 && x >= 10 ? STUD : tone(0x4a3020)(x, y, z);
+    if (y >= 10 && x >= 9 && z >= 8 && z <= 13 && rg !== 'belly') return skinT(skin)(x, y, z);                 // 러닝셔츠 목둘레 (맨살)
     if (rg === 'belly' || ((rg === 'chest' || x >= 11) && z >= 7 && z <= 14)) return grime(x, y, z, tone(UNDER, .2, .1)(x, y, z), 0x8a7050, .1, 9);
     if (y === 4 || y === 5 || (rg !== 'trap' && (z === 5 || z === 16) && x >= 9 && y >= 4) || (rg === 'trap' && (z === 5 || z === 16))) return (y === 4 || rg === 'trap' || z === 5 || z === 16) ? REF : shade(0xd8c040, .9);
     return VT(x, y, z);
@@ -593,7 +596,7 @@ function cyborg(r) {
   for (const [x, y, z] of [[17, 9, 3], [17, 1, 3], [15, 11, 2], [10, 9, 1], [17, 9, 7]]) s.set(x, y, z, STUD);
   s.fill(17, 4, 4, 17, 5, 6, 0x3a0a0a); s.fill(18, 4, 5, 18, 5, 5, 0xff3018); s.set(18, 5, 6, 0xff7050); s.set(18, 4, 4, 0xc81810); s.set(19, 4, 5, 0xff5030);
   // 모히칸: 부채처럼 펼쳐진 아주 높은 붉은 가시 (보스 실루엣의 핵심)
-  mohawk(s, { n: 9, thin: .8, x0: 3, x1: 17, base: 11, spread: .5, mid: .5, len: t => 8 + Math.sin(t * Math.PI) * 4, c: desat(0xa82418, .22), cd: desat(0x7a160e, .2), cl: desat(0xc8402a, .22) });   // 머리 하나 높이, 좁게 (피와 겹치지 않게 채도 낮춤)
+  mohawk(s, { n: 6, thin: .8, x0: 6, x1: 14, base: 11, spread: .45, mid: .5, len: t => 8 + Math.sin(t * Math.PI) * 4, c: desat(0xa02a1e, .42), cd: desat(0x7a1a10, .38), cl: desat(0xb84030, .42) });   // 머리 하나 높이, 좁게 (피와 겹치지 않게 채도 낮춤)
   // 몸통: 가시 박힌 검은 가죽 조끼(앞이 열려 복근이 보임) + 해골 장식 + 가슴 체인
   const tg = torsoGrid(TOR_B); const t = tg.s;
   torsoShape(t, TOR_B, (rg, x, y, z) => {

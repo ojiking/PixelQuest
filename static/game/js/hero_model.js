@@ -56,13 +56,11 @@ function head() {
   g.set(17, 2, 5, C.mouth); g.set(17, 2, 12, C.mouth);
   // 코: 한 칸 튀어나옴 + 콧망울 그늘
   g.fill(18, 3, 8, 18, 4, 9, C.skin); g.set(18, 3, 8, C.skinD); g.set(18, 3, 9, C.skinD); g.set(17, 3, 7, C.skinD); g.set(17, 3, 10, C.skinD);
-  // 눈: 흰자 3×2 + 안쪽 눈동자 (노려봄)
-  for (const [z0, pz] of [[4, 6], [11, 11]]) { g.fill(17, 4, z0, 17, 5, z0 + 2, C.eyeW); g.fill(17, 4, pz, 17, 5, pz, C.pupil); }
-  // 굵은 화난 눈썹: 바깥 높고 안쪽이 눈을 누름 (한 칸 도드라짐)
-  // (얼굴면과 같은 높이로 칠함 — 튀어나오면 윤곽선 때문에 안경처럼 보임)
-  for (let z = 3; z <= 7; z++) g.set(17, 6, z, C.brow);
-  for (let z = 10; z <= 14; z++) g.set(17, 6, z, C.brow);
-  g.set(17, 5, 7, C.brow); g.set(17, 5, 10, C.brow);
+  // 눈: 흰자 몇 칸 + 눈동자 한 칸 (어두운 테두리 없이 — 사각 틀이 안경처럼 보였음)
+  for (const [z0, pz] of [[4, 6], [11, 11]]) { g.fill(17, 4, z0, 17, 5, z0 + 2, C.skin); g.fill(17, 4, z0, 17, 4, z0 + 2, C.eyeW); g.fill(17, 5, z0, 17, 5, z0 + 2, C.eyeW); g.set(17, 5, pz, C.pupil); g.set(17, 5, z0 === 4 ? 4 : 13, C.skin); }
+  // 화난 눈썹: 짧게, 안쪽만 (얼굴면과 같은 높이)
+  for (let z = 5; z <= 7; z++) g.set(17, 6, z, C.brow);
+  for (let z = 10; z <= 12; z++) g.set(17, 6, z, C.brow);
   // 미간 주름
   g.set(17, 6, 8, C.skinD); g.set(17, 6, 9, C.skinD);
   // 귀

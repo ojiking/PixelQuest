@@ -398,7 +398,7 @@ export class Actor {
     }
     // 오토바이 탑승: 앉은 자세로 핸들을 잡음
     if (this.mounted && (this.state === 'idle' || this.state === 'walk' || this.state === 'jump' || this.state === 'attack')) {
-      T.legF = T.legB = 1.35; T.shinF = T.shinB = -1.35; T.armF = T.armB = 1.2; T.handF = T.handB = .35;
+      T.legF = T.legB = 1.35; T.shinF = T.shinB = -1.35; T.armF = T.armB = this.model.ride?.arm ?? 1.2; T.handF = T.handB = this.model.ride?.hand ?? .35;   // ride: 모델별 핸들 잡는 팔 각도
       T.torso = this.revving ? -.45 : -.25; T.head = 0;
     }
     const k = Math.min(1, dt * rate);
@@ -761,8 +761,8 @@ export class Actor {
     if (this.shieldUp()) {
       // 맨홀 방패: 몸 앞쪽에
       mat4.copy(WM, root);
-      mat4.translate(WM, 0.36, 0.95, 0.24);   // 카메라 쪽(+z)으로 내밀고 살짝 카메라를 향해 돌림 (턱~무릎을 가리는 큰 원판)
-      mat4.rotateY(WM, -0.35);
+      mat4.translate(WM, 0.55, 0.95, 0.32);   // 몸 앞에 똑바로 세우고 카메라 쪽 팔까지 가림 (두 팔은 원판 뒤) — 턱~무릎을 가리는 큰 원판
+      mat4.rotateY(WM, -0.5);
       r.drawMesh(getModel(r, 'manhole').mesh, WM, this.guardBroken > 0 ? WARN : tint);
     }
     for (const k of PART_ORDER) {
