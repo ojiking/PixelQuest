@@ -7,6 +7,7 @@
 |---|---|
 | `static/game/` | **게임 본체** (index.html, style.css, js/*.js) |
 | `docs/DESIGN.md` | 살아 있는 기획서: 시스템 표, 무기·적 목록, 수치 가이드, 변경 기록 |
+| `docs/ART_DIRECTION.md` | 아트 디렉션: 목표 화면 기준, 팔레트, 배경 두 안(한국/뉴욕), 이미지 프롬프트 |
 | `docs/HANDOFF.md` | 이 문서 |
 | `CLAUDE.md` | Claude Code가 자동으로 읽는 프로젝트 안내 (코드 지도, 작업 규칙, 사용자 취향) |
 | `tools/tests/` | 자동 테스트·자동 플레이 스크립트 (Playwright) |
