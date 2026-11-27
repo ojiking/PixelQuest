@@ -151,7 +151,7 @@ export class Renderer {
     this.canvas = canvas;
     this.mesh = link(gl, VS, FS);
     this.inst = link(gl, IVS, IFS);
-    this.pixelScale = 2;   // 기본값 (config.js CAMERA.pixelScale로 덮어씀)
+    this.pixelScale = 3;   // 기본값 (config.js CAMERA.pixelScale로 덮어씀)
     this.instCap = 20000;
     this._buildCube();
     gl.enable(gl.DEPTH_TEST);

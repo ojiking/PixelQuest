@@ -427,7 +427,7 @@ function act(a) {
 addEventListener('keydown', e => {
   if (e.repeat) return;
   if (e.code === 'KeyP') {
-    const order = [1, 2, 3, 4];
+    const order = [2, 3, 4, 1];
     renderer.pixelScale = order[(order.indexOf(renderer.pixelScale) + 1) % order.length];
     showBanner(`픽셀 크기 x${renderer.pixelScale}`, 1);
   }
