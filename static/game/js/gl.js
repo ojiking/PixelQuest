@@ -136,7 +136,7 @@ void main() {
         // 아트 기준 팔레트: 막 튄 피 #E0182C · 기본 #C8102E → 많이 묻을수록 마른 피 #7A0A14 쪽으로
         vec3 fresh = vec3(0.70 + 0.14 * h, 0.025, 0.06), dried = vec3(0.38, 0.02, 0.04);
         float h3 = hash(floor((vWorld - n * 0.03) * 7.0));   // 큰 얼룩 단위로 진하기가 달라 고인 피처럼
-        vec3 blood = mix(fresh, dried, clamp(v * 0.9 - 0.15 + h3 * 0.3, 0.0, 0.85)) * uBlood.x;
+        vec3 blood = mix(fresh, dried, clamp(v * 0.9 - 0.3 + h3 * 0.6, 0.0, 0.85)) * uBlood.x;   // 얼룩마다 짙은 마른 피가 섞여 깊이감 (페인트처럼 납작하지 않게)
         float a = min(0.97, 0.6 + v * 0.6);
         col = mix(col, blood, a);
         bloodAmt = a; bloodCol = blood;

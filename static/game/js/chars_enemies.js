@@ -138,7 +138,8 @@ function grunt(r) {
 // 2) 돌격 헬멧 — 뼈 뿔 두 개 달린 찌그러진 강철 투구 + 징 박힌 붉은 가죽 재킷 + 큰 건틀릿
 // =====================================================================================
 function charger(r) {
-  const skin = SK.ruddy, LEA = desat(0x6a2420, .25), LT = tone(LEA, .3, .16), TANK = 0xc4bba6, GL = 0x5a3a22, GLT = tone(GL, .28, .14);
+  const skin = SK.ruddy, LEA = desat(0x74402a, .2),   // 가죽 재킷: 마른 피(검붉은색)와 헷갈리지 않게 녹슨 갈색 쪽으로
+  LT = tone(LEA, .3, .16), TANK = 0xc4bba6, GL = 0x5a3a22, GLT = tone(GL, .28, .14);
   const hd = headGrid(30, 34, 42, 4, 12); const s = hd.s;
   faceBase(s, { skin, stache: 0x2a1a10, mouth: 'frown', brow: 0x1e120a, thickBrow: true, stub: 0x7a5a44, beardH: 1 });
   // 투구: 둥근 강철 + 리벳 띠 + 코 가리개 + 녹
@@ -537,7 +538,7 @@ function brute(r) {
 // =====================================================================================
 function boss(r) {
   const skin = SK.ruddy, HAT = 0xe8b81c,   // 포인트 색: 선명한 노란 안전모
-  VEST = desat(0xb8602a, .38), REF = 0xa8a69c, UNDER = 0xa49a84, PANT = 0x34405e, GLV = desat(0xc09a2c, .22);
+  VEST = desat(0xb8602a, .38), REF = 0xa8a69c, UNDER = 0xa49a84, PANT = 0x34405e, GLV = desat(0xa08a50, .4);   // 장갑은 차분하게 → 노란 안전모만 포인트
   const hd = headGrid(); const s = hd.s;
   faceBase(s, { skin, stache: 0x5a3418, bushy: true, mouth: 'none', brow: 0x3a2214, thickBrow: true, bigNose: true, noseC: 0xc0604e, stub: 0x8a6a54, beardH: 1, jaw: true });
   // 안전모: 높은 돔 + 앞뒤로 지나는 가운데 돋은 줄 + 짧은 챙(앞만 조금 길게) + 이마 전등
@@ -597,9 +598,9 @@ function cyborg(r) {
     s.set(x, y, z, (z === 8 || y === 7) ? shade(MET, .7) : MT(x, y, z));
   }
   for (const [x, y, z] of [[17, 9, 3], [17, 1, 3], [15, 11, 2], [10, 9, 1], [17, 9, 7]]) s.set(x, y, z, STUD);
-  s.fill(17, 4, 4, 17, 5, 6, 0x3a0a0a); s.fill(18, 4, 4, 18, 5, 6, 0xff4a1a); s.set(18, 5, 5, 0xffe0c0); s.set(19, 4, 5, 0xff8a50); s.set(19, 5, 5, 0xffc8a0);   // 포인트 색: 빛나는 의안 (가운데 흰빛)
+  s.fill(17, 3, 3, 17, 6, 7, 0x3a0a0a); s.fill(18, 3, 3, 18, 6, 7, 0xff4a1a); s.fill(18, 4, 4, 18, 5, 6, 0xff8a50); s.set(18, 5, 5, 0xffe0c0); s.fill(19, 4, 4, 19, 5, 6, 0xff8a50); s.set(19, 5, 5, 0xfff0e0);   // 의안을 키움 (4×5 + 앞으로 튀어나온 빛)   // 포인트 색: 빛나는 의안 (가운데 흰빛)
   // 모히칸: 부채처럼 펼쳐진 아주 높은 붉은 가시 (보스 실루엣의 핵심)
-  mohawk(s, { n: 6, thin: .8, x0: 6, x1: 14, base: 11, spread: .45, mid: .5, len: t => 8 + Math.sin(t * Math.PI) * 4, c: desat(0xa02a1e, .42), cd: desat(0x7a1a10, .38), cl: desat(0xb84030, .42) });   // 머리 하나 높이, 좁게 (피와 겹치지 않게 채도 낮춤)
+  mohawk(s, { n: 6, thin: .8, x0: 6, x1: 14, base: 11, spread: .45, mid: .5, len: t => 8 + Math.sin(t * Math.PI) * 4, c: desat(0xc4562a, .2), cd: desat(0x8e3c1e, .2), cl: desat(0xdc7440, .2) });   // 머리 하나 높이, 좁게. 검붉은 마른 피와 헷갈리지 않게 구릿빛 주황
   // 몸통: 가시 박힌 검은 가죽 조끼(앞이 열려 복근이 보임) + 해골 장식 + 가슴 체인
   const tg = torsoGrid(TOR_B); const t = tg.s;
   torsoShape(t, TOR_B, (rg, x, y, z) => {
