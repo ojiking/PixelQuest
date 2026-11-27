@@ -1,6 +1,6 @@
 // 게임 월드: 스테이지 진행, 카메라, 웨이브, 투사체, 폭발, 렌더링
 import { mat4, clamp, rand, randi, sign, shuffle, pick, weightedPick } from './math.js';
-import { GORE_BONUS, CHAPTER, STAGE_HEAL, ZONE_HEAL, EARLY_CHARGER_MAX, HERO_BLAST, HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
+import { CAMERA, GORE_BONUS, CHAPTER, STAGE_HEAL, ZONE_HEAL, EARLY_CHARGER_MAX, HERO_BLAST, HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
 import { Debris, Stains } from './fx.js';
 import { Gibs, bleed } from './gibs.js';
 import { getModel, WEAPON_MODEL } from './models.js';
@@ -303,7 +303,7 @@ export class Game {
   }
 
   updateCamera(dt) {
-    this.viewHalf = Math.min(10.5, 5.3 * this.aspect - 0.6);
+    this.viewHalf = Math.min(10.5, 5.3 * this.aspect - 0.6) / CAMERA.zoom;   // 화면에 보이는 반폭 (카메라를 당기면 좁아짐)
     let target = this.lock ? this.lock.cx : this.run?.lab ? this.player.x : Math.max(this.camX, this.player.x + 1.2);   // 무기방은 좌우 자유
     target = clamp(target, this.viewHalf - 1.5, this.stage.L - this.viewHalf + 1);
     if (this.camX === 0) this.camX = target;
@@ -1296,9 +1296,10 @@ export class Game {
     const r = this.r;
     this.aspect = r.resize();
     const sx = (Math.random() - .5) * this.shakeMag, sy = (Math.random() - .5) * this.shakeMag;
-    const eye = [this.camX + sx, 8.6 + sy, 15.5];
-    mat4.perspective(this.proj, 35 * Math.PI / 180, this.aspect, 0.5, 140);
-    mat4.lookAt(this.view, eye, [this.camX + sx * .5, 1.0, -0.6], [0, 1, 0]);
+    const Z = CAMERA.zoom, ly = CAMERA.look[0], lz = CAMERA.look[1];   // 바라보는 점에서 카메라까지의 거리를 zoom만큼 줄임
+    const eye = [this.camX + sx, ly + (CAMERA.eye[0] - ly) / Z + sy, lz + (CAMERA.eye[1] - lz) / Z];
+    mat4.perspective(this.proj, CAMERA.fov * Math.PI / 180, this.aspect, 0.3, 140);
+    mat4.lookAt(this.view, eye, [this.camX + sx * .5, ly, lz], [0, 1, 0]);
     mat4.multiply(this.vp, this.proj, this.view);
     const b = this.stage.biome;
     r.begin(this.vp, eye, { sky: b.sky, fog: b.fog, fogNear: 34, fogFar: 80 });

@@ -3,7 +3,7 @@ import { Renderer } from './gl.js';
 import { Input } from './input.js';
 import { Texts } from './fx.js';
 import { Game } from './game.js';
-import { PERKS, UPGRADES, WEAPONS, BOT, HEAT, TROPHIES, TROPHY_SLOTS, BERSERK } from './config.js';
+import { PERKS, UPGRADES, WEAPONS, BOT, HEAT, TROPHIES, TROPHY_SLOTS, BERSERK, CAMERA } from './config.js';
 import { Hideout } from './hideout.js';
 import { getModel } from './models.js';
 import { STAGE_COUNT } from './level.js';
@@ -20,6 +20,7 @@ const hud = $('hud');
 let renderer;
 try {
   renderer = new Renderer($('view'));
+  renderer.pixelScale = CAMERA.pixelScale;
 } catch (e) {
   screen.innerHTML = `<div class="panel"><h1>실행 불가</h1><p>${e.message}</p></div>`;
   throw e;
@@ -426,7 +427,7 @@ function act(a) {
 addEventListener('keydown', e => {
   if (e.repeat) return;
   if (e.code === 'KeyP') {
-    const order = [2, 3, 4, 1];
+    const order = [1, 2, 3, 4];
     renderer.pixelScale = order[(order.indexOf(renderer.pixelScale) + 1) % order.length];
     showBanner(`픽셀 크기 x${renderer.pixelScale}`, 1);
   }
