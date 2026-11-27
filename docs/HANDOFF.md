@@ -21,6 +21,11 @@
 
 > 파일(index.html)을 직접 더블클릭하면 안 열림 — ES 모듈이라 웹 서버가 필요.
 
+## 2-1. 웹에서 바로 플레이 (GitHub Pages)
+- 주소: **https://ojiking.github.io/PixelQuest/** (저장소 루트의 `index.html`이 `static/game/`으로 이동시킴, `.nojekyll`로 파일을 그대로 전달)
+- 처음 한 번 설정: GitHub 저장소 → **Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch: `ccr-dfd63318-2julkh` / `(root)` → Save**
+- 이후 이 브랜치에 커밋을 올리면 1~2분 뒤 자동으로 갱신됨. 브랜치를 main으로 합치면 Pages의 Branch도 main으로 바꿀 것.
+
 ## 3. Claude로 이어서 개발하기 (Ultra/Max 등 구독 플랜)
 
 ### 방법 A — 내 PC에서 Claude Code (추천)
