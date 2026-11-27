@@ -2,7 +2,7 @@
 // 뒷벽엔 현상수배 포스터, 왼쪽엔 전리품 진열대. 버튼은 main.js가 화면 위에 띄움 (anchor 좌표 제공)
 import { mat4 } from './math.js';
 import { VoxGrid, meshGrid } from './voxel.js';
-import { getModel, WEAPON_MODEL } from './models.js';
+import { heroModelKey, getModel, WEAPON_MODEL } from './models.js';
 import { makeSign } from './city.js';
 import { ENEMIES, TROPHIES } from './config.js';
 import { Actor, PART_ORDER } from './actor.js';
@@ -30,7 +30,7 @@ export class Hideout {
     this.pbuf = new Float32Array(400 * 7);
     this.buildStatic();
     const stub = { r, time: 0 };     // Actor가 필요로 하는 최소한의 game
-    this.hero = new Actor(stub, 'player', { hp: 1, team: 'hero' });
+    this.hero = new Actor(stub, heroModelKey(), { hp: 1, team: 'hero' });
     this.botKey = null;
   }
 

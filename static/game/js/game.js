@@ -1354,7 +1354,8 @@ export class Game {
     if (!p?.berserk || p.hidden || !p.parts.head?.alive) return;
     p.rootMatrix(RAGE_M1); p.partMatrix('head', RAGE_M1, RAGE_M2);
     // 머리 모델(6칸) 기준 눈 위치: 앞면(x) 3.6칸, 높이 3.5칸, 좌우 -1.5 / +2.5칸 (V = 0.09m)
-    const V = 0.09, s = p.model.headS ?? 6, ex = (s / 2 + 0.6) * V, ey = 3.5 * V, z1 = (2.5 - (s + 2) / 2) * V, z2 = (s - 0.5 - (s + 2) / 2) * V;
+    const V = 0.09, s = p.model.headS ?? 6, E = p.model.eyes;   // 새 모델은 눈 위치를 직접 알려 줌
+    const ex = E ? E[0][0] : (s / 2 + 0.6) * V, ey = E ? E[0][1] : 3.5 * V, z1 = E ? E[0][2] : (2.5 - (s + 2) / 2) * V, z2 = E ? E[1][2] : (s - 0.5 - (s + 2) / 2) * V;
     this.eyeBuf ??= new Float32Array(2 * 7); this.eyeGlow ??= new Float32Array(10 * 7);
     const b = this.eyeBuf, gb = this.eyeGlow, fl = 0.85 + Math.sin(this.time * 18) * 0.15, pt = [0, 0, 0];
     let n = 0;

@@ -1,6 +1,12 @@
 // 절차적 복셀 모델 정의 (캐릭터는 부위별로 분리 → 부위 파괴 가능)
 import { V } from './config.js';
 import { VoxGrid, meshGrid } from './voxel.js';
+import { buildHeroV2 } from './hero_model.js';
+
+// 뱀돌이 모델 선택: 'player' = 새 고밀도 모델(v2, 기본), 'player_v1' = 예전 모델. 무기방 6번으로 바꿔 비교 (브라우저에 저장)
+export function heroModelKey() {
+  try { return localStorage.getItem('pq_hero_model') === 'v1' ? 'player_v1' : 'player'; } catch { return 'player'; }
+}
 
 const cache = new Map();
 export function getModel(r, key) {
@@ -304,7 +310,8 @@ function single(r, w, h, d, origin, paint) {
 }
 
 const BUILDERS = {
-  player: r => humanoid(r, {
+  player: r => buildHeroV2(r),
+  player_v1: r => humanoid(r, {
     head: 'hairBand', torso: 'jacket', sleeve: 6,
     pal: { skin: 0xf1c27d, hair: 0x3b2a1a, band: 0xd23b3b, shirt: 0x2f6fd6, tee: 0xf0f0f0, pants: 0x2a2f3a, shoes: 0xe8e8e8 },
   }),

@@ -338,11 +338,16 @@ export class Actor {
     let fallT = 0, rate = 18, lift = 0, spread = 0;
     switch (this.state) {
       case 'idle':
-        if (this.team === 'hero' && this.modelKey === 'player' && !this.weapon && !this.carry) {
+        if (this.team === 'hero' && this.modelKey.startsWith('player') && !this.weapon && !this.carry) {
           // 맨손: 주먹을 턱 앞에 든 파이팅 자세 (살짝 들썩)
           const b = Math.sin(t * 5) * .04;
-          T.armF = 1.0 + b; T.handF = 2.0; T.armB = .85 - b; T.handB = 2.15; T.torso = -.06;
-          T.legF = .25; T.shinF = -.1; T.legB = -.2; T.shinB = -.15; lift = Math.abs(b) * .3;
+          if (this.model.lowGuard) {   // 새 모델: 큰 주먹이 얼굴을 가리지 않게 가슴 앞 낮은 가드, 다리를 넓게 벌린 자세
+            T.armF = .62 + b; T.handF = 1.45; T.armB = .5 - b; T.handB = 1.55; T.torso = -.08;
+            T.legF = .3; T.shinF = -.18; T.legB = -.28; T.shinB = -.12; lift = Math.abs(b) * .3;
+          } else {
+            T.armF = 1.0 + b; T.handF = 2.0; T.armB = .85 - b; T.handB = 2.15; T.torso = -.06;
+            T.legF = .25; T.shinF = -.1; T.legB = -.2; T.shinB = -.15; lift = Math.abs(b) * .3;
+          }
         } else { T.armF = .15 + Math.sin(t * 2.2) * .05; T.armB = .1 - Math.sin(t * 2.2) * .05; T.shinF = -.05; }
         this.gunHold(T, t);
         break;

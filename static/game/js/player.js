@@ -1,4 +1,5 @@
 import { Actor } from './actor.js';
+import { heroModelKey } from './models.js';
 import { PLAYER, WEAPONS, LIMB_WEAPONS, BERSERK, FOOTPRINT } from './config.js';
 
 const FIST_COMBO = ['jab', 'cross', 'kick'];
@@ -6,7 +7,7 @@ const FIST_COMBO4 = ['jab', 'cross', 'elbow', 'kick'];
 
 export class Player extends Actor {
   constructor(game, stats) {
-    super(game, 'player', { hp: stats.maxHp, team: 'hero', x: 3, z: 0 });
+    super(game, heroModelKey(), { hp: stats.maxHp, team: 'hero', x: 3, z: 0 });
     this.power = stats.power;
     this.st8 = stats;                        // 정비소 업그레이드
     this.spd = PLAYER.speed * stats.speedMul;
