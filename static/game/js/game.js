@@ -1371,6 +1371,8 @@ export class Game {
       if (a.flaming > 0 && a.weaponTip) { const p = a.weaponTip(1.6); out.push({ x: p[0], y: p[1], z: p[2], r: LIGHT.flame.r, k: LIGHT.flame.k * (0.85 + 0.15 * Math.random()), c: F }); }
     }
     out.sort((p, q) => Math.abs(p.x - this.camX) - Math.abs(q.x - this.camX));
+    const p = this.player, H = LIGHT.hero;                         // 주인공 주변 빛은 항상 포함
+    if (p && !p.hidden && H.k > 0) return [{ x: p.x, y: p.y + H.up, z: p.z + H.front, r: H.r, k: H.k, c: H.c }, ...out.slice(0, 7)];
     return out.slice(0, 8);
   }
 
