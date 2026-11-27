@@ -1258,5 +1258,23 @@ export class Game {
     for (const gb of this.gibs.list) if (Math.abs(gb.pos[0] - this.camX) < this.viewHalf + 2) add(gb.pos[0], gb.pos[2], 0.35);
     for (const pr of this.projectiles) add(pr.x, pr.z, 0.25);
     r.drawInstances(sb, n, 0.3, true);
+    this.drawHeroRing(r);
+  }
+
+  // 피범벅이 된 주인공 발밑의 흰 고리 (피와 같은 색이 되어 위치를 놓치지 않게)
+  drawHeroRing(r) {
+    const p = this.player;
+    if (!p || p.hidden || !p.blood) return;
+    const v = Object.values(p.blood), avg = v.reduce((a, b) => a + b, 0) / Math.max(1, v.length);
+    const k = Math.min(1, (avg - BLOOD.ringFrom) / 0.2);
+    if (k <= 0) return;
+    this.ringBuf ??= new Float32Array(28 * 7);
+    const b = this.ringBuf, fy = p.floor ?? this.floorAt(p.x, p.z), R = 0.48 * p.scale, pulse = 1 + Math.sin(this.time * 6) * 0.04;
+    for (let i = 0; i < 28; i++) {
+      const a = i / 28 * Math.PI * 2, o = i * 7;
+      b[o] = p.x + Math.cos(a) * R * pulse; b[o + 1] = fy + 0.02; b[o + 2] = p.z + Math.sin(a) * R * 0.75 * pulse; b[o + 3] = 0.07;
+      b[o + 4] = b[o + 5] = b[o + 6] = 1;
+    }
+    r.drawInstances(b, 28, 0.45 + 0.4 * k, true);
   }
 }

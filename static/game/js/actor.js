@@ -635,7 +635,7 @@ export class Actor {
     this.splatBuf ??= {};
     this.splatSeed ??= [Math.random() * 50, Math.random() * 50, Math.random() * 50];
     const b = this.splatBuf[k] ??= new Float32Array([0, ...this.splatSeed]);
-    b[0] = v;
+    b[0] = this === this.game.player ? Math.min(v, k === 'head' ? BLOOD.heroHeadMax : BLOOD.heroShowMax) : v;   // 주인공은 실루엣이 남게 상한
     return b;
   }
   // 주인공·볼트는 서서히 원래 색으로, 살아 있는 적은 아주 천천히, 시체는 그대로
