@@ -22,140 +22,160 @@ const C = {
 // 데님·머리카락 등 재질에 얼룩(색 세 단계) — 위치 해시로 고정
 const pick = (x, y, z, a, b, c, pb = .22, pc = .14) => { const h = hash3(x * 3 + 11, y * 5 + 7, z * 7 + 3); return h < pc ? c : h < pc + pb ? b : a; };
 
-// ---------------------------------------------------------------- 머리 (w18 × h16 × d14)
+// 둥근 덩어리 채우기 (타원체) — f(x,y,z)가 색을 돌려줌
+function ell(g, cx, cy, cz, rx, ry, rz, f, cond = null) {
+  for (let z = Math.floor(cz - rz); z <= Math.ceil(cz + rz); z++) for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+    const d = ((x + .5 - cx) / rx) ** 2 + ((y + .5 - cy) / ry) ** 2 + ((z + .5 - cz) / rz) ** 2;
+    if (d <= 1 && (!cond || cond(x, y, z))) g.set(x, y, z, f(x, y, z, d));
+  }
+}
+// 모서리 깎은 상자
+function rbox(g, x0, y0, z0, x1, y1, z1, f, cut = 1) {
+  for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const ex = x === x0 || x === x1, ez = z === z0 || z === z1, ey = y === y0 || y === y1;
+    if (cut && ex && ez) continue;
+    if (cut > 1 && ey && (ex || ez)) continue;
+    g.set(x, y, z, f(x, y, z));
+  }
+}
+const shade = (c, k) => { const r = Math.min(255, ((c >> 16) & 255) * k) | 0, gg = Math.min(255, ((c >> 8) & 255) * k) | 0, b = Math.min(255, (c & 255) * k) | 0; return (r << 16) | (gg << 8) | b; };
+
+// ---------------------------------------------------------------- 머리 (x19 × y17 × z18): 키의 약 35%, 머리보다 넓은 곱슬 덩어리
+// 얼굴 블록 x7..17, y0..9, z3..14 / 앞면 x=17 / 머리띠 y7..8 / 머리카락 y9 이상
 function head() {
-  const g = new VoxGrid(18, 16, 14);
-  // 두개골·얼굴 블록 x6..16, y0..10, z1..12 (턱은 좁게)
-  for (let y = 0; y <= 10; y++) {
-    const z0 = y === 0 ? 3 : y === 1 ? 2 : 1, z1 = y === 0 ? 10 : y === 1 ? 11 : 12, x0 = y === 0 ? 8 : 6;
-    for (let z = z0; z <= z1; z++) for (let x = x0; x <= 16; x++) g.set(x, y, z, C.skin);
+  const g = new VoxGrid(19, 17, 18);
+  for (let y = 0; y <= 9; y++) {
+    const z0 = y === 0 ? 5 : y === 1 ? 4 : 3, z1 = 17 - z0, x0 = y <= 1 ? 9 : 7;
+    for (let z = z0; z <= z1; z++) for (let x = x0; x <= 17; x++) g.set(x, y, z, shade(C.skin, z <= 4 || z >= 13 ? .9 : 1));
   }
-  // 수염 자국(턱·뺨 아래)과 뺨 그늘
-  for (let y = 0; y <= 2; y++) for (let z = 1; z <= 12; z++) for (let x = 8; x <= 16; x++) if (g.get(x, y, z) >= 0 && (x === 16 || z <= 2 || z >= 11)) g.set(x, y, z, C.stub);
-  // 입: 악문 이 (위아래 어두운 테두리)
-  for (let z = 4; z <= 9; z++) { g.set(16, 2, z, C.mouth); g.set(16, 3, z, C.teeth); g.set(16, 4, z, z === 4 || z === 9 ? C.mouth : C.skinD); }
-  g.set(16, 3, 4, C.mouth); g.set(16, 3, 9, C.mouth); g.set(16, 3, 6, 0xd8d2c4); g.set(16, 3, 7, 0xd8d2c4);
-  // 코 (한 칸 튀어나옴)
-  g.fill(17, 4, 6, 17, 5, 7, C.skin); g.set(17, 4, 6, C.skinD); g.set(17, 4, 7, C.skinD);
-  // 눈: 흰자 3칸 + 안쪽 눈동자
-  for (const [z0, pz] of [[2, 4], [9, 9]]) { g.fill(16, 6, z0, 16, 7, z0 + 2, C.eyeW); g.fill(16, 6, pz, 16, 7, pz, C.pupil); }
-  // 굵은 눈썹: 바깥쪽이 높고 안쪽이 내려온 화난 눈썹
-  for (let z = 1; z <= 5; z++) g.set(16, 8, z, C.brow);
-  for (let z = 8; z <= 12; z++) g.set(16, 8, z, C.brow);
-  g.set(16, 7, 5, C.brow); g.set(16, 7, 8, C.brow); g.set(17, 8, 4, C.brow); g.set(17, 8, 9, C.brow);
+  // 수염 자국: 턱과 아래 뺨
+  for (let y = 0; y <= 2; y++) for (let z = 3; z <= 14; z++) for (let x = 9; x <= 17; x++) if (g.get(x, y, z) >= 0 && (x === 17 || z <= 4 || z >= 13)) g.set(x, y, z, C.stub);
+  // 악문 이: 8칸, 위아래 어두운 테두리, 이 사이 선
+  for (let z = 5; z <= 12; z++) { g.set(17, 1, z, C.mouth); g.set(17, 2, z, z % 2 ? C.teeth : 0xd6d0c2); g.set(17, 3, z, C.mouth); }
+  g.set(17, 2, 5, C.mouth); g.set(17, 2, 12, C.mouth);
+  // 코: 한 칸 튀어나옴 + 콧망울 그늘
+  g.fill(18, 3, 8, 18, 4, 9, C.skin); g.set(18, 3, 8, C.skinD); g.set(18, 3, 9, C.skinD); g.set(17, 3, 7, C.skinD); g.set(17, 3, 10, C.skinD);
+  // 눈: 흰자 3×2 + 안쪽 눈동자 (노려봄)
+  for (const [z0, pz] of [[4, 6], [11, 11]]) { g.fill(17, 4, z0, 17, 5, z0 + 2, C.eyeW); g.fill(17, 4, pz, 17, 5, pz, C.pupil); }
+  // 굵은 화난 눈썹: 바깥 높고 안쪽이 눈을 누름 (한 칸 도드라짐)
+  for (let z = 3; z <= 7; z++) g.set(18, 6, z, C.brow);
+  for (let z = 10; z <= 14; z++) g.set(18, 6, z, C.brow);
+  g.set(18, 5, 7, C.brow); g.set(18, 5, 10, C.brow); g.set(17, 5, 7, C.brow); g.set(17, 5, 10, C.brow);
+  // 미간 주름
+  g.set(17, 6, 8, C.skinD); g.set(17, 6, 9, C.skinD);
   // 귀
-  g.fill(10, 4, 0, 11, 6, 0, C.skin); g.fill(10, 4, 13, 11, 6, 13, C.skin); g.set(10, 5, 0, C.skinD); g.set(10, 5, 13, C.skinD);
+  g.fill(11, 3, 2, 12, 5, 2, C.skin); g.fill(11, 3, 15, 12, 5, 15, C.skin); g.set(11, 4, 2, C.skinD); g.set(11, 4, 15, C.skinD);
   // 구레나룻·뒷머리
-  for (const z of [1, 12]) g.fill(11, 5, z, 13, 8, z, C.hair);
-  for (let y = 3; y <= 8; y++) for (let z = 1; z <= 12; z++) for (let x = 6; x <= 8; x++) if (x === 6 || z === 1 || z === 12) g.set(x, y, z, pick(x, y, z, C.hair, C.hairD, C.hairL));
-  // 머리띠 (한 칸 도드라지게 둘러감) y9..10
-  for (let y = 9; y <= 10; y++) {
-    for (let z = 1; z <= 12; z++) { g.set(17, y, z, y === 9 ? C.bandD : C.band); g.set(5, y, z, C.band); }
-    for (let x = 5; x <= 17; x++) { g.set(x, y, 0, y === 9 ? C.bandD : C.band); g.set(x, y, 13, y === 9 ? C.bandD : C.band); }
-    for (let z = 1; z <= 12; z++) for (let x = 6; x <= 16; x++) g.set(x, y, z, C.skin);   // 속은 피부(안 보임)
+  for (const z of [3, 14]) g.fill(12, 4, z, 14, 6, z, C.hairD);
+  for (let y = 2; y <= 6; y++) for (let z = 3; z <= 14; z++) g.set(7, y, z, pick(7, y, z, C.hair, C.hairD, C.hairL));
+  // 머리띠 y7..8: 머리를 한 칸 도드라지게 둘러감 (위 줄 밝게)
+  for (let y = 7; y <= 8; y++) {
+    const c = y === 8 ? C.band : C.bandD;
+    for (let z = 3; z <= 14; z++) { g.set(18, y, z, c); g.set(6, y, z, c); }
+    for (let x = 6; x <= 18; x++) { g.set(x, y, 2, c); g.set(x, y, 15, c); }
   }
-  // 뒤통수 매듭 + 바람에 날리는 꼬리 두 가닥
-  g.fill(4, 9, 6, 4, 10, 8, C.bandD);
-  const tail = (zs, ys, drop) => { for (let i = 0; i <= 4; i++) { const x = 3 - i + 1, y = ys - Math.floor(i * drop), z = zs + (i % 2 ? 1 : 0); g.set(x, y, z, C.band); g.set(x, y - 1, z, i % 2 ? C.bandD : C.band); } };
-  tail(5, 10, .5); tail(8, 9, .9);
-  // 곱슬 머리: 위로 4층, 위로 갈수록 듬성듬성 (2~3톤)
-  for (let y = 11; y <= 15; y++) {
-    const keep = y <= 12 ? 1 : y === 13 ? .8 : y === 14 ? .5 : .18;
-    for (let z = 1; z <= 12; z++) for (let x = 5; x <= 17; x++) {
-      const edge = x === 5 || x === 17 || z === 1 || z === 12;
-      if (y === 11 && !edge && (x < 6 || x > 16)) continue;
-      if ((x === 5 || x === 17) && y > 12) continue;
-      if (hash3(x + 31, y * 3, z + 17) > keep) continue;
-      g.set(x, y, z, pick(x, y, z, C.hair, C.hairD, C.hairL, .3, .2));
-    }
+  // 곱슬머리: 머리보다 넓은 타원 덩어리 + 바깥으로 삐친 곱슬 (3톤)
+  ell(g, 12, 9.2, 8.5, 7, 6.5, 8.2, (x, y, z) => pick(x, y, z, C.hair, C.hairD, C.hairL, .3, .22), (x, y, z) => y >= 9 && !(x >= 17 && y <= 9));
+  for (let k = 0; k < 90; k++) {           // 표면에 돋은 곱슬 송이
+    const a = hash3(k, 1, 7) * Math.PI * 2, b = hash3(k, 2, 9) * Math.PI * .55;
+    const x = Math.round(12 + Math.cos(a) * Math.sin(b) * 7.4), z = Math.round(8.5 + Math.sin(a) * Math.sin(b) * 8.6), y = Math.round(9.4 + Math.cos(b) * 6.8);
+    if (y >= 9 && y < 17 && x < 18) g.set(x, y, z, hash3(k, 3, 3) < .5 ? C.hairD : C.hairL);
   }
-  // 앞머리가 머리띠 위로 살짝 삐침
-  for (let z = 2; z <= 11; z += 3) g.set(17, 11, z, C.hairD);
-  return { g, origin: [11.5, 0, 7], eyes: [[(17.6 - 11.5) * H, 7 * H, (3.5 - 7) * H], [(17.6 - 11.5) * H, 7 * H, (10.5 - 7) * H]] };
+  // 뒤통수 매듭 + 뒤로 날리는 꼬리 두 가닥 (물결)
+  g.fill(5, 7, 7, 5, 8, 10, C.bandD); g.set(5, 9, 8, C.band);
+  const tail = (z0, y0, dy) => { for (let i = 0; i <= 5; i++) { const x = 4 - i, y = Math.round(y0 - i * dy + (i % 2 ? .6 : 0)), z = z0 + (i >= 3 ? 1 : 0); if (x < 0) break; g.set(x, y, z, C.band); g.set(x, y - 1, z, C.bandD); } };
+  tail(7, 9, .35); tail(10, 8, .7);
+  return { g, origin: [12.5, 0, 9], eyes: [[(18.7 - 12.5) * H, 5 * H, (5.5 - 9) * H], [(18.7 - 12.5) * H, 5 * H, (12.5 - 9) * H]] };
 }
 
-// ---------------------------------------------------------------- 몸통 (x9 × y12 × z16): 찢은 청조끼 + 흰 티 + 벨트
+// ---------------------------------------------------------------- 몸통 (x11 × y11 × z18): 짧고 넓은 몸통, 목을 덮는 승모근
 function torso() {
-  const g = new VoxGrid(9, 12, 16);
-  for (let y = 0; y < 12; y++) {
-    const z0 = y <= 1 ? 2 : y <= 5 ? 1 : 0, z1 = 15 - z0;
-    for (let z = z0; z <= z1; z++) for (let x = 0; x <= 8; x++) {
-      let c = pick(x, y, z, C.denim, C.denimD, C.denimL);
-      if (x === 8 && z >= 5 && z <= 10) c = y === 7 ? C.teeD : C.tee;      // 열린 앞섶 사이의 흰 티 (가슴 아래 그늘)
+  const g = new VoxGrid(11, 11, 18);
+  const vest = (x, y, z) => shade(pick(x, y, z, C.denim, C.denimD, C.denimL), y >= 6 ? 1.04 : .96);
+  for (let y = 0; y <= 8; y++) {
+    const z0 = y <= 1 ? 3 : y <= 4 ? 2 : 0, z1 = 17 - z0;
+    for (let z = z0; z <= z1; z++) for (let x = 0; x <= 9; x++) {
+      let c = vest(x, y, z);
+      if (x === 9 && z >= 6 && z <= 11) c = (y === 5 && z !== 8 && z !== 9) ? C.teeD : C.tee;   // 열린 앞섶의 흰 티 (가슴 아래 그늘)
       if (y <= 1) c = C.belt;
       g.set(x, y, z, c);
     }
   }
-  g.fill(8, 0, 7, 8, 1, 8, C.buckle);                                       // 버클
-  for (const z of [2, 3, 12, 13]) { g.set(8, 8, z, C.denimD); g.set(8, 9, z, C.denimD); }   // 가슴 주머니
-  g.set(8, 9, 2, C.buckle); g.set(8, 9, 13, C.buckle);
-  for (const z of [4, 11]) g.fill(7, 11, z, 8, 11, z, C.denimD);             // 옷깃
-  // 소매를 찢어낸 진동 둘레: 흰 실밥이 너덜너덜
-  for (const z of [0, 15]) for (let y = 7; y <= 11; y++) for (let x = 1; x <= 7; x++) if (hash3(x, y, z) < .55 && (y === 7 || x === 1 || x === 7 || y === 11)) g.set(x, y, z, C.fray);
-  for (const z of [0, 15]) for (let x = 2; x <= 6; x += 2) if (hash3(x, 9, z + 5) < .7) g.set(x, 6, z, C.fray);
-  g.fill(0, 5, 5, 0, 9, 10, C.patch);                                       // 등의 바랜 패치
-  for (let z = 5; z <= 10; z++) if (z % 2) { g.set(0, 5, z, 0x86837a); g.set(0, 9, z, 0x86837a); }
-  for (let y = 3; y <= 10; y++) g.set(0, y, 8, C.denimD);                   // 등 솔기
-  return { g, origin: [4.5, 0, 8] };
+  // 가슴 근육이 티를 밀어냄
+  for (let y = 5; y <= 7; y++) for (let z = 6; z <= 11; z++) g.set(10, y, z, y === 5 ? C.teeD : C.tee);
+  g.set(10, 6, 8, C.teeD); g.set(10, 6, 9, C.teeD); g.set(10, 7, 8, C.teeD); g.set(10, 7, 9, C.teeD);
+  g.fill(9, 0, 8, 10, 1, 9, C.buckle); g.set(10, 0, 8, 0x8a8478);              // 버클
+  for (const z of [2, 3, 14, 15]) { g.set(9, 6, z, C.denimD); g.set(9, 7, z, C.denimD); }   // 가슴 주머니
+  g.set(9, 7, 2, C.buckle); g.set(9, 7, 15, C.buckle);
+  // 승모근·조끼 어깨끈: 목 둘레로 솟아 머리를 감쌈 (구부정한 실루엣)
+  for (let y = 9; y <= 10; y++) for (let z = 2; z <= 15; z++) for (let x = 2; x <= 8; x++) {
+    if (z >= 6 && z <= 11 && x >= 4) continue;                                // 목 자리 (머리가 들어앉음)
+    if (y === 10 && (z <= 3 || z >= 14)) continue;
+    g.set(x, y, z, vest(x, y, z));
+  }
+  for (const z of [5, 12]) { g.set(9, 8, z, C.denimD); g.set(9, 9, z, C.denimD); g.set(8, 10, z, C.denimD); }   // 옷깃
+  // 찢어낸 진동 둘레: 흰 실밥이 너덜너덜
+  for (const z of [0, 17]) for (let y = 5; y <= 8; y++) for (let x = 0; x <= 9; x++) if ((y === 5 || x === 0 || x === 9 || y === 8) && hash3(x, y, z) < .6) g.set(x, y, z, C.fray);
+  for (const z of [1, 16]) for (let x = 1; x <= 8; x += 2) if (hash3(x, 4, z) < .65) g.set(x, 4, z, C.fray);
+  // 등: 바랜 패치 + 솔기
+  for (let y = 3; y <= 7; y++) for (let z = 6; z <= 11; z++) g.set(0, y, z, (y === 3 || y === 7) && z % 2 ? 0x86837a : C.patch);
+  for (let y = 2; y <= 8; y++) g.set(0, y, 9, C.denimD);
+  return { g, origin: [5, 0, 9] };
 }
 
-// ---------------------------------------------------------------- 팔 (x8 × y13 × z8): 아래 7칸 = 주먹+붕대, 위 6칸 = 팔꿈치·이두·어깨
+// ---------------------------------------------------------------- 팔 (x9 × y16 × z9): 아래 9칸 = 큰 주먹·붕대·팔뚝, 위 7칸 = 이두·거대한 어깨
 function arm(front) {
-  const g = new VoxGrid(8, 13, 8);
-  const round = (x, z, w0, w1) => !((x === w0 || x === w1) && (z === w0 || z === w1));
-  // 주먹 y0..3: 8×8, 모서리 깎음, 손가락 홈
-  for (let y = 0; y <= 3; y++) for (let z = 0; z <= 7; z++) for (let x = 0; x <= 7; x++) {
-    if (!round(x, z, 0, 7)) continue;
-    if (y === 0 && (x === 0 || x === 7 || z === 0 || z === 7)) continue;
-    g.set(x, y, z, C.skin);
-  }
-  for (const z of [2, 4, 6]) for (let y = 1; y <= 2; y++) g.set(7, y, z, C.skinD);   // 손가락 사이
-  g.fill(7, 3, 1, 7, 3, 6, C.skinL);                                                  // 주먹 마디
-  // 손목 붕대 y4..5 (팔뚝보다 한 칸 굵게)
-  for (let y = 4; y <= 5; y++) for (let z = 1; z <= 6; z++) for (let x = 1; x <= 6; x++) g.set(x, y, z, (y + x + z) % 3 ? C.wrap : C.wrapD);
-  // 팔뚝 y6..7 (6×6)
-  for (let y = 6; y <= 7; y++) for (let z = 1; z <= 6; z++) for (let x = 1; x <= 6; x++) g.set(x, y, z, C.skin);
-  // 이두 y8..9 (6×6 + 앞으로 볼록)
-  for (let y = 8; y <= 9; y++) { for (let z = 1; z <= 6; z++) for (let x = 1; x <= 6; x++) g.set(x, y, z, C.skin); g.fill(7, y, 2, 7, y, 5, C.skin); }
-  // 어깨 근육 y10..12 (8×8 둥글게)
-  for (let y = 10; y <= 12; y++) for (let z = 0; z <= 7; z++) for (let x = 0; x <= 7; x++) {
-    if (!round(x, z, 0, 7)) continue;
-    if (y === 12 && (x === 0 || x === 7 || z === 0 || z === 7)) continue;
-    g.set(x, y, z, y === 12 ? C.skinL : C.skin);
-  }
-  // 근육 경계 그늘
-  for (let z = 1; z <= 6; z++) g.set(1, 9, z, C.skinD);
+  const g = new VoxGrid(9, 16, 9);
+  const sk = (x, y, z) => shade(C.skin, (y >= 12 ? 1.06 : 1) * (x <= 1 ? .9 : 1));
+  // 주먹 y0..4: 9×9, 둥글게, 손가락 홈·마디·엄지
+  rbox(g, 0, 0, 0, 8, 4, 8, sk, 2);
+  for (const z of [2, 4, 6]) for (let y = 1; y <= 3; y++) g.set(8, y, z, C.skinD);
+  g.fill(8, 4, 1, 8, 4, 7, C.skinL); g.fill(7, 4, 1, 7, 4, 7, C.skinL);
+  g.fill(6, 1, front ? 0 : 8, 8, 2, front ? 0 : 8, C.skinD);                   // 엄지
+  // 손목 붕대 y5..6
+  for (let y = 5; y <= 6; y++) rbox(g, 1, y, 1, 7, y, 7, (x, yy, z) => (x + z + yy) % 3 ? C.wrap : C.wrapD);
+  // 굵은 팔뚝 y7..8
+  for (let y = 7; y <= 8; y++) rbox(g, 1, y, 1, 7, y, 7, sk);
+  // 이두 y9..11 (+앞으로 볼록)
+  for (let y = 9; y <= 11; y++) { rbox(g, 1, y, 1, 7, y, 7, sk); if (y >= 10) g.fill(8, y, 2, 8, y, 6, C.skin); }
+  for (let z = 1; z <= 7; z++) g.set(1, 9, z, C.skinD);                       // 삼두 그늘
+  // 거대한 어깨 y12..15 (둥근 덩어리)
+  ell(g, 4.5, 12.6, 4.5, 4.6, 3.6, 4.6, (x, y, z) => shade(C.skin, y >= 14 ? 1.1 : 1.02), (x, y) => y >= 12);
+  for (let z = 1; z <= 7; z++) g.set(4, 12, z, C.skinD);                      // 어깨·이두 경계
   if (front) {
-    // 오른쪽 위팔 바깥면(z=7): 똬리 튼 뱀 문신
-    const S = [[2, 10], [3, 10], [4, 10], [5, 11], [4, 11], [2, 11], [1, 10], [2, 9], [3, 9], [4, 9], [5, 9], [5, 8], [4, 8], [5, 10]];
-    for (const [x, y] of S) g.set(x + 1, y, 7, C.tattoo);
-    g.set(7, 11, 7, C.tattoo);
-    for (const [x, y] of [[2, 8], [3, 8], [4, 8]]) g.set(x, y, 7, C.skin);
-    g.fill(1, 8, 7, 6, 9, 7, C.skin); g.set(2, 9, 7, C.tattoo); g.set(3, 8, 7, C.tattoo); g.set(4, 9, 7, C.tattoo); g.set(5, 8, 7, C.tattoo);
+    // 오른쪽 위팔 바깥면(z=8): 똬리 튼 뱀 문신 (머리가 위를 봄)
+    const S = ['.##.', '#..#', '.##.', '...#', '###.'];
+    S.forEach((row, r) => [...row].forEach((ch, c) => { if (ch === '#') g.set(2 + c, 13 - r, 8, C.tattoo); }));
+    g.set(6, 14, 8, C.tattoo); g.set(6, 14, 7, C.tattoo);
   } else {
     // 왼팔 팔뚝 흉터 (바깥면 z=0)
-    g.set(2, 7, 0, C.scar); g.set(3, 6, 0, C.scar); g.set(4, 7, 0, C.scar);
-    g.fill(1, 6, 0, 6, 7, 0, -1); g.fill(1, 6, 1, 6, 7, 1, C.skin); g.set(2, 7, 1, C.scar); g.set(4, 6, 1, C.scar);
+    g.set(3, 8, 0, C.scar); g.set(4, 7, 0, C.scar); g.set(5, 8, 0, C.scar); g.set(3, 7, 1, C.scar);
   }
   return g;
 }
 
-// ---------------------------------------------------------------- 다리 (x12 × y14 × z8): 아래 7칸 = 큰 운동화+롤업, 위 7칸 = 찢어진 청바지
+// ---------------------------------------------------------------- 다리 (x13 × y18 × z9): 아래 10칸 = 투박한 하이탑+롤업, 위 8칸 = 찢어진 청바지
 function leg() {
-  const g = new VoxGrid(12, 14, 8);
-  for (let y = 4; y <= 13; y++) for (let z = 0; z <= 7; z++) for (let x = 1; x <= 8; x++) g.set(x, y, z, pick(x, y, z, C.jean, C.jeanD, C.jeanL, .25, .12));
-  for (let y = 4; y <= 5; y++) for (let z = 0; z <= 7; z++) for (let x = 0; x <= 9; x++) g.set(x, y, z, y === 5 ? C.jeanL : 0x9ab2d4);   // 걷어 올린 밑단
-  // 무릎 찢어짐 (앞면, 허벅지·정강이 경계 걸침): 맨살 + 흰 실
-  g.fill(8, 6, 2, 8, 8, 5, C.skin); g.set(8, 9, 3, C.thread); g.set(8, 5, 2, C.thread); g.set(8, 7, 6, C.thread); g.set(8, 6, 1, C.thread); g.set(8, 9, 5, C.thread);
-  g.fill(1, 10, 0, 4, 10, 0, C.jeanL); g.fill(2, 11, 7, 5, 11, 7, C.jeanL);   // 허벅지 옆 닳은 자국
-  g.fill(1, 11, 2, 1, 13, 5, C.jeanD);                                         // 뒷주머니
-  // 큰 운동화: 밑창 y0 (크림), 갑피 y1..3 (빨강), 앞코 흰색, 옆 흰 띠, 끈
-  for (let z = 0; z <= 7; z++) for (let x = 0; x <= 11; x++) g.set(x, 0, z, (x + z) % 4 ? C.sole : C.white);
-  for (let y = 1; y <= 3; y++) for (let z = 0; z <= 7; z++) for (let x = 0; x <= 10; x++) g.set(x, y, z, C.shoe);
-  g.fill(10, 1, 0, 11, 2, 7, C.white); g.fill(11, 2, 1, 11, 2, 6, -1); g.fill(10, 3, 0, 10, 3, 7, -1); g.fill(9, 3, 1, 9, 3, 6, C.shoe);   // 앞코
-  for (const z of [0, 7]) { g.fill(4, 1, z, 7, 2, z, C.white); g.set(5, 3, z, C.white); }   // 옆 흰 띠
-  for (let x = 5; x <= 8; x++) for (let z = 2; z <= 5; z++) if ((x + z) % 2) g.set(x, 3, z, C.white);   // 끈
-  g.fill(0, 1, 0, 0, 3, 7, C.shoeD); g.fill(0, 3, 2, 0, 3, 5, C.white);        // 뒤꿈치
+  const g = new VoxGrid(13, 18, 9);
+  for (let y = 9; y <= 17; y++) for (let z = 0; z <= 8; z++) for (let x = 1; x <= 9; x++) {
+    if ((x === 1 || x === 9) && (z === 0 || z === 8)) continue;
+    g.set(x, y, z, shade(pick(x, y, z, C.jean, C.jeanD, C.jeanL, .25, .12), y >= 15 ? 1.03 : .97));
+  }
+  for (let y = 7; y <= 8; y++) rbox(g, 0, y, 0, 10, y, 8, () => (y === 8 ? C.jeanL : 0x9ab2d4));   // 걷어 올린 밑단
+  // 무릎 찢어짐: 맨살 + 흰 실
+  g.fill(9, 11, 2, 9, 13, 6, C.skin); for (const [y, z] of [[14, 3], [10, 2], [12, 7], [14, 5], [11, 1]]) g.set(9, y, z, C.thread);
+  g.fill(1, 14, 0, 4, 14, 0, C.jeanL); g.fill(2, 15, 8, 5, 15, 8, C.jeanL);
+  g.fill(1, 15, 2, 1, 17, 6, C.jeanD);                                         // 뒷주머니
+  // 투박한 하이탑: 두꺼운 밑창 y0..1 (홈), 갑피 y2..6 (빨강), 흰 앞코·옆판·발목, 끈
+  rbox(g, 0, 0, 0, 12, 1, 8, (x, y) => (y === 0 && x % 2 ? 0xb8b0a2 : C.sole), 1);
+  rbox(g, 0, 2, 0, 11, 6, 8, (x, y, z) => C.shoe, 1);
+  for (let y = 2; y <= 6; y++) for (let z = 0; z <= 8; z++) if (y >= 5 && 11 - y < 0) g.set(11, y, z, -1);
+  g.fill(10, 5, 0, 11, 6, 8, -1); g.fill(11, 4, 0, 11, 4, 8, -1);             // 발등 경사
+  rbox(g, 9, 2, 0, 12, 3, 8, () => C.white, 1);                                 // 흰 앞코
+  for (const z of [0, 8]) { g.fill(3, 2, z, 7, 4, z, C.white); g.fill(4, 5, z, 6, 5, z, C.white); g.set(5, 3, z, C.shoeD); }   // 옆 흰 판 + 별
+  g.fill(1, 6, 0, 8, 6, 8, C.white); g.fill(2, 6, 2, 7, 6, 6, C.shoe);          // 흰 발목 테두리
+  for (let x = 6; x <= 9; x++) for (let z = 2; z <= 6; z++) if ((x + z) % 2 && g.get(x, x <= 8 ? 5 : 4, z) >= 0) g.set(x, x <= 8 ? 5 : 4, z, C.white);   // 끈
+  g.fill(0, 2, 1, 0, 5, 7, C.shoeD);                                            // 뒤꿈치
   return g;
 }
 
@@ -182,22 +202,24 @@ export function buildHeroV2(r) {
     return o;
   };
   const hd = head(), to = torso(), armF = arm(true), armB = arm(false), lg = leg();
-  const AH = 13, AU = 6, AL = 7;          // 팔: 위 6칸, 아래 7칸
-  const LHn = 14, LU = 7, LL = 7;         // 다리: 위 7칸, 아래 7칸
-  const THn = 12;
+  const AH = 16, AU = 7, AL = 9;          // 팔: 위 7칸(이두·어깨), 아래 9칸(팔뚝·붕대·주먹)
+  const LHn = 18, LU = 8, LL = 10;        // 다리: 위 8칸(청바지), 아래 10칸(롤업·하이탑)
+  const THn = 9;                          // 몸통 9칸 (승모근은 그 위로 2칸 솟음)
   const LH = LHn * H, TH = THn * H;
   const headM = mk(hd.g, hd.origin, 0);
   const torsoM = mk(to.g, to.origin, THn - 1, 0);
-  const armUF = mk(slice(armF, AL, AH - 1), [4, AU, 4], AU - 1, 0), armLF = mk(slice(armF, 0, AL - 1), [4, AL, 4], AL - 1);
-  const armUB = mk(slice(armB, AL, AH - 1), [4, AU, 4], AU - 1, 0), armLB = mk(slice(armB, 0, AL - 1), [4, AL, 4], AL - 1);
-  const legUM = mk(slice(lg, LL, LHn - 1), [5, LU, 4], LU - 1, 0), legLM = mk(slice(lg, 0, LL - 1), [5, LL, 4], LL - 1);
-  const hipZ = 0.22, shZ = 11 * H, shY = LH + TH - 1.5 * H;
+  const armUF = mk(slice(armF, AL, AH - 1), [4.5, AU, 4.5], AU - 1, 0), armLF = mk(slice(armF, 0, AL - 1), [4.5, AL, 4.5], AL - 1);
+  const armUB = mk(slice(armB, AL, AH - 1), [4.5, AU, 4.5], AU - 1, 0), armLB = mk(slice(armB, 0, AL - 1), [4.5, AL, 4.5], AL - 1);
+  const legUM = mk(slice(lg, LL, LHn - 1), [5.5, LU, 4.5], LU - 1, 0), legLM = mk(slice(lg, 0, LL - 1), [5.5, LL, 4.5], LL - 1);
+  // 어깨는 턱보다 높이(몸통 위 3칸) 솟고, 머리는 그 사이에 들어앉음 → 원화의 구부정한 덩치 실루엣
+  const hipZ = 0.21, shZ = 11.5 * H, shY = LH + TH + 3 * H;
   return {
-    height: (LHn + THn + 15) * H,
+    height: (LHn + THn + 16) * H,
     armLen: AH * H, armULen: AU * H, handLen: AL * H,
     legLen: LH, legULen: LU * H,
     eyes: hd.eyes,                        // 광폭화 눈빛 위치 (머리 부위 로컬, 미터)
     lowGuard: true,                       // 맨손 대기 자세를 낮게 (큰 주먹이 얼굴을 가리지 않게)
+    armSpread: .32, legSpread: .12,       // 기본으로 팔·다리를 바깥으로 벌림 (A자 실루엣)
     parts: {
       legB:  { ...legUM, pivot: [0, LH, -hipZ] },
       shinB: { ...legLM, pivot: [0, -LU * H, 0], parent: 'legB' },

@@ -400,8 +400,12 @@ export class Actor {
     this.grip += (T.grip - this.grip) * k;
     this.twist += (T.twist - this.twist) * k;
     if (this.legCount() === 1 && this.fall < 0.3 && spread === 0 && this.state !== 'attack') spread = 0.35;
-    P.armF.rx += (-spread - P.armF.rx) * k;
-    P.armB.rx += (spread - P.armB.rx) * k;
+    // 모델 기본 벌림 (새 뱀돌이: 팔·다리를 바깥으로 벌린 A자 실루엣). 공격·쓰러짐 중엔 줄임
+    const aS = (this.model.armSpread ?? 0) * (this.state === 'attack' ? .35 : fallT ? 0 : 1);
+    const lS = (this.model.legSpread ?? 0) * (fallT ? 0 : 1);
+    P.armF.rx += (-spread - aS - P.armF.rx) * k;
+    P.armB.rx += (spread + aS - P.armB.rx) * k;
+    if (lS || P.legF.rx) { P.legF.rx += (-lS - P.legF.rx) * k; P.legB.rx += (lS - P.legB.rx) * k; }
     this.hopLift = lift;
     // 한 다리면 남은 다리 쪽으로 몸이 기움
     const leanT = this.legCount() === 1 && this.fall < 0.3 ? (this.legOK('F') ? 0.14 : -0.14) : 0;
