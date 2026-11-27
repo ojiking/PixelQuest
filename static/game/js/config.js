@@ -45,9 +45,10 @@ export const BOT = {
 // zone: 노리는 부위 (high=머리·팔, mid=팔·몸, low=다리)
 export const ATTACKS = {
   // 플레이어 맨손 콤보
-  jab:     { startup: .05, active: .08, recovery: .10, range: [.1, 1.2], depth: .5,  dmg: 6,  knock: 1.0, zone: 'high', hitstop: .045, anim: 'punchF' },
-  cross:   { startup: .06, active: .08, recovery: .12, range: [.1, 1.3], depth: .5,  dmg: 8,  knock: 1.4, zone: 'high', hitstop: .055, anim: 'punchB' },
-  kick:    { startup: .09, active: .10, recovery: .22, range: [.1, 1.5], depth: .55, dmg: 14, knock: 5.5, zone: 'mid',  hitstop: .10, anim: 'kick', knockdown: true, finisher: true },
+  // 맨주먹: 앞으로 내딛으며(lunge) 접었던 팔을 곧게 뻗음. 판정 거리·라인 허용 폭을 넉넉하게
+  jab:     { startup: .05, active: .09, recovery: .10, range: [.1, 1.5], depth: .68, dmg: 6,  knock: 1.2, zone: 'high', hitstop: .05, anim: 'punchF', lunge: 2.6 },
+  cross:   { startup: .06, active: .09, recovery: .12, range: [.1, 1.6], depth: .68, dmg: 8,  knock: 1.6, zone: 'high', hitstop: .06, anim: 'punchB', lunge: 3.2 },
+  kick:    { startup: .09, active: .11, recovery: .22, range: [.1, 1.8], depth: .72, dmg: 14, knock: 6,   zone: 'mid',  hitstop: .10, anim: 'kick', knockdown: true, finisher: true, lunge: 3.4 },
   flykick: { startup: .04, active: .40, recovery: .10, range: [0, 1.3],  depth: .55, dmg: 13, knock: 8,   zone: 'high', hitstop: .09, anim: 'flykick', knockdown: true },
   // 대쉬 어택: 몸통 박치기. 맞은 적이 멀리 날아가 다른 적과 부딪힘
   // 숄더 태클: 몸을 낮추고 어깨로 들이받는 돌진기 (돌진 중 무적, 맞은 적은 날아가 다른 적과 충돌)
@@ -94,7 +95,7 @@ export const ATTACKS = {
   // 날아차기 해금 전의 약한 공중 공격
   airPunch: { startup: .04, active: .20, recovery: .10, range: [0, 1.05], depth: .5, dmg: 6, knock: 2, zone: 'high', hitstop: .05, anim: 'punchF' },
   // 4연타 콤보의 팔꿈치
-  elbow:    { startup: .06, active: .08, recovery: .13, range: [.1, 1.1], depth: .5, dmg: 9, knock: 1.6, zone: 'high', hitstop: .06, anim: 'punchB' },
+  elbow:    { startup: .06, active: .09, recovery: .13, range: [.1, 1.35], depth: .68, dmg: 9, knock: 1.8, zone: 'high', hitstop: .065, anim: 'elbow', lunge: 2.8 },
   pThrowBarrel: { startup: .14, active: .05, recovery: .22, anim: 'throw', projectile: 'barrel' },
   // 잡기: 무릎 차기 / 던지기 (판정은 잡은 적에게만)
   grabKnee:  { startup: .09, active: .05, recovery: .2, anim: 'knee', grab: 'knee' },

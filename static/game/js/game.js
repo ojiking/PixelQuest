@@ -430,6 +430,17 @@ export class Game {
     this.texts.add(v.x, v.y + 1.9 * v.scale, v.z, String(dmg), cls);
   }
 
+  // 맨주먹 타격선: 주먹이 닿는 거리까지 짧은 흰 줄기 (얼마나 닿는지 눈으로 보이게)
+  punchStreak(a, d) {
+    const len = d.range[1] * a.scale, y = a.y + (d.anim === 'kick' ? 0.75 : 1.28) * a.scale, f = a.facing;
+    const x0 = a.x + f * 0.35;
+    for (let i = 0; i < 14; i++) {
+      const u = i / 13;
+      for (const dy of [-0.04, 0.04]) this.debris.spawn(x0 + f * u * (len - 0.35), y + dy, a.z + 0.08, f * 3, 0, 0, 1, 1, .9, .08 * (1 - u * .45), .1 + u * .04, 0);
+    }
+    this.debris.sparks(a.x + f * len, y, a.z + .05, 0xffffff, 3, 2.5);
+  }
+
   // 숄더 태클 시작: 뒤로 흙먼지 + 앞으로 바람 줄기
   dashBurst(p) {
     const d = p.facing;

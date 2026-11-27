@@ -108,6 +108,7 @@ export class Actor {
     this.attack = { key, def, t: 0, hit: new Set(), activated: false, ended: false, spawned: false };
     this.setState('attack');
     if (!def.air && this.grounded) { this.vx = 0; this.vz = 0; }
+    if (def.lunge && this.grounded) this.vx = this.facing * def.lunge;   // 맨주먹: 한 걸음 내딛으며 침
   }
 
   attackPhase() {
@@ -129,6 +130,7 @@ export class Actor {
     a.t += dt * spd;
     const s = d.startup, e = s + d.active;
     if (a.t >= s && (a.t < e || !a.activated)) {
+      if (!a.activated && d.lunge && this.team === 'hero') this.game.punchStreak?.(this, d);
       a.activated = true;
       this.activeFrame(a, dt);
     } else if (a.t >= e && !a.ended) {
@@ -332,7 +334,14 @@ export class Actor {
     const T = { legF: 0, shinF: 0, legB: 0, shinB: 0, armF: .12, handF: .3, armB: .12, handB: .3, torso: 0, head: 0, grip: -0.6, twist: 0 };
     let fallT = 0, rate = 18, lift = 0, spread = 0;
     switch (this.state) {
-      case 'idle': T.armF = .15 + Math.sin(t * 2.2) * .05; T.armB = .1 - Math.sin(t * 2.2) * .05; T.shinF = -.05; break;
+      case 'idle':
+        if (this.team === 'hero' && this.modelKey === 'player' && !this.weapon && !this.carry) {
+          // 맨손: 주먹을 턱 앞에 든 파이팅 자세 (살짝 들썩)
+          const b = Math.sin(t * 5) * .04;
+          T.armF = 1.0 + b; T.handF = 2.0; T.armB = .85 - b; T.handB = 2.15; T.torso = -.06;
+          T.legF = .25; T.shinF = -.1; T.legB = -.2; T.shinB = -.15; lift = Math.abs(b) * .3;
+        } else { T.armF = .15 + Math.sin(t * 2.2) * .05; T.armB = .1 - Math.sin(t * 2.2) * .05; T.shinF = -.05; }
+        break;
       case 'walk': {
         const legs = this.legCount();
         if (legs === 1) {
@@ -498,15 +507,24 @@ export class Actor {
     const S = ph === 'startup', A = ph === 'active';
     this.spin = 0;
     switch (d.anim) {
-      case 'punchF':
-        T.armF = S ? -.4 : A ? 1.6 : .9; T.handF = S ? 1.6 : A ? 0 : .6; T.armB = .5; T.handB = 1.4;
-        T.torso = A ? -.18 : 0; T.legF = .3; T.legB = -.2; T.shinB = -.2; break;
-      case 'punchB':
-        T.armB = S ? -.4 : A ? 1.6 : .9; T.handB = S ? 1.6 : A ? 0 : .6; T.armF = .5; T.handF = 1.4;
-        T.torso = A ? -.18 : 0; T.legF = .3; T.legB = -.2; T.shinB = -.2; break;
-      case 'kick':
-        T.legF = S ? .5 : A ? 1.5 : .7; T.shinF = S ? -1.4 : A ? 0 : -.8;
-        T.torso = S ? .1 : .35; T.armF = -.6; T.armB = .7; T.handB = 1; break;
+      case 'punchF': // 잽: 가드 자세에서 앞손을 곧게 내지름 (어깨를 들며 팔꿈치를 펴는 동작)
+        T.armF = S ? 1.05 : A ? 1.62 : 1.2; T.handF = S ? 2.15 : A ? 0.02 : 1.2;
+        T.armB = .95; T.handB = 2.1;                         // 뒷손은 턱 앞 가드
+        T.torso = A ? -.22 : -.08; T.twist = S ? -.1 : A ? .4 : .2; T.head = A ? .1 : 0;   // 칠 때 몸을 옆으로 돌려 팔이 화면 가로로 뻗어 보이게
+        T.legF = .42; T.shinF = -.1; T.legB = -.32; T.shinB = -.28; break;
+      case 'punchB': // 스트레이트: 허리를 크게 틀며 뒷손을 끝까지 뻗음
+        T.armB = S ? 1.0 : A ? 1.66 : 1.2; T.handB = S ? 2.2 : A ? 0.02 : 1.2;
+        T.armF = .9; T.handF = 2.1;
+        T.torso = A ? -.3 : -.05; T.twist = S ? -.35 : A ? .5 : .25; T.head = A ? .12 : 0;
+        T.legF = .48; T.shinF = -.15; T.legB = -.42; T.shinB = -.15; break;
+      case 'elbow': // 팔꿈치 훅: 팔을 접은 채 몸통 회전으로 휘두름
+        T.armF = S ? 1.3 : 1.6; T.handF = 2.6; T.armB = .95; T.handB = 2.1;
+        T.torso = A ? -.25 : 0; T.twist = S ? -.45 : A ? .55 : .3; T.head = A ? .15 : 0;
+        T.legF = .42; T.legB = -.32; T.shinB = -.25; break;
+      case 'kick': // 앞차기: 무릎을 당겼다가 발바닥으로 밀어 찬다 (상체를 뒤로 젖혀 균형)
+        T.legF = S ? 1.3 : A ? 1.62 : .8; T.shinF = S ? -1.9 : A ? 0.02 : -.9;
+        T.legB = -.12; T.shinB = -.08;
+        T.torso = S ? .15 : A ? .45 : .2; T.armF = .7; T.handF = 1.9; T.armB = .4; T.handB = 1.9; break;
       case 'knee': // 멱살 잡고 무릎 올려차기
         T.armF = T.armB = A ? 1.0 : 1.3; T.handF = T.handB = .6; T.torso = A ? .25 : 0;
         T.legF = S ? .4 : A ? 1.75 : .9; T.shinF = S ? -.6 : A ? -2.2 : -1.2; T.legB = -.15; break;
