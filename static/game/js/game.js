@@ -8,6 +8,7 @@ import { Player } from './player.js';
 import { Companion } from './companion.js';
 import { Enemy } from './enemy.js';
 import { Stage, STAGE_COUNT, PIT, SEG_HINTS } from './level.js';
+import { chunkVisible } from './env.js';
 import { Item, Prop } from './props.js';
 const CAR_FLASH = [1, 1, 1, .6], CAR_WARN = [1, .5, .1, .5], CAR_ALARM = [1, .85, .3, .18];
 import { applyHit } from './combat.js';
@@ -1263,12 +1264,17 @@ export class Game {
     this.run.maxCombo = Math.max(this.run.maxCombo, this.combo);
   }
 
-  // 도시 요소: 도로 표시, 주차된 차·쓰레기통, 전봇대·전선, 간판 (화면 근처만)
-  drawCity(r) {
+  // 바이옴 배경: 바닥 무늬, 장애물, 주차된 차·쓰레기통, 건물·구조물, 원경, 거리 장식, 간판 (화면 근처만)
+  drawBiome(r) {
     const st = this.stage;
-    if (!st.biome.city) return;
     const near = x => Math.abs(x - this.camX) < this.viewHalf + 8;
-    r.drawMesh(st.roadMarks, IDENT, null, 0);
+    const chunks = (list, stained) => { for (const c of list ?? []) if (chunkVisible(c, this.camX)) r.drawMesh(c.mesh, IDENT, null, 0, 1, null, stained); };
+    if (st.roadMarks) r.drawMesh(st.roadMarks, IDENT, null, 0);
+    chunks(st.envGround, true);                                // 바닥 무늬 (핏자국이 묻음)
+    chunks(st.obstacles, true);                                // 벽·잔해·바리케이드
+    chunks(st.pitEdges, false);                                // 낭떠러지 단면
+    chunks(st.envNear, true);                                  // 길 뒤 건물·울타리·소품
+    chunks(st.envFar, false);                                  // 원경
     for (const s of st.solids) {
       if (!near(s.x)) continue;
       mat4.identity(M); mat4.translate(M, s.x + 0.02, 0, s.z + 0.1);
@@ -1297,12 +1303,12 @@ export class Game {
       mat4.identity(M); mat4.translate(M, t.x, t.y, t.z);
       r.drawMesh(getModel(r, 'watertower').mesh, M);
     }
-    for (const p of st.poles) {
+    for (const p of st.poles ?? []) {
       if (!near(p.x)) continue;
       mat4.identity(M); mat4.translate(M, p.x, 0, p.z);
       r.drawMesh(getModel(r, 'pole').mesh, M);
     }
-    for (const s of st.signs) {
+    for (const s of st.signs ?? []) {
       if (!near(s.x)) continue;
       mat4.identity(M); mat4.translate(M, s.x, s.y, s.z);
       r.drawMesh(s.mesh, M);
@@ -1310,7 +1316,7 @@ export class Game {
     if (st.wireCount) r.drawInstances(st.wires, st.wireCount);
   }
 
-  // 알파 포그: 반투명 안개막 (뒤에서 앞으로), 색은 안개색 그대로 + 공중에 떠다니는 먼지
+  // 알파 포그: 반투명 안개막 (뒤에서 앞으로), 색은 안개색 그대로
   drawFogCards(r) {
     const st = this.stage;
     if (!st.fogCards || !r.lightMode) return;
@@ -1320,17 +1326,24 @@ export class Game {
       r.drawMesh(c.mesh, M, [f[0], f[1], f[2], 1], 0, c.a);
     }
   }
+  // 공중에 떠다니는 입자: 먼지(도시·초원) / 모래바람(사막) / 눈송이(항구). 카메라를 따라 순환
   drawDust(r) {
-    if (!this.stage.biome.nyc || !r.lightMode) return;
-    const N = 70, dt = this.frameDt || 1 / 60;
-    if (!this.dust) { this.dust = []; this.dustBuf = new Float32Array(N * 7); for (let i = 0; i < N; i++) this.dust.push({ x: rand(-12, 12), y: rand(0.2, 5), z: rand(-5.5, 5), v: rand(.15, .45), ph: rand(0, 6.3) }); }
-    const b = this.dustBuf, fc = this.stage.biome.fog;
+    const P = this.stage.biome.particles;
+    if (!P || !r.lightMode) return;
+    const N = P.n, dt = this.frameDt || 1 / 60, snow = P.kind === 'snow', sand = P.kind === 'sand';
+    if (!this.dust || this.dustKind !== P) {
+      this.dustKind = P; this.dust = []; this.dustBuf = new Float32Array(N * 7);
+      for (let i = 0; i < N; i++) this.dust.push({ x: rand(-14, 14), y: rand(0.1, snow ? 7 : sand ? 3 : 5), z: rand(-6, 5.5), v: rand(.5, 1.5) * P.speed, ph: rand(0, 6.3) });
+    }
+    const b = this.dustBuf, c = P.color;
     this.dust.forEach((d, i) => {
-      d.x += d.v * dt; d.y += Math.sin(this.time * .8 + d.ph) * .08 * dt;
-      let wx = this.camX + ((d.x % 24) + 24) % 24 - 12;      // 카메라를 따라 순환
-      b.set([wx, d.y, d.z, .035 + (i % 3) * .015, fc[0] * 1.25, fc[1] * 1.22, fc[2] * 1.18], i * 7);
+      if (snow) { d.y -= d.v * dt; d.x += (Math.sin(this.time * .7 + d.ph) * .3 + .15) * dt; if (d.y < 0) { d.y = 7; d.x = rand(-14, 14); } }
+      else if (sand) { d.x += d.v * dt; d.y += Math.sin(this.time * 2 + d.ph) * .25 * dt; if (d.y < .05) d.y = 2.5; }
+      else { d.x += d.v * dt; d.y += Math.sin(this.time * .8 + d.ph) * .08 * dt; }
+      const wx = this.camX + ((d.x % 28) + 28) % 28 - 14;
+      b.set([wx, d.y, d.z, P.size * (1 + (i % 3) * .4), c[0], c[1], c[2]], i * 7);
     });
-    r.drawInstances(b, N, .55, true);
+    r.drawInstances(b, N, P.alpha, true);
   }
 
   // ------------------------------------------------ 렌더링
@@ -1347,7 +1360,7 @@ export class Game {
     r.begin(this.vp, eye, { sky: b.sky, fog: b.fog, fogNear: b.fogNear ?? 34, fogFar: b.fogFar ?? 80, hfog: b.hfog, light: b.light ?? LIGHT, lights: this.collectLights(), near: 0.3, far: 140, focus: [this.camX, 0, -1.5] });
     this.stains.flush();
     r.drawMesh(this.stage.terrain, IDENT, null, 8, 1, null, true);
-    this.drawCity(r);
+    this.drawBiome(r);
     if (this.stage.hazardN) r.drawInstances(this.stage.hazard, this.stage.hazardN);
     this.drawFogCards(r);
     for (const t of this.traps) t.draw(r, this);

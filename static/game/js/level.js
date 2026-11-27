@@ -6,9 +6,11 @@ import { Prop, SpikeTrap, Item } from './props.js';
 import { rollWeapon } from './game.js';
 import { buildCityBlocks, makeSigns, buildRoadMarks, buildPoles } from './city.js';
 import { buildNYCBlocks, makeFacades, makeNYCSigns, buildNYCRoad, buildNYCDecor, buildFogCards } from './nyc.js';
+import { planBiome, buildBiome } from './biomes.js';
+import { buildObstacles } from './obstacles.js';
 
 const AIR = 0, GRASS = 1, DIRT = 2, LANEB = 3, STONE = 4, WALL = 5, WALL2 = 6, GLASS = 7, WOOD = 8, LEAVES = 9, VOID = 10;
-const SIDE = 11, TRIM = 12, FAR = 13, RAIL = 14, BUILD0 = 20; // 도시용 블록 (BUILD0~ 건물 외벽 색)
+const SIDE = 11, TRIM = 12, FAR = 13, RAIL = 14, GHOST = 15, BUILD0 = 20;   // GHOST: 장애물 칸 (그리지 않고 틈새 그늘만) // 도시용 블록 (BUILD0~ 건물 외벽 색)
 export const PIT = -100;           // 낭떠러지 (떨어지면 사망)
 const DEPTH = -12;                 // 낭떠러지 바닥 깊이
 const LANE_Z0 = -4, LANE_Z1 = 4;   // 걸을 수 있는 블록 줄 (z 셀)
@@ -36,11 +38,12 @@ class World {
   set(x, y, z, b) { const i = this.idx(x, y, z); if (i >= 0) this.data[i] = b; }
 }
 
-function buildTerrain(r, L, biome, seed, hmap) {
-  const w = new World(-14, L + 16, -32, 8, DEPTH, 18);
+function buildTerrain(r, L, biome, seed, hmap, plan) {
+  const w = new World(-14, L + 16, plan ? -40 : -32, 8, DEPTH, 18);
   const heights = new Map();
   const city = !!biome.city;
   const groundH = (x, z) => {
+    if (plan) return plan.groundH(x, z);              // 초원·사막·항구: biomes.js 계획 (null = 물)
     if (z >= -5 || (city && z >= -30)) return 0;
     let h = (-z - 5) * 0.3 + noise2(x * 0.07, z * 0.09, seed) * 3 - 0.6;
     if (z < -17) h += (-z - 17) * 0.55 + noise2(x * 0.05, z * 0.05, seed + 7) * 6;
@@ -49,9 +52,10 @@ function buildTerrain(r, L, biome, seed, hmap) {
   for (let x = w.x0; x < w.x0 + w.W; x++) {
     for (let z = w.z0; z < w.z0 + w.D; z++) {
       const h = groundH(x, z);
-      heights.set(x + ',' + z, h);
+      heights.set(x + ',' + z, h ?? 0);
       const hm = hmap.get(x + ',' + z);
       if (hm === PIT) { w.set(x, DEPTH, z, VOID); continue; } // 낭떠러지: 바닥만 어둡게
+      if (h === null) continue;                                // 물 (항구)
       for (let y = w.y0; y < h; y++) {
         let b = y === h - 1 ? GRASS : y >= h - 3 ? DIRT : STONE;
         if (city && y === h - 1) b = z >= -2 && z <= LANE_Z1 ? LANEB : SIDE; // 도시: 차도 + 인도
@@ -61,83 +65,26 @@ function buildTerrain(r, L, biome, seed, hmap) {
         }
         w.set(x, y, z, b);
       }
-      // 올라설 수 있는 블록 / 벽
-      if (hm > 0) for (let y = 0; y < hm; y++) w.set(x, y, z, y === hm - 1 ? WALL : WALL2);
-      // 차도 경계석(낮은 담장, 군데군데 무너짐)
-      if (!city && z === -5 && hm !== PIT && hash3(x, 9, z) > 0.25) w.set(x, 0, z, hash3(x, 10, z) > 0.8 ? WALL2 : WALL);
+      // 올라설 수 있는 블록 / 벽: 겉모습은 obstacles.js가 그림 (여기선 바닥 틈새 그늘용 투명 블록)
+      if (hm > 0) for (let y = 0; y < hm; y++) w.set(x, y, z, GHOST);
     }
   }
-  const occupied = new Set();
   let signSpecs = [], nyc = null;
   if (city && biome.nyc) {
     nyc = buildNYCBlocks(w, L, { build: biome.build.map((_, i) => BUILD0 + i), trim: TRIM, far: FAR, rail: RAIL });
     signSpecs = nyc.signs;
   } else if (city) {
     signSpecs = buildCityBlocks(w, L, { build: biome.build.map((_, i) => BUILD0 + i), glass: GLASS, trim: TRIM, far: FAR });
-  } else {
-  // 무너진 건물
-  for (let bx = 4 + randi(0, 6); bx < L + 6; bx += randi(13, 21)) {
-    const bw = randi(5, 9), bd = randi(4, 6), bh = randi(4, 8);
-    const zf = -6 - randi(0, 2);
-    for (let x = bx; x < bx + bw; x++) {
-      for (let z = zf - bd + 1; z <= zf; z++) {
-        occupied.add(x + ',' + z);
-        const base = heights.get(x + ',' + z) ?? 0;
-        let top = bh - (hash3(x, 21, z) < 0.35 ? randi(1, 3) : 0);
-        if (x === bx || x === bx + bw - 1) top = Math.max(top, bh - 1);
-        for (let y = 0; y < top; y++) {
-          let b = y === 0 || x === bx || x === bx + bw - 1 ? WALL2 : WALL;
-          if (z === zf && y % 3 === 1 && (x - bx) % 2 === 1 && y < top - 1) b = GLASS;
-          if (z === zf && y < 2 && x === bx + (bw >> 1)) b = GLASS;
-          w.set(x, base + y, z, b);
-        }
-      }
-    }
-  }
-  // 식물
-  for (let i = 0; i < L / 2.4; i++) {
-    const x = randi(-10, L + 12), z = randi(-16, -7);
-    if (occupied.has(x + ',' + z) || occupied.has((x + 1) + ',' + z) || occupied.has((x - 1) + ',' + z)) continue;
-    const base = heights.get(x + ',' + z) ?? 0;
-    if (biome.flora === 'cactus') {
-      const hgt = randi(2, 4);
-      for (let y = 0; y < hgt; y++) w.set(x, base + y, z, WOOD);
-      if (hgt > 2 && Math.random() < 0.6) { w.set(x + 1, base + 1, z, WOOD); w.set(x + 1, base + 2, z, WOOD); }
-    } else if (biome.flora === 'spruce') {
-      const hgt = randi(4, 6);
-      for (let y = 0; y < hgt; y++) w.set(x, base + y, z, WOOD);
-      const rads = [2, 2, 1, 1, 0];
-      rads.forEach((rd, k) => {
-        const y = base + 2 + k;
-        for (let dx = -rd; dx <= rd; dx++) for (let dz = -rd; dz <= rd; dz++) {
-          if (Math.abs(dx) + Math.abs(dz) > rd + 1) continue;
-          if (w.get(x + dx, y, z + dz) === AIR) w.set(x + dx, y, z + dz, LEAVES);
-        }
-      });
-      w.set(x, base + 2 + rads.length, z, LEAVES);
-    } else {
-      const hgt = randi(3, 5);
-      for (let y = 0; y < hgt; y++) w.set(x, base + y, z, WOOD);
-      for (let dy = -1; dy <= 1; dy++) {
-        const rd = dy === 1 ? 1 : 2;
-        for (let dx = -rd; dx <= rd; dx++) for (let dz = -rd; dz <= rd; dz++) {
-          if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
-          if (w.get(x + dx, base + hgt + dy, z + dz) === AIR) w.set(x + dx, base + hgt + dy, z + dz, LEAVES);
-        }
-      }
-    }
-    occupied.add(x + ',' + z);
   }
 
-  } // (도시가 아닐 때만 건물·식물)
 
   // 블록 → 색
   const snowy = biome.flora === 'spruce';
   const C = k => hexToRgb(biome[k]);
   const BL = {
-    [GRASS]: { top: C('grass'), side: C('dirt'), strip: 1, stripC: C('grass') },
+    [GRASS]: { top: C('grass'), side: C(biome.hillSide ? 'hillSide' : 'dirt'), strip: 1, stripC: C('grass') },   // 언덕 옆면은 풀빛(초원)·모래(사막)·눈(항구)
     [DIRT]: { top: C('dirt'), side: C('dirt') },
-    [LANEB]: { top: C('lane'), side: C('dirt') },
+    [LANEB]: { top: C('lane'), side: C(biome.edge ? 'edge' : 'dirt') },
     [STONE]: { top: C('stone'), side: C('stone') },
     [WALL]: { top: C('wall'), side: C('wall') },
     [WALL2]: { top: C('wall2'), side: C('wall2') },
@@ -154,11 +101,12 @@ function buildTerrain(r, L, biome, seed, hmap) {
     for (let y = w.y0; y < w.y0 + w.H; y++) {
       for (let x = w.x0; x < w.x0 + w.W; x++) {
         const b = w.get(x, y, z);
-        if (b === AIR) continue;
+        if (b === AIR || b === GHOST) continue;
         const bl = BL[b];
         for (const f of FACES) {
           if (f.n[1] === -1) continue;
-          if (w.get(x + f.n[0], y + f.n[1], z + f.n[2]) !== AIR) continue;
+          const nb = w.get(x + f.n[0], y + f.n[1], z + f.n[2]);
+          if (nb !== AIR && nb !== GHOST) continue;
           const ao = faceAO(w, x, y, z, f, (gx, gy, gz) => w.get(gx, gy, gz) !== AIR);   // 블록 틈새 그늘
           if (f.n[1] === 1) mb.quad(f, x, y, z, 1, 1, 1, bl.top, bl.top, 0, ao);
           else mb.quad(f, x, y, z, 1, 1, 1, bl.side, bl.stripC ?? bl.side, bl.strip ?? 0, ao);
@@ -271,9 +219,22 @@ export class Stage {
     this.solid = new Map();   // 주차된 차·쓰레기통 (올라설 수 있는 장애물 높이)
     this.solids = [];
     if (this.biome.city && !this.lab) this.placeCityProps();
-    const built = buildTerrain(game.r, this.L, this.biome, randi(1, 9999), this.hmap);
+    const seed = randi(1, 9999);
+    const plan = this.biome.city ? null : planBiome(biomeKey, this.L, seed);   // 초원·사막·항구 배경 구획
+    const t0 = performance.now();
+    const built = buildTerrain(game.r, this.L, this.biome, seed, this.hmap, plan);
+    const t1 = performance.now();
     this.terrain = built.mesh;
     this.buildHazard();
+    // 장애물(벽·잔해·바리케이드)과 낭떠러지 단면: 바이옴에 맞는 물건으로
+    const obs = buildObstacles(game.r, this, this.biome.city ? 'city' : biomeKey);
+    this.obstacles = obs.chunks; this.pitEdges = obs.edges;
+    const t2 = performance.now();
+    if (plan) {
+      const env = buildBiome(game.r, plan, (x, z) => this.heightAt(x, z) === PIT);
+      this.envNear = env.near; this.envFar = env.far; this.envGround = env.ground; this.fogCards = env.fogCards;
+    }
+    this.buildMs = { terrain: Math.round(t1 - t0), obstacles: Math.round(t2 - t1), env: Math.round(performance.now() - t2) };   // 스테이지 생성 시간 (테스트 확인용)
     if (this.biome.nyc) {   // 폐허 뉴욕: 0.2m 외벽·영어 간판·바랜 도로·거리 장식·물탱크·안개막
       const isPit = (x, z) => this.heightAt(x, z) === PIT;
       this.facades = makeFacades(game.r, built.nyc.facades);
@@ -463,6 +424,7 @@ export class Stage {
 
   dispose(r) {
     r.deleteMesh(this.terrain);
+    for (const k of ['obstacles', 'pitEdges', 'envNear', 'envFar', 'envGround']) for (const c of this[k] ?? []) r.deleteMesh(c.mesh);
     if (this.roadMarks) r.deleteMesh(this.roadMarks);
     for (const s of this.signs ?? []) r.deleteMesh(s.mesh);
     for (const f of this.facades ?? []) r.deleteMesh(f.mesh);

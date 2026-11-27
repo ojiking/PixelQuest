@@ -2,6 +2,7 @@
 import { V } from './config.js';
 import { VoxGrid, meshGrid } from './voxel.js';
 import { buildHeroV2 } from './hero_model.js';
+import { ENV_BUILDERS } from './env_models.js';
 import { CHAR_BUILDERS } from './chars_enemies.js';
 import { ITEM_BUILDERS } from './items_hd.js';
 
@@ -610,6 +611,9 @@ for (let i = 0; i < 7; i++) {
     });
   };
 }
+
+// 배경 소품·차: 고해상도 모델(env_models.js)로 교체
+Object.assign(BUILDERS, ENV_BUILDERS);
 
 // 적·보스·로봇: 고밀도 모델(chars_enemies.js)로 교체 (예전 humanoid 정의는 위에 남아 있지만 덮어씀)
 Object.assign(BUILDERS, CHAR_BUILDERS);

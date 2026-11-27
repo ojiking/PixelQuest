@@ -373,6 +373,22 @@ export const TRAPS = {
 
 // ---------------- 바이옴 ----------------
 // 블록 색만 바꿔도 분위기가 크게 달라지는지 검증하기 위한 3종
+// ---------------- 바이옴 배경 꾸미기 (biomes.js / obstacles.js) ----------------
+// slab: 콘크리트 판 이음 간격(m), joint/crack: 이음·균열 색, lane: 바랜 차선(없으면 null)
+// patch: 길 위 얼룩(흙·모래·눈) 색, patchF: 얼룩 크기(작을수록 큰 덩어리), patchT: 얼룩 문턱(낮을수록 많이), edgeBoost: 길가에서 더 많이
+// patch2: 두 번째 얼룩(이끼·진창·물웅덩이), fog: 안개막 [z, [[바닥 y, 높이, 불투명도]...]]
+export const BIOME_ENV = {
+  plains: { slab: 3, joint: 0x4a4842, crack: 0x3a3834, lane: 0x9a968a, patch: [0x6e664e, 0x766c52, 0x686048], patchF: .5, patchT: .7, edgeBoost: .3, patch2: [0x66654c, 0x6a6850], patch2T: .84,
+    fog: [[-30, [[0, 10, .3], [10, 8, .16]]], [-20, [[0, 6, .26], [6, 6, .12]]], [-12, [[0, 3, .18], [3, 5, .08]]], [-5.4, [[0, 1.2, .14], [1.2, 2.5, .07]]]] },
+  desert: { slab: 4, joint: 0x5e584e, crack: 0x4a443c, lane: null, patch: [0xb09a76, 0xa48e6a, 0xb8a27e], patchF: .3, patchT: .68, edgeBoost: .4, patch2: [0x7e786c, 0x96907e], patch2T: .8,
+    fog: [[-30, [[0, 12, .42], [12, 10, .22]]], [-20, [[0, 8, .34], [8, 6, .16]]], [-12, [[0, 4, .24], [4, 5, .1]]], [-5.4, [[0, 1.4, .18], [1.4, 3, .09]]]] },
+  snow: { slab: 3, joint: 0x45433f, crack: 0x3a3836, lane: 0x8a7a44, patch: [0xc8ccce, 0xb8bcbe, 0xd4d8d9], patchF: .4, patchT: .63, edgeBoost: .4, patch2: [0x4a4e50, 0x7e8284, 0x8a8e8e], patch2T: .76,
+    waterY: -0.7,
+    fog: [[-32, [[0, 10, .3], [10, 8, .15]]], [-20, [[-1, 7, .2], [6, 6, .1]]], [-11, [[-1, 4, .12], [3, 5, .06]]], [-5.4, [[0, 1.3, .1], [1.3, 2.6, .05]]]] },
+};
+// 장애물(높이 맵 벽·잔해·바리케이드) / 항구 낭떠러지 아래 바닷물
+export const OBSTACLE = { water: 0x2a3436, waterY: -2.2 };
+
 export const BIOMES = {
   city: {
     // 폐허가 된 뉴욕 거리 (docs/art/target_ingame.webp): 바랜 벽돌, 먼지 낀 흙빛 하늘, 짙은 먼지 안개
@@ -381,22 +397,35 @@ export const BIOMES = {
     light: { sky: [.44, .42, .44], ground: [.3, .23, .17], sun: [.82, .6, .4] },   // 먼지 낀 늦은 오후: 따뜻하고 낮은 해
     grass: 0x857c70, dirt: 0x5e5650, lane: 0x3e3a37, stone: 0x5a5450,
     wall: 0x7a4434, wall2: 0x5a3428, glass: 0x1e242a, wood: 0x5a4030, leaves: 0x4a5a38, flora: 'none',
-    trim: 0x4a4440, far: 0x6e625a, rail: 0x4a463c, build: [0x7a4434, 0x6a3a2c, 0x8a5038, 0x5e4a3e, 0x7e5c46],
+    trim: 0x4a4440, far: 0x6e625a, rail: 0x4a463c, build: [0x7a4434, 0x6a3a2c, 0x8a5038, 0x5e4a3e, 0x7e5c46], edge: 0x3a3634,
+    particles: { kind: 'dust', n: 70, size: .035, color: [.75, .64, .54], speed: .3, alpha: .55 },   // 떠다니는 먼지 (kind: dust / sand / snow)
   },
   plains: {
-    name: '폐허 초원', sky: [0.56, 0.76, 0.96], fog: [0.66, 0.80, 0.95],
-    grass: 0x5da130, dirt: 0x7a5532, lane: 0x9c8d73, stone: 0x7d7d7d,
-    wall: 0x9a9a96, wall2: 0x6f6f6c, glass: 0x2b3b55, wood: 0x6b4a2b, leaves: 0x3c8a2a, flora: 'tree',
+    // 폐허 초원 (docs/art/ref/biome_plains.webp): 흐린 잿빛 하늘, 마른 카키 풀, 회색 콘크리트 폐허, 녹슨 철망
+    name: '폐허 초원', sky: [0.62, 0.61, 0.58], fog: [0.6, 0.59, 0.55],
+    fogNear: 18, fogFar: 66, hfog: [0.45, 2.6],
+    light: { sky: [.46, .47, .48], ground: [.28, .26, .21], sun: [.62, .56, .46] },   // 흐린 낮: 해가 약하고 그늘이 부드러움
+    grass: 0x8e8462, dirt: 0x5e5040, lane: 0x75716a, stone: 0x5e5a54, edge: 0x5a5650, hillSide: 0x766c4e,
+    wall: 0x7e7a74, wall2: 0x5e5a54, glass: 0x1e2024, wood: 0x4e4034, leaves: 0x5e6040, flora: 'none',
+    particles: { kind: 'dust', n: 50, size: .026, color: [.74, .71, .64], speed: .3, alpha: .35 },
   },
   desert: {
-    name: '모래 공업지대', sky: [0.98, 0.84, 0.62], fog: [0.97, 0.86, 0.70],
-    grass: 0xdcc581, dirt: 0xcfb172, lane: 0xb39a68, stone: 0xc2a46b,
-    wall: 0xb5654a, wall2: 0x8f4b37, glass: 0x3a2a22, wood: 0x5a8c3a, leaves: 0x4f9a3f, flora: 'cactus',
+    // 모래 공업지대 (docs/art/ref/biome_desert.webp): 황토빛 모래 안개, 녹슨 골함석 창고, 굴뚝·크레인
+    name: '모래 공업지대', sky: [0.74, 0.62, 0.5], fog: [0.72, 0.6, 0.47],
+    fogNear: 14, fogFar: 56, hfog: [0.6, 3.4],
+    light: { sky: [.5, .46, .42], ground: [.34, .28, .21], sun: [.8, .64, .46] },     // 먼지 낀 강한 해
+    grass: 0xa8946e, dirt: 0x8a7656, lane: 0x86827a, stone: 0x6e6252, edge: 0x6e685e, hillSide: 0x9a845e,
+    wall: 0x8a7e6e, wall2: 0x6a5e50, glass: 0x1e1c1a, wood: 0x5a4a3a, leaves: 0x6a6a46, flora: 'none',
+    particles: { kind: 'sand', n: 110, size: .028, color: [.86, .74, .56], speed: 1.6, alpha: .55 },
   },
   snow: {
-    name: '얼어붙은 항구', sky: [0.74, 0.82, 0.92], fog: [0.82, 0.87, 0.94],
-    grass: 0xf2f6f8, dirt: 0x6e5038, lane: 0xa5b0ba, stone: 0x7f8c99,
-    wall: 0x7c8a97, wall2: 0x56626e, glass: 0x9cc8e8, wood: 0x4b3420, leaves: 0x2f5a40, flora: 'spruce',
+    // 얼어붙은 항구 (docs/art/ref/biome_snow.webp): 차가운 잿빛, 더러운 눈과 진창, 녹슨 컨테이너, 얼음 낀 바다
+    name: '얼어붙은 항구', sky: [0.58, 0.6, 0.62], fog: [0.56, 0.58, 0.6],
+    fogNear: 18, fogFar: 70, hfog: [0.4, 2.6],
+    light: { sky: [.5, .53, .58], ground: [.34, .34, .35], sun: [.5, .5, .52] },     // 눈 오는 흐린 날: 해가 거의 없음
+    grass: 0xbcc0c2, dirt: 0x4e4c48, lane: 0x6c6a66, stone: 0x4e4c48, edge: 0x5a5854, hillSide: 0x8e9294,
+    wall: 0x6e6c68, wall2: 0x4e4c48, glass: 0x1e2024, wood: 0x4b3a2a, leaves: 0x4a5048, flora: 'none',
+    particles: { kind: 'snow', n: 150, size: .045, color: [.9, .92, .94], speed: .9, alpha: .85 },
   },
 };
 
