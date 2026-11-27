@@ -185,8 +185,9 @@ function renderLabUI() {
     <button class="btn small" data-lab="count">적 수: <b>${L.count}</b> (2)</button>
     <button class="btn small" data-lab="infinite">내구도: <b>${L.infinite ? '무한' : '정상'}</b> (3)</button>
     <button class="btn small" data-lab="rage">피 뒤집어쓰기 → 광폭 (4)</button>
+    <button class="btn small" data-lab="puddle">발밑에 피 웅덩이 (5)</button>
     <button class="btn small ghost" data-lab="exit">나가기</button>`;
-  if (IS_MOBILE) labUI.innerHTML = labUI.innerHTML.replace(/ \([1234]\)/g, '');
+  if (IS_MOBILE) labUI.innerHTML = labUI.innerHTML.replace(/ \([12345]\)/g, '');
   labTags.innerHTML = L.slots.map((s, i) => `<span data-i="${i}">${WEAPONS[s.type].name}</span>`).join('');
 }
 function labOption(k) {
@@ -195,6 +196,7 @@ function labOption(k) {
   if (k === 'attack') L.attack = !L.attack;
   if (k === 'count') { L.count = L.count === 1 ? 3 : L.count === 3 ? 0 : 1; for (const e of game.enemies.filter(e => !e.dead).slice(L.count)) { e.dead = true; e.remove = true; game.releaseToken(e); } }
   if (k === 'infinite') L.infinite = !L.infinite;
+  if (k === 'puddle') { const p = game.player, fy = p.floor ?? game.floorAt(p.x, p.z); for (let i = 0; i < 14; i++) game.stains.add(p.x + (Math.random() - .5) * 1.4, fy, p.z + (Math.random() - .5) * 1.0, 1, 1, 0.5); }   // 발자국 시험용
   if (k === 'rage') { const p = game.player; if (!p.berserk) { p.rageCd = 0; p.enterBerserk(); } }   // 바로 광폭 (대기 시간 무시)
   if (k === 'exit') { leaveLab(); showTitle(); return; }
   renderLabUI();
@@ -430,7 +432,7 @@ addEventListener('keydown', e => {
     else if (mode === 'hub' && !panel) act('start');
   }
   if (mode === 'perk' && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) choosePerk(+e.code.slice(5) - 1);
-  if (mode === 'run' && game.run?.lab && ['Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(e.code)) labOption(['attack', 'count', 'infinite', 'rage'][+e.code.slice(5) - 1]);
+  if (mode === 'run' && game.run?.lab && ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'].includes(e.code)) labOption(['attack', 'count', 'infinite', 'rage', 'puddle'][+e.code.slice(5) - 1]);
 });
 
 // ------------------------------------------------------------ HUD

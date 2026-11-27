@@ -192,6 +192,32 @@ export class Stains {
       if (axis === 1) this.put(p[0], p[1] - 1, p[2], amt >> 1);   // 블록 위 높이가 조금 달라도 묻게 한 층 더
     }
   }
+  // 바닥 핏자국 진하기 읽기 (발밑 주변 3×3칸 중 최댓값, 0~255)
+  sample(x, y, z) {
+    if (!this.data) return 0;
+    const c = this.cell(x, y - 0.03, z);
+    let m = 0;
+    for (const dy of [0, -1]) for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+      const ix = c[0] + a, iy = c[1] + dy, iz = c[2] + b;
+      if (ix < 0 || iy < 0 || iz < 0 || ix >= this.W || iy >= this.H || iz >= this.D) continue;
+      m = Math.max(m, this.data[ix + this.W * (iy + this.H * iz)]);
+    }
+    return m;
+  }
+  // 바닥에 발자국 하나 (10cm 칸 기준, 진행 방향 dir=±1)
+  // fill: 칸이 찍힐 확률 (발에 남은 피가 줄수록 듬성듬성해져 옅어지는 느낌)
+  footprint(x, y, z, dir, amt, fill = 1) {
+    if (!this.data) return;
+    const c = this.cell(x, y - 0.03, z);
+    const cells = [];
+    for (let b = 0; b < 3; b++) { cells.push([-2, b], [-1, b], [1, b], [2, b]); if (b < 2) cells.push([3, b]); }   // 뒤꿈치 2칸 + 한 칸 띄우고 앞꿈치 3칸, 폭 3칸
+    for (const [a, b] of cells) {
+      if (Math.random() > fill) continue;
+      const v = Math.round(amt * (0.75 + Math.random() * 0.4));
+      this.put(c[0] + a * dir, c[1], c[2] + b - 1, v);
+      this.put(c[0] + a * dir, c[1] - 1, c[2] + b - 1, v >> 1);   // (b-1: 발 중심 기준 좌우)   // 블록 높이가 조금 달라도 묻게 한 층 더
+    }
+  }
   // 영역 안 핏자국 제거 (차가 폭발해 지붕이 사라질 때 등)
   removeBox(x0, x1, z0, z1, yMin) {
     if (!this.data) return;

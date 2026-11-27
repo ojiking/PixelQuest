@@ -1,5 +1,5 @@
 import { Actor } from './actor.js';
-import { PLAYER, WEAPONS, LIMB_WEAPONS, BERSERK } from './config.js';
+import { PLAYER, WEAPONS, LIMB_WEAPONS, BERSERK, FOOTPRINT } from './config.js';
 
 const FIST_COMBO = ['jab', 'cross', 'kick'];
 const FIST_COMBO4 = ['jab', 'cross', 'elbow', 'kick'];
@@ -105,6 +105,26 @@ export class Player extends Actor {
     for (const k in this.parts) if (this.parts[k].alive) super.addBlood(k, .1);
   }
 
+  // 피 발자국: 걸은 거리마다 왼발·오른발을 번갈아 찍음. 진한 핏자국을 밟으면 발에 피가 다시 묻음
+  updateFootprints(dt) {
+    const g = this.game, st = g.stains;
+    if (!st?.data || !this.grounded || this.hidden || this.dead) return;
+    const v = Math.hypot(this.vx, this.vz);
+    if (v < 0.3) return;
+    this.stepDist = (this.stepDist || 0) + v * dt;
+    if (this.stepDist < FOOTPRINT.step) return;
+    this.stepDist = 0;
+    this.footSide = -(this.footSide || 1);
+    const dir = Math.abs(this.vx) > 0.2 ? Math.sign(this.vx) : this.facing;
+    const fx = this.x, fz = this.z + this.footSide * FOOTPRINT.gap, fy = this.floor ?? g.floorAt(fx, fz);
+    if (st.sample(fx, fy, fz) >= FOOTPRINT.pickup) this.bloodySteps = FOOTPRINT.steps;   // 웅덩이를 밟음
+    else if (this.bloodySteps > 0) {
+      const k = this.bloodySteps / FOOTPRINT.steps;
+      st.footprint(fx, fy, fz, dir, FOOTPRINT.minAmt + (FOOTPRINT.amt - FOOTPRINT.minAmt) * k, 0.3 + 0.7 * k);
+      this.bloodySteps--;
+    }
+  }
+
   update(dt) {
     const g = this.game, inp = g.input;
     if (inp.pressed('KeyJ')) this.buffer = 0.3;
@@ -119,6 +139,7 @@ export class Player extends Actor {
 
     this.updateBerserk(dt);
     this.physics(dt);
+    this.updateFootprints(dt);
     if (this.state === 'ko') { this.pose(dt); return; }
     if (this.updateCommon(dt)) { this.pose(dt); return; }
 
