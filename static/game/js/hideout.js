@@ -209,7 +209,7 @@ export class Hideout {
     mat4.perspective(this.proj, 38 * Math.PI / 180, aspect, 0.5, 60);
     mat4.lookAt(this.view, this.eye, [0, 1.75, -1.0], [0, 1, 0]);
     mat4.multiply(this.vp, this.proj, this.view);
-    r.begin(this.vp, this.eye, { sky: [0.05, 0.05, 0.07], fog: [0.05, 0.05, 0.07], fogNear: 30, fogFar: 60, light: HIDEOUT_LIGHT });
+    r.begin(this.vp, this.eye, { sky: [0.05, 0.05, 0.07], fog: [0.05, 0.05, 0.07], fogNear: 30, fogFar: 60, light: HIDEOUT_LIGHT, near: 0.5, far: 60, focus: [0, 0, 0] });
     this.put(m.floor, 0, 0, 0);
     this.put(m.back, 0, 0, -3.2);
     this.put(m.left, -7.2, 0, -3.2);

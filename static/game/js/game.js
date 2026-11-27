@@ -1344,7 +1344,7 @@ export class Game {
     mat4.lookAt(this.view, eye, [this.camX + sx * .5, ly, lz], [0, 1, 0]);
     mat4.multiply(this.vp, this.proj, this.view);
     const b = this.stage.biome;
-    r.begin(this.vp, eye, { sky: b.sky, fog: b.fog, fogNear: b.fogNear ?? 34, fogFar: b.fogFar ?? 80, hfog: b.hfog, light: b.light ?? LIGHT, lights: this.collectLights() });
+    r.begin(this.vp, eye, { sky: b.sky, fog: b.fog, fogNear: b.fogNear ?? 34, fogFar: b.fogFar ?? 80, hfog: b.hfog, light: b.light ?? LIGHT, lights: this.collectLights(), near: 0.3, far: 140, focus: [this.camX, 0, -1.5] });
     this.stains.flush();
     r.drawMesh(this.stage.terrain, IDENT, null, 8, 1, null, true);
     this.drawCity(r);
@@ -1381,7 +1381,7 @@ export class Game {
     for (const it of this.items) add(it.x, it.z, 0.3);
     for (const gb of this.gibs.list) if (Math.abs(gb.pos[0] - this.camX) < this.viewHalf + 2) add(gb.pos[0], gb.pos[2], 0.35);
     for (const pr of this.projectiles) add(pr.x, pr.z, 0.25);
-    r.drawInstances(sb, n, 0.3, true);
+    r.drawInstances(sb, n, 0.16, true);   // 실제 해 그림자가 생겨 발밑 그림자는 옅은 접지 그림자로만
     this.drawHeroRing(r);
     this.drawRageEyes(r);
   }

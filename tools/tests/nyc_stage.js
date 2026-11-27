@@ -6,6 +6,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 (async () => { const browser = await chromium.launch(); const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errs = []; page.on('pageerror', e => errs.push(e.message + ' ' + (e.stack || '').split('\n')[1]));
   await page.route('http://game.test/**', route => { const rel = new URL(route.request().url()).pathname.replace(/^\/+/, '') || 'index.html'; route.fulfill({ status: 200, contentType: TYPES[path.extname(rel)], body: fs.readFileSync(path.join(ROOT, rel)) }); });
+  await page.addInitScript(() => { window.__forceHQ = true; });   // 그래픽카드 없는 환경에서도 고품질(그림자·후처리)로 확인
   await page.goto('http://game.test/index.html'); await page.waitForTimeout(1200);
   await page.keyboard.press('Enter'); await page.waitForTimeout(150); await page.keyboard.press('Enter'); await page.waitForTimeout(1500);
   const t0 = Date.now();
