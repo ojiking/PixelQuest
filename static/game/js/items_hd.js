@@ -19,9 +19,10 @@ function rodY(g, y0, y1, cx, cz, rr, f) {
 // 손잡이 감은 테이프 (나선 줄무늬)
 const tape = (c) => (x, y, z) => (x + y + z) % 3 === 0 ? shade(c, .7) : pick(x, y, z, c, shade(c, .88), shade(c, 1.1));
 
-// 맨홀 뚜껑 원판: 녹슨 주철, 격자 무늬 + 테두리 + 'NYC' 돋을새김. 원판 면 = (u,v), 두께 방향 = t
+// 맨홀 뚜껑 원판: 회청색 주철, 격자 무늬 + 테두리 + 'NYC' 돋을새김. 원판 면 = (u,v), 두께 방향 = t
+// 흙빛 배경·갈색 옷과 섞이지 않게 차가운 쇠색 + 닳아 반짝이는 테두리·격자·글자 (채도가 아니라 명도 대비로 눈에 띄게)
 function manholeDisc(set, N = 20, T = 4) {
-  const c = (N - 1) / 2, IRON = 0x6a4a36, IRON_D = 0x4a3426, IRON_L = 0x8a6448;
+  const c = (N - 1) / 2, IRON = 0x4e5660, IRON_D = 0x3a4048, IRON_L = 0x646e78, WORN = 0xb4bcc0, WORN_D = 0x8e979e;
   const letters = ['#..#.#.#.###', '##.#.#.#.#..', '#.##..#..#..', '#..#..#..###'];
   for (let u = 0; u < N; u++) for (let v = 0; v < N; v++) {
     const d = Math.hypot(u - c, v - c);
@@ -32,16 +33,16 @@ function manholeDisc(set, N = 20, T = 4) {
       let col = pick(u, v, t, IRON, IRON_D, IRON_L, .3, .16);
       if (front && !rim) {
         const grid = (u % 3 === 0 || v % 3 === 0) && d < N / 2 - 5;           // 격자 홈
-        col = grid ? shade(IRON, .62) : ring2 ? shade(IRON, .7) : col;
+        col = grid ? shade(IRON, .55) : ring2 ? WORN_D : pick(u, v, 5, WORN_D, IRON_L, WORN, .3, .12);   // 홈은 어둡게, 돋은 칸은 닳아 밝게
       }
-      if (rim) col = pick(u, v, t, 0x5a4030, 0x4a3426, 0x7a5a42);
-      set(u, v, t, grime(u, v, t, col, 0x9a5a2a, .16, 41));
+      if (rim) col = pick(u, v, t, 0x5a626a, 0x48505a, 0x6e7880);
+      set(u, v, t, grime(u, v, t, col, 0x8a5a34, .08, 41));   // 녹은 조금만
     }
-    if (rim && hash3(u, v, 9) < .7) set(u, v, T, shade(0x5a4030, 1.1));          // 두툼한 테두리 (앞으로 한 칸)
+    if (rim && hash3(u, v, 9) < .8) set(u, v, T, hash3(u, v, 4) < .7 ? WORN : WORN_D);   // 두툼한 테두리 (앞으로 한 칸, 닳아 반짝임)
   }
   // 'NYC' 글자 띠: 가운데를 가로지르는 판 + 돋을새김 글자
-  for (let u = 3; u <= N - 4; u++) for (let v = Math.round(c) - 3; v <= Math.round(c) + 2; v++) set(u, v, T - 1, 0x5e4232);
-  letters.forEach((row, rr) => [...row].forEach((ch, i) => { if (ch === '#') set(4 + i, Math.round(c) + 1 - rr, T, 0x9a7050); }));
+  for (let u = 3; u <= N - 4; u++) for (let v = Math.round(c) - 3; v <= Math.round(c) + 2; v++) set(u, v, T - 1, 0x363c44);
+  letters.forEach((row, rr) => [...row].forEach((ch, i) => { if (ch === '#') set(4 + i, Math.round(c) + 1 - rr, T, 0xccd2d4); }));   // 어두운 띠 위 밝은 글자
 }
 
 export const ITEM_BUILDERS = {
