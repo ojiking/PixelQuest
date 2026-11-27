@@ -1358,7 +1358,7 @@ export class Game {
     mat4.lookAt(this.view, eye, [this.camX + sx * .5, ly, lz], [0, 1, 0]);
     mat4.multiply(this.vp, this.proj, this.view);
     const b = this.stage.biome;
-    r.begin(this.vp, eye, { sky: b.sky, fog: b.fog, fogNear: b.fogNear ?? 34, fogFar: b.fogFar ?? 80, hfog: b.hfog, light: b.light ?? LIGHT, lights: this.collectLights(), near: 0.3, far: 140, focus: [this.camX, 0, -1.5] });
+    r.begin(this.vp, eye, { sky: b.sky, fog: b.fog, fogNear: b.fogNear ?? 34, fogFar: b.fogFar ?? 80, hfog: b.hfog, light: b.light ?? LIGHT, lights: this.collectLights(), near: 0.3, far: 140, focus: [this.camX, 0, -1.5], blood: b.blood });
     this.stains.flush();
     r.drawMesh(this.stage.terrain, IDENT, null, 8, 1, null, true);
     this.drawBiome(r);

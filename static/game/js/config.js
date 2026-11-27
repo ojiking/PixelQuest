@@ -247,6 +247,9 @@ export const RENDER = {
   bloom: .9,              // 빛 번짐 세기 (불·동전·눈빛처럼 아주 밝은 곳만)
   bloomThreshold: .9,     // 이 밝기 이상만 번짐 (피부·밝은 모래는 번지지 않게)
   grade: { contrast: 1.07, saturation: 1.02, vignette: .32, lift: [.012, .006, 0] },   // 대비·채도·가장자리 어둡게·그늘 색
+  // 피 강조 (배경 팔레트는 그대로 두고 피만 또렷하게): k 피 색 밝기, floor 그늘·어두운 바닥에서도 남기는 최소 밝기(피 색 대비), wet 위를 향한 핏자국의 젖은 윤기
+  // 바이옴마다 BIOMES[*].blood = { k, floor, wet } 배율로 조정
+  blood: { k: 1, floor: .5, wet: .05 },
   mobile: { dprMax: 1.5, shadowSize: 2048, msaa: 4 },   // 휴대폰·태블릿 설정 (사양 좋은 폰 기준)
 };
 
@@ -391,6 +394,7 @@ export const OBSTACLE = { water: 0x2a3436, waterY: -2.2 };
 
 export const BIOMES = {
   city: {
+    blood: { k: 1.1, floor: 1.15 },   // 어두운 바닥이라 피를 조금 더 밝게 (RENDER.blood 배율)
     // 폐허가 된 뉴욕 거리 (docs/art/target_ingame.webp): 바랜 벽돌, 먼지 낀 흙빛 하늘, 짙은 먼지 안개
     name: '폐허 뉴욕 거리', sky: [0.66, 0.56, 0.47], fog: [0.6, 0.51, 0.43], city: true, nyc: true,
     fogNear: 16, fogFar: 62, hfog: [0.55, 3.2],    // 거리 안개(시작·끝 m), 바닥 먼지 안개(세기·높이 m)
@@ -401,6 +405,7 @@ export const BIOMES = {
     particles: { kind: 'dust', n: 70, size: .035, color: [.52, .47, .42], speed: .3, alpha: .45 },   // 떠다니는 먼지 (kind: dust / sand / snow)
   },
   plains: {
+    blood: { k: 1.06, floor: 1.1 },   // 어두운 바닥이라 피를 조금 더 밝게 (RENDER.blood 배율)
     // 폐허 초원 (docs/art/ref/biome_plains.webp): 흐린 잿빛 하늘, 마른 카키 풀, 회색 콘크리트 폐허, 녹슨 철망
     name: '폐허 초원', sky: [0.62, 0.61, 0.58], fog: [0.6, 0.59, 0.55],
     fogNear: 18, fogFar: 66, hfog: [0.45, 2.6],

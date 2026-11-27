@@ -104,6 +104,7 @@ uniform float uStainOn;
 uniform vec4 uSplat;   // x = 묻은 양(0~1), yzw = 무늬 시드
 uniform float uTex;
 uniform float uAlpha;
+uniform vec3 uBlood;   // 피 강조 (config.js RENDER.blood × 바이옴 blood): x 밝기, y 그늘에서도 남기는 최소 밝기, z 젖은 윤기
 out vec4 outColor;
 ${LIGHTING}
 float hash(vec3 p) {
@@ -114,6 +115,7 @@ float hash(vec3 p) {
 void main() {
   vec3 n = normalize(vNormal);
   vec3 col = vColor;
+  float bloodAmt = 0.0; vec3 bloodCol = vec3(0.0);   // 이 픽셀의 핏자국 (그늘에서도 묻히지 않게 나중에 다시 끌어올림)
   if (uTex > 0.0) {
     // 블록 표면에 픽셀 텍스처 느낌의 노이즈
     vec3 q = floor((vWorld - n * 0.01) * uTex);
@@ -131,8 +133,13 @@ void main() {
       float v = texture(uStain, sp).r;
       if (v > 0.06) {
         float h = hash(floor((vWorld - n * 0.03) * 20.0));
-        vec3 blood = vec3(0.34 + 0.24 * h, 0.012, 0.025) * (1.12 - v * 0.42);   // 많이 묻을수록 검붉게
-        col = mix(col, blood, min(0.96, 0.55 + v * 0.6));
+        // 아트 기준 팔레트: 막 튄 피 #E0182C · 기본 #C8102E → 많이 묻을수록 마른 피 #7A0A14 쪽으로
+        vec3 fresh = vec3(0.70 + 0.14 * h, 0.025, 0.06), dried = vec3(0.38, 0.02, 0.04);
+        float h3 = hash(floor((vWorld - n * 0.03) * 7.0));   // 큰 얼룩 단위로 진하기가 달라 고인 피처럼
+        vec3 blood = mix(fresh, dried, clamp(v * 0.9 - 0.15 + h3 * 0.3, 0.0, 0.85)) * uBlood.x;
+        float a = min(0.97, 0.6 + v * 0.6);
+        col = mix(col, blood, a);
+        bloodAmt = a; bloodCol = blood;
       }
     }
   }
@@ -141,9 +148,18 @@ void main() {
     vec3 q = floor(vLocal * 22.2 + uSplat.yzw);
     float h = hash(q), h2 = hash(q + vec3(3.7, 1.3, 9.1));
     float big = hash(floor(vLocal * 7.4 + uSplat.zwy));   // 큰 덩어리 단위로 뭉치게
-    if (h * 0.55 + big * 0.45 < uSplat.x) col = mix(col, vec3(0.36 + 0.3 * h2, 0.015, 0.025), 0.92);
+    if (h * 0.55 + big * 0.45 < uSplat.x) { vec3 b = vec3(0.62 + 0.25 * h2, 0.04, 0.08) * uBlood.x; col = mix(col, b, 0.92); bloodAmt = 0.92; bloodCol = b; }
   }
-  col = shade(col, n, vWorld);
+  vec3 lit = shade(col, n, vWorld);
+  if (bloodAmt > 0.0) {
+    // 어두운 바닥·그늘에서도 피가 가라앉지 않게 최소 밝기를 보장 + 위를 향한 면은 젖은 윤기 (안개는 그대로 적용)
+    float fog = clamp((length(vWorld - uCam) - uFog.x) / (uFog.y - uFog.x), 0.0, 1.0);
+    vec3 floorB = mix(bloodCol * uBlood.y, uFogColor, fog);
+    lit = mix(lit, max(lit, floorB), bloodAmt);
+    float r = 1.0 - max(dot(n, normalize(uCam - vWorld)), 0.0);
+    lit += bloodAmt * uBlood.z * max(n.y, 0.0) * (0.35 + 0.65 * r * r) * vec3(1.0, 0.3, 0.3);
+  }
+  col = lit;
   col = mix(col, uTint.rgb, uTint.a);
   outColor = vec4(col, uAlpha);
 }`;
@@ -542,6 +558,7 @@ export class Renderer {
     gl.uniform2fv(u.uHFog, this.lightMode && env.hfog ? env.hfog : [0, 1]);
     gl.uniformMatrix4fv(u.uLVP, false, this.lvp);
     gl.uniform3f(u.uShadow, shadowOn ? 1 : 0, env.shadowK ?? this.cfg.shadowStrength, 1 / this.cfg.shadowSize);
+    if (u.uBlood) { const B = this.cfg.blood, b = env.blood || {}; gl.uniform3f(u.uBlood, B.k * (b.k ?? 1), B.floor * (b.floor ?? 1), this.lightMode ? B.wet * (b.wet ?? 1) : 0); }
   }
 
   // ---------------------------------------------------------------- 프레임 끝: 그림자 → 장면 → 후처리
