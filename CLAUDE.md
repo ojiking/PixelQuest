@@ -38,14 +38,19 @@ ES 모듈이라 파일을 더블클릭하면 안 되고 **로컬 웹 서버**가
 | `combat.js` | 판정(tryHits)과 피해 처리(applyHit): 방패, 백어택, 잡기, 넉백 |
 | `level.js` | 스테이지 생성: 지형 높이맵, 구간, 구역 웨이브(난이도 곡선), 도심 소품, 낭떠러지 경고 줄무늬 |
 | `models.js` | 모든 복셀 모델(인간형 빌더, 무기, 소품) |
+| `chars_hd.js` / `chars_enemies.js` | 고밀도(4.5cm) 캐릭터 공용 빌더 / 적·보스·볼트 모델 (`docs/art/ref/chars_*.webp`, `robots.webp` 기준) |
+| `items_hd.js` | 무기·소품 고밀도 모델 (손잡이 원점·길이는 예전과 같음) |
 | `hero_model.js` | 뱀돌이 v2 고밀도 복셀 모델(복셀 4.5cm, 시트 `docs/art/hero_turnaround.webp` 기준). 예전 모델은 `player_v1` |
-| `gl.js` | WebGL2 렌더러 (정점색 메시 + 인스턴스 큐브 + 3D 핏자국 맵 샘플링 셰이더) |
+| `gl.js` | WebGL2 렌더러: 그리기 명령을 모았다가 `end()`에서 해 그림자 맵 → 다중 표본 장면 → 후처리(윤곽선·빛 번짐·색 보정). 정점색 메시 + 인스턴스 큐브 + 3D 핏자국 맵. 그래픽카드 없는 환경은 자동으로 가벼운 경로(`renderer.software`) |
 | `fx.js` | 파편/피 입자(Debris), 핏자국 맵(Stains), 떠오르는 글씨(Texts) |
 | `gibs.js` | 떨어진 부위 조각(통통 튀기, 들기, 던지기, 골프 샷) |
 | `hideout.js` | 아지트(정비소) 3D 장면 |
 | `meta.js` | 영구 진행 저장(localStorage `pixelquest_meta_v1`), 업그레이드, 해금, 전리품 |
 | `props.js` | 상자·드럼통·오토바이, 가시 함정, 바닥 아이템 |
 | `city.js` | (예전) 한국식 도심 건물·간판·전봇대. `makeSign`(캔버스 글씨 → 복셀 간판)은 계속 사용 |
+| `biomes.js` / `env.js` | 초원·공업지대·항구 배경 (`docs/art/ref/biome_*.webp`) / 환경 메시 공용 도구(덩어리 합치기·화면 밖 제외) |
+| `obstacles.js` | 지형 장애물(벽·바리케이드·잔해 더미·낭떠러지 단면)을 바이옴별 개연성 있는 물건으로 그림 (충돌 칸은 그대로) |
+| `env_models.js` | 도심 소품·차 고밀도 모델 |
 | `nyc.js` | 폐허 뉴욕 거리(도심 바이옴): 0.2m 복셀 외벽, 영어 간판, 바랜 도로, 거리 장식, 반투명 안개막 |
 | `sfx.js` | WebAudio 합성 효과음 |
 | `touch.js` / `input.js` | 모바일 터치 UI(휴대폰에서만) / 키보드 입력 |
@@ -54,5 +59,8 @@ ES 모듈이라 파일을 더블클릭하면 안 되고 **로컬 웹 서버**가
 - 수치는 `config.js`에 상수로 두고 한국어 주석으로 의미를 적는다.
 - 문법 검사: `node --check`는 .js를 CommonJS로 보므로 **.mjs로 복사해서 검사** (`cp x.js /tmp/chk.mjs && node --check /tmp/chk.mjs`).
 - 변경 후 Playwright 테스트(`tools/tests/`)로 검증하고 스크린샷을 직접 확인한다. 특히 `full_run.js`(전체 진행)는 항상 통과해야 함.
+  - 이 클라우드 환경엔 Playwright가 전역 설치돼 있음: `cd tools/tests && NODE_PATH=$(npm root -g) node full_run.js`.
+  - 테스트 브라우저는 그래픽카드가 없어 자동으로 가벼운 화면으로 돈다. 고품질 화면 확인용 스크린샷은 `page.addInitScript(() => { window.__forceHQ = true; })` (예: `char_lineup.js`, `biome_shots.js`, `nyc_stage.js`). 느리니 짧게.
+- 그래픽 기준: 목표 화면 `docs/art/target_ingame.webp` + 참고 이미지 `docs/art/ref/` 7장. 캐릭터는 실루엣만으로 구별돼야 하고, 장애물은 그 자리에 있을 이유가 보여야 한다. 카메라는 바꾸지 않는다.
 - 커밋 메시지는 영어 한 줄 요약 + 필요하면 본문.
 - **전투 시스템을 바꾸거나 새로 넣으면 무기방(개발자 전용 실험실)에서도 똑같이 동작해야 한다.** 사용자가 무기방에서 시스템을 실험함. 필요하면 무기방 옵션(`main.js`의 `renderLabUI`/`labOption`, 숫자키)에 바로 시험할 수 있는 버튼을 추가한다 (예: 4번 = 즉시 광폭).
