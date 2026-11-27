@@ -441,6 +441,18 @@ export class Game {
     this.debris.sparks(a.x + f * len, y, a.z + .05, 0xffffff, 3, 2.5);
   }
 
+  // 되튀는 피: 맞은 자리에서 공격자 쪽(약간 위)으로 핏방울을 뿌림
+  backsplash(v, att, n) {
+    const d = Math.sign(att.x - v.x) || -1, y = v.y + 1.15 * v.scale;
+    const reach = Math.max(0.4, Math.abs(att.x - v.x));
+    for (let i = 0; i < n; i++) {
+      const [r, g, b] = [[.78, .12, .14], [.62, .07, .1], [.88, .22, .17]][i % 3];
+      // 공격자 몸까지 날아가도록 거리에 맞춘 속도
+      this.debris.spawn(v.x + d * 0.15, y + (Math.random() - .3) * .3, v.z + (Math.random() - .5) * .2,
+        d * (reach * 3.2 + Math.random() * 2), 1 + Math.random() * 2.5, (att.z - v.z) * 2 + (Math.random() - .5) * 1.2, r, g, b, .06 + Math.random() * .05, 1.5, 1, 1);
+    }
+  }
+
   // 숄더 태클 시작: 뒤로 흙먼지 + 앞으로 바람 줄기
   dashBurst(p) {
     const d = p.facing;
@@ -472,6 +484,7 @@ export class Game {
 
   severPart(v, k, dir, h = {}) {
     v.severPart(k, dir, h);
+    if (h.attacker === this.player) this.backsplash(v, this.player, BLOOD.backsplash * 2);   // 절단: 크게 되튐
     if (v.mounted && /^(leg|shin)/.test(k)) this.dismount(v, dir);
     this.run.severs++; this.stat('severs');
     this.sfx?.(h.mode === 'crush' ? 'crush' : 'splat');

@@ -1,5 +1,5 @@
 // 판정 / 데미지 / 부위 파괴 규칙
-import { WEAPONS, FIST_SEVER } from './config.js';
+import { WEAPONS, FIST_SEVER, BLOOD } from './config.js';
 import { sign } from './math.js';
 
 // 공격 zone별로 맞는 부위 확률 (torso = 부위 피해 없음)
@@ -143,6 +143,8 @@ export function applyHit(game, v, h) {
   game.debris.sparks(v.x - h.dir * 0.1, v.y + 1.1 * v.scale, v.z + 0.3, back ? 0xffb03a : 0xfff3a0, back ? 14 : 8);
   // 날붙이/톱으로 벨 때마다 붉은 블록이 튐
   if (v.destructible && (h.mode === 'cut' || h.mode === 'saw')) game.bleed(v.x - h.dir * 0.1, v.y + 1.1 * v.scale, v.z + 0.2, h.dir, h.mode === 'saw' ? 5 : 8);
+  // 되튀는 피: 뱀돌이가 바짝 붙어 베거나 세게 때리면 피가 뱀돌이 쪽으로도 튐 (몸에 묻음)
+  if (v.destructible && h.attacker === game.player && (h.mode === 'cut' || h.mode === 'saw' || dmg >= 12) && Math.abs(v.x - h.attacker.x) < 2.4) game.backsplash(v, h.attacker, BLOOD.backsplash);
   if (v.dead) return true;
   if (v.hp <= 0) { game.kill(v, h); return true; }
 

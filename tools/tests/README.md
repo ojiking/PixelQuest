@@ -28,6 +28,7 @@ node full_run.js
 | `grab_hint.js` | 잡기·무릎·던지기, L 키 우선순위·라벨, 공격 예고 '!' |
 | `cars_biker.js` | 차량 폭파·연쇄, 폭주족 돌진·낙차, 오토바이 들고 던지기 (도심) |
 | `blood.js` | 핏자국 (바닥·벽·캐릭터). `WALL=1` 이면 벽 테스트 |
+| `hero_blood.js` | 실제 공격으로 적을 벨 때 주인공에게 피가 되튀어 묻는지 |
 | `gib_bounce.js` | 떨어진 조각이 통통 튀는지 |
 | `gore_bonus.js` | 고어 보너스 지급, 동전 표시 |
 | `heal_charger_pitwarn.js` | 스테이지 클리어 회복, 첫 스테이지 돌격 헬멧 1명 제한, 낭떠러지 경고 |
