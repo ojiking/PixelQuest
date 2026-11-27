@@ -1426,7 +1426,8 @@ export class Game {
     }
     out.sort((p, q) => Math.abs(p.x - this.camX) - Math.abs(q.x - this.camX));
     const p = this.player, H = LIGHT.hero;                         // 주인공 주변 빛은 항상 포함
-    if (p && !p.hidden && H.k > 0) return [{ x: p.x, y: p.y + H.up, z: p.z + H.front, r: H.r, k: H.k, c: H.c }, ...out.slice(0, 7)];
+    const hk = H.k * (this.stage.biome.heroLight ?? 1);             // 바닥이 밝은 바이옴(모래·눈)은 약하게 → 발밑이 하얗게 날아가지 않게
+    if (p && !p.hidden && hk > 0) return [{ x: p.x, y: p.y + H.up, z: p.z + H.front, r: H.r, k: hk, c: H.c }, ...out.slice(0, 7)];
     return out.slice(0, 8);
   }
 
