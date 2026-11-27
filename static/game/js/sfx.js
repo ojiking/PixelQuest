@@ -70,6 +70,7 @@ const SOUNDS = {
   splat: t => { noise(t, .22, { type: 'lowpass', f0: 900, f1: 120, peak: .55 }); for (let i = 0; i < 4; i++) noise(t + .03 + i * .035, .03, { f0: 500 + Math.random() * 900, q: 4, peak: .25 }); },
   crush: t => { noise(t, .28, { f0: 500, f1: 150, q: 1.4, peak: .7 }); tone(t, .22, { f0: 90, f1: 35, peak: .6 }); noise(t + .05, .1, { type: 'highpass', f0: 3000, peak: .2 }); },
   boom: t => { noise(t, .9, { type: 'lowpass', f0: 900, f1: 60, peak: .9, attack: .01 }); tone(t, .7, { f0: 70, f1: 25, peak: .8 }); },
+  batswing: t => { noise(t, .22, { f0: 260, f1: 1600, q: 1.2, peak: .32, attack: .04 }); noise(t + .03, .14, { f0: 900, f1: 3000, q: 2, peak: .12, attack: .02 }); },   // 배트 풀스윙 '부웅'
   swing: t => noise(t, .13, { f0: 500, f1: 2400, q: 1.5, peak: .16, attack: .02 }),
   jump: t => tone(t, .09, { wave: 'square', f0: 280, f1: 560, peak: .08 }),
   land: t => tone(t, .1, { f0: 120, f1: 50, peak: .25 }),

@@ -65,8 +65,9 @@ export const ATTACKS = {
   chop:    { startup: .20, active: .10, recovery: .30, range: [.1, 1.0], depth: .6,  dmg: 1.0, knock: 2.5, zone: 'mid',  hitstop: .09, anim: 'swing', weapon: true },
   chopF:   { startup: .26, active: .10, recovery: .42, range: [.1, 1.0], depth: .65, dmg: 1.6, knock: 6,   zone: 'mid',  hitstop: .14, anim: 'swing', weapon: true, knockdown: true, finisher: true, shake: .22 },
   golf:    { startup: .24, active: .10, recovery: .34, range: [.1, 1.1], depth: .6,  dmg: 1.0, knock: 2.5, zone: 'head', hitstop: .13, anim: 'golf', weapon: true, knockdown: true, launch: 9.5, finisher: true, shake: .16 },
-  bash:    { startup: .14, active: .10, recovery: .25, range: [.1, 1.0], depth: .65, dmg: 1.0, knock: 3,   zone: 'mid',  hitstop: .08, anim: 'hswing', weapon: true },
-  bashF:   { startup: .20, active: .10, recovery: .36, range: [.1, 1.0], depth: .7,  dmg: 1.5, knock: 8,   zone: 'high', hitstop: .13, anim: 'hswing', weapon: true, knockdown: true, finisher: true, shake: .2 },
+  // 배트: 어깨 뒤로 크게 들어 올림(예비 동작) → 앞발 내딛고 허리를 돌려 수평으로 후려침 → 반대 어깨 위로 감기는 마무리
+  bash:    { startup: .16, active: .09, recovery: .28, range: [.1, 1.05], depth: .7, dmg: 1.0, knock: 4.5, zone: 'mid',  hitstop: .10, anim: 'batswing', weapon: true, shake: .1, lunge: 1.6 },
+  bashF:   { startup: .24, active: .10, recovery: .40, range: [.1, 1.1], depth: .75, dmg: 1.6, knock: 10,  zone: 'high', hitstop: .16, anim: 'batswing', weapon: true, knockdown: true, finisher: true, shake: .3, lunge: 2.4, big: true },
   whip:    { startup: .10, active: .12, recovery: .20, range: [.2, 1.0], depth: .85, dmg: 1.0, knock: 1.5, zone: 'low',  hitstop: .05, anim: 'hswing', weapon: true },
   whipF:   { startup: .14, active: .14, recovery: .30, range: [.2, 1.0], depth: .9,  dmg: 1.4, knock: 2.5, zone: 'low',  hitstop: .08, anim: 'hswing', weapon: true, knockdown: true, finisher: true },
   // 화염 분사 (누르고 있기) / 샷건 사격

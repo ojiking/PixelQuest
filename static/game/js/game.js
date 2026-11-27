@@ -1339,6 +1339,15 @@ export class Game {
     this.drawRageEyes(r);
   }
 
+  // 배트 풀스윙 잔상: 배트 끝 궤적을 따라 하얀 줄무늬 입자
+  batTrail(a) {
+    if (!a.weaponTip) return;
+    for (const len of [1.0, 0.75, 0.5]) {
+      const p = a.weaponTip(len);
+      this.debris.spawn(p[0], p[1], p[2], 0, 0, 0, 1, 1, 1, 0.09 * len + 0.03, 0.12, 0);
+    }
+  }
+
   // 광폭화 중 하얀 눈빛 (빨강 대신 흰색으로 — 피범벅이어도 눈에 띄게)
   drawRageEyes(r) {
     const p = this.player;

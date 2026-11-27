@@ -105,7 +105,7 @@ export class Actor {
   // ------------------------------------------------ 공격
   startAttack(key) {
     const def = ATTACKS[key];
-    if (this.team === 'hero' && (def.weapon || def.anim === 'kick' || def.anim === 'flykick' || def.anim === 'dashAtk')) this.game.sfx?.('swing');
+    if (this.team === 'hero' && def.anim !== 'batswing' && (def.weapon || def.anim === 'kick' || def.anim === 'flykick' || def.anim === 'dashAtk')) this.game.sfx?.('swing');
     this.attack = { key, def, t: 0, hit: new Set(), activated: false, ended: false, spawned: false };
     this.setState('attack');
     if (!def.air && this.grounded) { this.vx = 0; this.vz = 0; }
@@ -132,7 +132,7 @@ export class Actor {
     a.t += dt * spd;
     const s = d.startup, e = s + d.active;
     if (a.t >= s && (a.t < e || !a.activated)) {
-      if (!a.activated && d.lunge && this.team === 'hero') this.game.punchStreak?.(this, d);
+      if (!a.activated && d.lunge && !d.weapon && this.team === 'hero') this.game.punchStreak?.(this, d);
       a.activated = true;
       this.activeFrame(a, dt);
     } else if (a.t >= e && !a.ended) {
@@ -379,7 +379,7 @@ export class Actor {
         T.torso = -.5; T.armF = -.9; T.armB = -.7; T.handF = .4; T.handB = .4;
         T.legF = .9; T.shinF = -.3; T.legB = -.6; T.shinB = -1.2; T.head = .2; break;
       case 'repair': T.armF = 1.3 + Math.sin(t * 20) * .3; T.armB = 1.3 - Math.sin(t * 20) * .3; T.handF = .8; T.handB = .8; T.torso = -.4; break;
-      case 'attack': this.attackPose(T); rate = 35; break;
+      case 'attack': this.poseRate = 0; this.attackPose(T); rate = this.poseRate || 35; break;
     }
     // 드럼통을 머리 위로 들고 있음
     if (HEAVY.has(this.carry?.kind) && (this.state === 'idle' || this.state === 'walk' || this.state === 'jump')) {
@@ -562,6 +562,27 @@ export class Actor {
         T.legF = .35; T.legB = -.3; T.shinB = -.3;
         if (d.anim === 'hswing') T.torso = S ? .15 : -.2;
         break;
+      case 'batswing': { // 야구 배트 풀스윙. 배트 방향 θ = armF + handF + grip (0 = 정면 수평, 1.57 = 위, 3.14 = 뒤)
+        const big = d.big ? 1.15 : 1;
+        // 세 자세: 장전(배트를 뒷어깨 위로, 앞발 들기) → 임팩트(팔을 뻗고 배트 수평) → 마무리(반대 어깨 위로 감김)
+        const LOAD = { armF: 2.55 * big, handF: .95, th: 2.35, armB: 2.3, handB: 1.1, twist: .95 * big, torso: .18, head: -.05, legF: .75, shinF: -1.05, legB: -.08, shinB: -.2 };
+        const HIT = { armF: 1.45, handF: .05, th: 0, armB: 1.35, handB: .25, twist: -.15, torso: -.28, head: .1, legF: .6, shinF: -.08, legB: -.55, shinB: -.25 };
+        const FOL = { armF: 2.45, handF: 1.05, th: 2.95, armB: 2.1, handB: 1.0, twist: -.7 * big, torso: -.12, head: .05, legF: .5, shinF: -.1, legB: -.6, shinB: -.45 };
+        const mix = (A0, B0, u) => { for (const k in A0) { const v = A0[k] + (B0[k] - A0[k]) * u; if (k === 'th') T.grip = v - (T.armF + T.handF); else T[k] = v; } };
+        const set = P0 => { for (const k in P0) if (k !== 'th') T[k] = P0[k]; T.grip = P0.th - (P0.armF + P0.handF); };
+        if (S) { set(LOAD); this.poseRate = 16; }                   // 천천히 감아 올림 (예비 동작이 보이게)
+        else if (A) {                                                // 임팩트 구간: 순식간에 휘두름
+          const u = Math.min(1, (a.t - d.startup) / d.active);
+          if (u < .55) mix(LOAD, HIT, u / .55); else mix(HIT, FOL, (u - .55) / .45);
+          this.poseRate = 70;
+          if (!a.trailed) { a.trailed = 0; if (this.team === 'hero') this.game.sfx?.('batswing'); }   // 휘두르는 순간 '부웅'
+          if (a.t - a.trailed > .012) { a.trailed = a.t; this.game.batTrail?.(this); }   // 배트 끝 잔상
+        } else {                                                     // 마무리: 감긴 자세로 잠깐 멈췄다가 풀림
+          const r = (a.t - d.startup - d.active) / d.recovery;
+          set(FOL); this.poseRate = r < .45 ? 40 : 9;
+        }
+        break;
+      }
       case 'golf': // 아래에서 위로 올려치기
         T.armF = S ? -1.0 : A ? 2.7 : 2.3; T.armB = S ? -.9 : A ? 2.5 : 2.1;
         T.handF = 0; T.handB = .2; T.grip = -1.57;
