@@ -10,8 +10,8 @@ const B = 0.2, F = 0.1;   // 건물 복셀 / 소품 복셀 (m)
 const CONC = [0x8e8a84, 0x7e7a74, 0x96928a, 0x86827c];
 const RUST = [0x6e4028, 0x7a4a2e, 0x5e3622, 0x865436];
 const WOOD = [0x6e5438, 0x7a5e40, 0x5e4830, 0x846646];
-const SNOW = [0xd2d6d8, 0xc4c9cc, 0xdadedf], SAND = [0xb8a078, 0xaa9068, 0xc2aa82];
-const DRY = [0x9a8c5e, 0x8a7c50, 0xa89a6a, 0x7a7046, 0xb0a272];
+const SNOW = [0xc4c9cc, 0xbcc1c4, 0xb4b9bc], SAND = [0xb09a74, 0xa48e6a, 0xb8a27e];   // 눈은 너무 하얗게 날아가지 않게 상한
+const DRY = [0x8a8a5a, 0x7a7e4e, 0x96925e, 0x6e7248, 0x9a9468];                              // 마른 풀잎 (카키·올리브)
 const VINE = [0x5a5e3a, 0x6a6a40, 0x4a5032, 0x767448];
 
 // ---------------------------------------------------------------- 배치 계획 (지형보다 먼저: 항구는 부두 폭이 구획마다 다름)
@@ -114,16 +114,18 @@ function warehouse(ch, lot, key) {
   const snow = key === 'snow', s = lot.seed, w = lot.x1 - lot.x0 - randi(1, 2), x0 = lot.x0 + rand(0, 1);
   const W = w * 5, Hw = randi(22, 26), D = 40, roofRise = .3, H = Hw + Math.ceil(D * roofRise) + 3, FP = 6;
   const g = grid(W, H, D + FP), fz = D - 1;
-  const base = snow ? pick([0x6e7074, 0x6a6660, 0x5e6266]) : pick([0x7e7468, 0x8a6a4e, 0x76705e]);
+  const base = snow ? pick([0x6e7074, 0x6a6660, 0x5e6266]) : pick([0x8a8882, 0x7e7c76, 0x86837c]);   // 회색 함석 (녹은 흘러내린 줄·얼룩으로만)
   const roofY = z => Hw + Math.floor((fz - z) * roofRise);
   const door0 = randi(6, Math.max(7, W - 26)), door1 = door0 + 18, doorH = 18;
   const doorHole = x => 2 + Math.floor(vnoise(x * .3, 0, s) * 7) + (x > door0 + 4 && x < door1 - 4 ? 4 : 0);
   const wallC = (x, y, l) => {
-    let c = l % 3 === 2 ? shadeC(base, .78) : base;                         // 골함석
+    let c = l % 3 === 2 ? shadeC(base, .74) : l % 3 === 0 ? shadeC(base, 1.06) : base;   // 골함석 (밝은 마루·어두운 골)
     if (y % 8 === 0) c = shadeC(base, .7);                                   // 띠장
-    const r = vnoise(l * .12, y * .1, s);
-    if (r > (snow ? .62 : .5)) c = mixC(c, RUST[(l + y) % 4], snow ? .7 : .85);
-    if (y > Hw - 4 && h3(l, 0, s) < .35) c = mixC(c, RUST[1], .6);             // 녹물
+    const r = vnoise(l * .1, y * .08, s);
+    if (r > .76) c = mixC(c, RUST[(l >> 1) % 4], .7);                       // 큰 녹 얼룩
+    const st = h3(l >> 1, 0, s);                                              // 위에서 흘러내린 녹물 줄
+    if (st < .18 && Hw - y < 4 + st * 50) c = mixC(c, RUST[1], .5);
+    if (y < 6 && !snow) c = mixC(c, RUST[2], .35);                            // 아래쪽 녹
     if (!snow && y < 4) c = ((l + y) % 8 < 4) ? 0x9a8a44 : 0x2e2c28;             // 경고 띠
     return c;
   };
@@ -133,7 +135,7 @@ function warehouse(ch, lot, key) {
     if (!front && !back && !sideW) continue;
     if (front && x >= door0 && x < door1 && y < doorH) {                      // 셔터
       if (y < doorHole(x)) continue;
-      if (z === fz) g.set(x, y, z, y % 2 ? 0x6a665e : 0x58544e);
+      if (z === fz) g.set(x, y, z, mixC(y % 2 ? 0x7a7670 : 0x5e5a54, RUST[1], y < 6 || h3(x >> 2, 1, s) < .2 ? .45 : .08));
       continue;
     }
     if (front && y >= Hw - 9 && y < Hw - 3 && x % 16 >= 1 && x % 16 <= 13 && Math.abs(x - (door0 + door1) / 2) > 13) {   // 창: 철제 격자 + 깨진 유리
@@ -144,6 +146,9 @@ function warehouse(ch, lot, key) {
     if (front && z === fz && x % 3 === 2) { g.set(x, y, fz - 1, wallC(x, y, x)); continue; }   // 골 (한 칸 들어감)
     g.set(x, y, z, wallC(front || back ? x : z, y, front || back ? x : z));
   }
+  // 벽면 배관: 세로 홈통 + 가로 관 (받침쇠)
+  for (const px of [randi(2, 8), W - randi(4, 10)]) for (let y = 0; y < Hw + 1; y++) { g.set(px, y, fz + 1, y % 9 === 0 ? 0x3a342e : RUST[(y >> 3) % 4]); g.set(px + 1, y, fz + 1, RUST[(y >> 3) % 4]); }
+  if (!snow) { const py = randi(11, 14); for (let x = 2; x < Math.min(W - 2, door0 - 2); x++) { g.set(x, py, fz + 2, x % 10 === 0 ? 0x3a342e : RUST[(x >> 3) % 4]); g.set(x, py + 1, fz + 2, RUST[1]); if (x % 10 === 0) g.set(x, py, fz + 1, 0x3a342e); } }
   // 기둥 (앞으로 한 칸)
   for (let x = 0; x < W; x += 20) for (let y = 0; y < Hw; y++) { g.set(x, y, fz + 1, 0x3a342e); g.set(x + 1, y, fz + 1, 0x3a342e); }
   // 셔터 위 상자와 등
@@ -218,7 +223,7 @@ function fenceRun(ch, x0, x1, z, key, seed) {
 
 // 드럼통 하나 (지름 0.6m, 높이 0.9m), 가끔 넘어짐
 function drum(ch, x, z, key, seed, tipped = false) {
-  const g = tipped ? grid(9, 6, 6) : grid(6, 9, 6), base = pick([0x7a4a30, 0x56605c, 0x857246, 0x6a3a2a, 0x5a5a52, 0x4a5a4a, 0x8a3a2c]);
+  const g = tipped ? grid(9, 6, 6) : grid(6, 9, 6), base = pick([0x6e4a32, 0x56605c, 0x6a6252, 0x5a5a52, 0x4e5a58, 0x7a6a4a]);   // 장식 드럼통: 녹·회색·청록 (빨강은 폭발 드럼통 전용)
   const col = (t, a, b) => { let c = base; if (t === 2 || t === 6) c = shadeC(base, .7); if (vnoise(a * .5 + t * .3, b * .5 + t * .2, seed) > .58) c = mixC(c, RUST[(t + a) % 4], .85); if (t === 8 || t === 0) c = shadeC(base, .85); return c; };
   if (!tipped) cyl(g, 'y', 3, 3, 3, 0, 8, (xx, y, zz) => col(y, xx, zz));
   else cyl(g, 'x', 3, 3, 3, 0, 8, (xx, y, zz) => col(xx, y, zz));
@@ -250,8 +255,8 @@ function bollard(ch, x, z, seed) {
 // 말뚝 사이 늘어진 사슬
 function chainBetween(ch, xa, xb, z, y0, seed, col = 0x4a3e36) {
   const n = Math.round((xb - xa) / F), g = grid(n + 1, 8, 1);
-  for (let i = 0; i <= n; i++) { const t = i / n, y = Math.round(7 - Math.sin(Math.PI * t) * 6); g.set(i, y, 0, i % 2 ? col : shadeC(col, 1.3)); if (i % 2) g.set(i, y - 1, 0, col); }
-  ch.add(g, F, xa, y0 - .7, z, { seed });
+  for (let i = 0; i <= n; i++) { const t = i / n, y = Math.round(6 - Math.sin(Math.PI * t) * 4.5); g.set(i, y, 0, i % 2 ? col : shadeC(col, 1.4)); if (i % 2) g.set(i, y + 1, 0, col); }
+  ch.add(g, F, xa, y0, z, { seed });
 }
 // 타이어 (부두 벽에 매달림)
 function tire(ch, x, y, z, seed) {
@@ -281,15 +286,16 @@ function bush(ch, x, y, z, seed, rr = rand(4, 8), vs = F) {
   }
   ch.add(g, vs, x - n * vs / 2, y, z - n * vs / 2, { seed });
 }
-// 마른 풀 무더기 (키 큰 것)
+// 마른 풀 무더기: 가는 풀잎이 제각각 높이로 기울어짐 (막대 다발처럼 보이지 않게 듬성듬성)
 function grassClump(ch, x, y, z, seed, rr = 4, tall = 6, vs = F) {
-  const n = rr * 2 + 1, g = grid(n, tall + 2, n);
-  for (let xx = 0; xx < n; xx++) for (let zz = 0; zz < n; zz++) {
-    if (Math.hypot(xx - rr, zz - rr) > rr || h3(xx, zz, seed) < .45) continue;
-    const hgt = randi(2, tall), c = pick(DRY);
-    for (let yy = 0; yy < hgt; yy++) g.set(xx, yy, zz, yy === hgt - 1 ? shadeC(c, 1.12) : c);
+  const n = rr * 2 + 3, g = grid(n, tall + 2, n);
+  for (let xx = 1; xx < n - 1; xx++) for (let zz = 1; zz < n - 1; zz++) {
+    if (Math.hypot(xx - n / 2 + .5, zz - n / 2 + .5) > rr + .3 || h3(xx, zz, seed) < .62) continue;
+    const hgt = Math.max(1, Math.round(tall * (.35 + h3(xx, zz, seed + 1) * .65))), c = DRY[(h3(xx, zz, seed + 2) * DRY.length) | 0];
+    const lx = Math.sign(xx - n / 2 + .5), lz = Math.sign(zz - n / 2 + .5);   // 바깥쪽으로 기울어짐
+    for (let yy = 0; yy < hgt; yy++) { const t = yy / hgt, ox = t > .55 ? lx : 0, oz = t > .8 ? lz : 0; g.set(xx + ox, yy, zz + oz, yy === hgt - 1 ? shadeC(c, 1.12) : c); }
   }
-  ch.add(g, vs, x - rr * vs, y, z - rr * vs, { seed });
+  ch.add(g, vs, x - n * vs / 2, y, z - n * vs / 2, { seed });
 }
 // 녹슨 폐차 (풀숲에 묻힘)
 function rustCar(ch, x, z, seed) {
@@ -348,6 +354,19 @@ function frontBollard(ch, x, z, seed) {
   const g = grid(10, 3, 8);
   for (let xx = 0; xx < 10; xx++) for (let zz = 0; zz < 8; zz++) { const d = Math.hypot(xx + .5 - 5, zz + .5 - 4); if (d < 4.2 && d > 1.6) for (let y = 0; y < (d < 3 ? 3 : 2); y++) g.set(xx, y, zz, (xx + y) % 3 ? 0xa08a62 : 0x8a7652); }
   ch.add(g, F, x + .25, 0, z - .2, { seed });
+}
+
+// 언덕 위 먼 폐허 (0.3m): 창 구멍 난 콘크리트 덩어리, 윗부분이 무너짐
+function farRuin(ch, x, y, z, seed) {
+  const W = randi(14, 26), H = randi(10, 22), D = randi(8, 14), g = grid(W, H, D);
+  for (let xx = 0; xx < W; xx++) {
+    const top = H - 1 - Math.floor(vnoise(xx * .2, 0, seed) * H * .45);
+    for (let yy = 0; yy <= top; yy++) for (let zz = 0; zz < D; zz++) {
+      const win = zz === D - 1 && yy % 7 >= 3 && yy % 7 <= 5 && xx % 5 >= 1 && xx % 5 <= 3 && yy > 2;
+      g.set(xx, yy, zz, win ? 0x2a2a28 : yy % 7 === 0 ? shadeC(CONC[1], .85) : CONC[(xx + zz) % 4]);
+    }
+  }
+  ch.add(g, .3, x, y - .2, z, { seed, jitter: .06 });
 }
 
 // ================================================================ 원경 (0.25~0.4m, 그림자 안 드리움)
@@ -426,8 +445,10 @@ function groundDecals(ch, plan, isPit) {
   const q = (x, z, w, d, c, y = .006) => { if (isPit(x + w / 2, z + d / 2)) return; ch.mb(x, x + w, z).quad(top, x, y - 1, z, w, 1, d, rgb(c)); };
   const E = BIOME_ENV[key];
   // 1) 판 이음 줄 (콘크리트 판)
-  for (let x = -12; x < L + 14; x += E.slab) for (let z = -4; z < 5; z += .25) if (h3(x * 7, z * 9, seed) < .85) q(x, z, .06, .25, E.joint);
-  for (let x = -12; x < L + 14; x += .5) if (h3(x * 3, 0, seed) < .8) q(x, .45, .5, .05, E.joint);
+  if (E.slab) {
+    for (let x = -12; x < L + 14; x += E.slab) for (let z = -4; z < 5; z += .25) if (h3(x * 7, z * 9, seed) < .85) q(x, z, .06, .25, E.joint);
+    for (let x = -12; x < L + 14; x += .5) if (h3(x * 3, 0, seed) < .8) q(x, .45, .5, .05, E.joint);
+  }
   // 2) 바랜 차선
   if (E.lane) for (let x = -12; x < L + 14; x += 4) if (h3(x, 2, seed) < .8) q(x, 1.5, 2, .12, E.lane, .008);
   // 3) 얼룩·모래·눈 패치: 0.25m 격자, 노이즈로 덩어리지게
@@ -436,7 +457,7 @@ function groundDecals(ch, plan, isPit) {
     let run = null;
     const flush = () => { if (run) q(run.x0, z, run.x1 - run.x0, c, run.col, run.y); run = null; };
     for (let x = -12; x < L + 14; x += c) {
-      const n = vnoise(x * E.patchF, z * E.patchF * 1.3, seed + 3) * .8 + vnoise(x * 1.6, z * 1.6, seed + 4) * .2 + (h3(x * 8, z * 8, seed) - .5) * .12;
+      const n = vnoise(x * E.patchF, z * E.patchF * 1.3, seed + 3) * .82 + vnoise(x * 1.2, z * 1.2, seed + 4) * .18;
       const edge = z < -4 ? E.edgeBoost * Math.min(1, -4 - z + .3) : z > 4.2 ? E.edgeBoost * Math.min(1, (z - 4.2) * .8) : 0;
       let col = null, y = .01;
       if (n + edge > E.patchT) col = E.patch[(vnoise(x * 3, z * 3, 5) * E.patch.length) | 0];
@@ -446,11 +467,18 @@ function groundDecals(ch, plan, isPit) {
     }
     flush();
   }
-  // 4) 균열 (지그재그)
-  for (let n = 0; n < L * .3; n++) {
-    let x = rand(-10, L + 12), z = rand(-4, 4.6);
-    for (let i = 0; i < randi(5, 14); i++) { const nx = x + rand(.12, .35), nz = Math.max(-4.5, Math.min(5, z + rand(-.15, .15))); q(Math.min(x, nx), Math.min(z, nz), Math.abs(nx - x) + .04, .05, E.crack, .012); x = nx; z = nz; }
-  }
+  // 4) 균열: 방향이 제멋대로 꺾이고 갈라지는 줄 (초원은 틈에 풀이 남)
+  const crack = (x, z, ang, steps, depth) => {
+    for (let i = 0; i < steps; i++) {
+      ang += rand(-.6, .6);
+      const st = rand(.1, .22), nx = x + Math.cos(ang) * st, nz = Math.max(-4.6, Math.min(5, z + Math.sin(ang) * st));
+      q(Math.min(x, nx), Math.min(z, nz), Math.abs(nx - x) + .045, Math.abs(nz - z) + .045, E.crack, .012);
+      if (E.crackGrass && h3(x * 9, z * 9, seed) < E.crackGrass && !isPit(x, z)) grassClump(ch, x, 0, z, (x * 13) | 0, 1, randi(2, 4));
+      if (depth < 2 && Math.random() < .12) crack(nx, nz, ang + rand(-1.4, 1.4), (steps - i) >> 1, depth + 1);
+      x = nx; z = nz;
+    }
+  };
+  for (let n = 0; n < L * (E.cracks ?? .3); n++) crack(rand(-10, L + 12), rand(-4, 4.6), rand(0, Math.PI * 2), randi(8, 22), 0);
 }
 // 길 위 작은 풀 포기 (균열 사이) / 모래 둔덕 / 눈 더미: 0.1m 복셀
 function groundBits(ch, plan, isPit) {
@@ -458,9 +486,9 @@ function groundBits(ch, plan, isPit) {
   for (let n = 0; n < L * (key === 'plains' ? 2.6 : 1.2); n++) {
     const x = rand(-12, L + 14), edge = Math.random() < .55, z = edge ? (Math.random() < .5 ? rand(-5, -4.2) : rand(4.7, 7)) : rand(-4, 4.6);
     if (isPit(x, z)) continue;
-    if (key === 'plains') grassClump(ch, x, 0, z, n, edge ? randi(2, 4) : 1, edge ? randi(4, 7) : randi(1, 3));
+    if (key === 'plains') { if (edge || Math.random() < .3) grassClump(ch, x, 0, z, n, edge ? randi(2, 4) : 1, edge ? randi(4, 8) : randi(2, 3)); }
     else if (key === 'desert') {
-      if (!edge) { if (Math.random() < .5) grassClump(ch, x, 0, z, n, 1, 3); continue; }
+      if (!edge) continue;
       const g = grid(randi(6, 14), 3, randi(4, 9)); for (let xx = 0; xx < g.w; xx++) for (let zz = 0; zz < g.d; zz++) { const d = Math.hypot((xx + .5) / g.w - .5, (zz + .5) / g.d - .5) * 2; const hgt = Math.floor((1 - d) * 3.4); for (let y = 0; y < hgt; y++) g.set(xx, y, zz, SAND[(xx + zz + y) % 3]); }
       ch.add(g, F, x, 0, z, { seed: n });
     } else {
@@ -493,6 +521,8 @@ function fillPlains(near, far, plan) {
   // 언덕: 덤불·마른 나무·작은 폐허
   for (let n = 0; n < L * .7; n++) { const x = rand(-14, L + 16), z = rand(-22, -11.5); grassClump(far, x, groundH(x, z), z, n, randi(2, 4), randi(3, 5), B); }
   for (let x = -14; x < L + 16; x += rand(2, 5)) { const z = rand(-24, -12), y = groundH(x, z); if (Math.random() < .2) deadTree(far, x, y, z, x | 0, B * .75); else bush(far, x, y, z, x | 0, rand(3, 6), B); }
+  for (let x = rand(-14, 0); x < L + 16; x += rand(9, 18)) { const z = rand(-21, -13); farRuin(far, x, groundH(x + 3, z + 2), z, x | 0); }
+  for (let n = 0; n < L * .5; n++) { const x = rand(-14, L + 16), z = rand(-11.5, -9); bush(near, x, 0, z, n + 500, rand(4, 8)); }
   for (let x = rand(-10, 10); x < L + 16; x += rand(24, 36)) { const z = rand(-24, -19); pylon(far, x, groundH(x, z), z, x | 0); }
   for (let x = rand(0, 20); x < L + 10; x += rand(40, 60)) overpass(far, x, x + rand(24, 34), Math.max(0, groundH(x + 12, -26) - 1), -30, x | 0);
 }
@@ -543,7 +573,7 @@ function fillSnow(near, far, plan) {
     } else {
       // 열린 부두: 말뚝 + 사슬, 벽면 타이어
       const xs = []; for (let x = lot.x0 + rand(.5, 1.5); x < lot.x1 - .5; x += rand(2.4, 3.4)) { xs.push(x); bollard(near, x, -6.6, s + xs.length); }
-      for (let i = 0; i + 1 < xs.length; i++) if (h3(i, 1, s) < .8) chainBetween(near, xs[i] + .2, xs[i + 1] - .2, -6.6, .45, s + i);
+      for (let i = 0; i + 1 < xs.length; i++) if (h3(i, 1, s) < .8) chainBetween(near, xs[i] + .2, xs[i + 1] - .2, -6.55, 0.05, s + i, 0x3a302a);
       for (let x = lot.x0 + 1; x < lot.x1 - 1; x += rand(2.5, 4)) tire(near, x, -.8, -7.25, s + (x | 0));
     }
   }

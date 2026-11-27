@@ -12,7 +12,7 @@ const C = {
   glass: 0x1e242a, glassL: 0x3a4650, dark: 0x0e0f12, frame: 0x4a3e36,
   wood: 0x7a5a3a, woodD: 0x5a4028, rust: 0x5a3424, rustL: 0x7a4a2e, iron: 0x2e2622,
   ac: 0xa8a294, acD: 0x7a766c, shutter: 0x6e6c68, shutterD: 0x55534f,
-  awn: [[0xa0402e, 0xc8b89a], [0x3e5a3a, 0xc8b89a], [0x8a6a2a, 0x3a3028]],
+  awn: [[0x8e4a3c, 0xbab098], [0x485a46, 0xbab098], [0x7e6a3e, 0x3a3230]],   // 차양: 30% 채도 낮춤
   graffiti: [0x8a5a7a, 0x5a7a7a, 0xb8b0a0, 0x7a6a3a, 0x6a4a5a],
 };
 const SIGN_TEXT = ['BODEGA', 'DELI', 'PAWN SHOP', 'LIQUOR', 'HOTEL', 'PIZZA', 'LAUNDRY', 'GROCERY', 'BAR', 'CHECKS CASHED', 'TATTOO', 'DINER', 'HARDWARE', 'PHARMACY', 'SHOES', 'CAFE'];
@@ -163,16 +163,50 @@ export function buildNYCRoad(r, L, isPit) {
   strip(-12, L + 14, 4.75, 4.85, WH, .7);
   for (let x = -12; x < L + 14; x += 4) strip(x, x + 2, -0.3, -0.2, WH, .6);
   // 균열: 지그재그 가는 선
-  for (let n = 0; n < L * 0.22; n++) {
-    let x = rand(-10, L + 12), z = rand(-1.8, 4.6);
-    for (let i = 0; i < randi(4, 10); i++) {
-      const nx = x + rand(0.15, 0.4), nz = Math.max(-1.9, Math.min(4.7, z + rand(-0.12, 0.12)));
-      if (!isPit(x, z)) mb.quad(top, Math.min(x, nx), y - 0.998, Math.min(z, nz), Math.abs(nx - x), 1, 0.05, CR);
+  const crack = (x, z, ang, steps, depth) => {   // 제멋대로 꺾이고 갈라지는 균열
+    for (let i = 0; i < steps; i++) {
+      ang += rand(-.55, .55);
+      const st = rand(.1, .25), nx = x + Math.cos(ang) * st, nz = Math.max(-1.9, Math.min(4.7, z + Math.sin(ang) * st));
+      if (!isPit(x, z)) mb.quad(top, Math.min(x, nx), y - 0.998, Math.min(z, nz), Math.abs(nx - x) + .045, 1, Math.abs(nz - z) + .045, CR);
+      if (depth < 2 && Math.random() < .12) crack(nx, nz, ang + rand(-1.4, 1.4), (steps - i) >> 1, depth + 1);
       x = nx; z = nz;
     }
-  }
+  };
+  for (let n = 0; n < L * 0.4; n++) crack(rand(-10, L + 12), rand(-1.8, 4.6), rand(0, 6.28), randi(6, 18), 0);
   // 땜질한 아스팔트 조각
   for (let n = 0; n < L * 0.05; n++) { const x = rand(-10, L + 12), z = rand(-1.5, 4.2); if (!isPit(x, z)) mb.quad(top, x, y - 0.999, z, rand(0.8, 2), 1, rand(0.6, 1.4), PT); }
+  // 노이즈 덩어리 (0.1m 격자): 패인 구멍·물웅덩이
+  const blob = (cx, cz, rad, col, rim, yy) => {
+    for (let gx = -rad; gx <= rad; gx += 0.1) for (let gz = -rad; gz <= rad; gz += 0.1) {
+      const d = Math.hypot(gx, gz * 1.3) / rad + (hash3((cx + gx) * 10, 3, (cz + gz) * 10) - .5) * .25;
+      if (d > 1 || isPit(cx + gx, cz + gz)) continue;
+      mb.quad(top, cx + gx, yy - 1, cz + gz, 0.1, 1, 0.1, rim && d > .72 ? rim : col);
+    }
+  };
+  for (let n = 0; n < L * 0.06; n++) blob(rand(-10, L + 12), rand(-1.4, 4.3), rand(.25, .55), hexToRgb(0x242220), hexToRgb(0x56524c), y + .0015);   // 패인 구멍
+  for (let n = 0; n < L * 0.05; n++) blob(rand(-10, L + 12), rand(-1.8, -0.8) + (Math.random() < .4 ? 5.2 : 0), rand(.35, .8), hexToRgb(0x2e3236), hexToRgb(0x3a3e40), y + .002);   // 물웅덩이 (길가)
+  // 맨홀 뚜껑 (둥근 쇠, 격자 무늬)
+  for (let x = rand(4, 12); x < L + 10; x += rand(14, 22)) {
+    const cz = rand(0.2, 3.2); if (isPit(x, cz)) continue;
+    for (let gx = -.35; gx <= .35; gx += .05) for (let gz = -.35; gz <= .35; gz += .05) {
+      const d = Math.hypot(gx, gz); if (d > .35) continue;
+      const c = d > .3 ? 0x2a2826 : (Math.round(gx * 20) + Math.round(gz * 20)) % 3 === 0 ? 0x3e3a36 : 0x4e4842;
+      mb.quad(top, x + gx, y + .002 - 1, cz + gz, .05, 1, .05, hexToRgb(c));
+    }
+  }
+  // 빗물받이 (인도 경계석 앞)
+  for (let x = rand(2, 9); x < L + 10; x += rand(9, 15)) {
+    if (isPit(x, -1.85)) continue;
+    mb.quad(top, x, y + .002 - 1, -1.95, 0.9, 1, 0.3, hexToRgb(0x2a2826));
+    for (let k = 0; k < 7; k++) mb.quad(top, x + 0.06 + k * 0.12, y + .003 - 1, -1.9, 0.05, 1, 0.2, hexToRgb(0x101010));
+  }
+  // 흩어진 벽돌 조각 (작은 상자)
+  const BRK = [0x8a4a38, 0x7a4232, 0x6e6a64];
+  for (let n = 0; n < L * 0.5; n++) {
+    const x = rand(-10, L + 12), z = Math.random() < .6 ? rand(-1.9, -1.2) : rand(-1, 4.6); if (isPit(x, z)) continue;
+    const w = rand(.12, .22), d = rand(.06, .12), c = hexToRgb(BRK[n % 3]).map(v => v * (0.85 + Math.random() * .2));
+    for (const f of FACES) if (f.n[1] !== -1 && f.n[2] !== -1) mb.quad(f, x, 0, z, w, .07, d, c);
+  }
   return mb.build(r);
 }
 

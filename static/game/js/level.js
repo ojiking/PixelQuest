@@ -38,7 +38,7 @@ class World {
   set(x, y, z, b) { const i = this.idx(x, y, z); if (i >= 0) this.data[i] = b; }
 }
 
-function buildTerrain(r, L, biome, seed, hmap, plan) {
+function buildTerrain(r, L, biome, seed, hmap, plan, deck) {
   const w = new World(-14, L + 16, plan ? -40 : -32, 8, DEPTH, 18);
   const heights = new Map();
   const city = !!biome.city;
@@ -56,6 +56,7 @@ function buildTerrain(r, L, biome, seed, hmap, plan) {
       const hm = hmap.get(x + ',' + z);
       if (hm === PIT) { w.set(x, DEPTH, z, VOID); continue; } // 낭떠러지: 바닥만 어둡게
       if (h === null) continue;                                // 물 (항구)
+      if (deck?.has(x + ',' + z)) { w.set(x, -1, z, LANEB); w.set(x, DEPTH, z, VOID); continue; }   // 다리 상판: 밑이 비어 있음
       for (let y = w.y0; y < h; y++) {
         let b = y === h - 1 ? GRASS : y >= h - 3 ? DIRT : STONE;
         if (city && y === h - 1) b = z >= -2 && z <= LANE_Z1 ? LANEB : SIDE; // 도시: 차도 + 인도
@@ -222,12 +223,14 @@ export class Stage {
     const seed = randi(1, 9999);
     const plan = this.biome.city ? null : planBiome(biomeKey, this.L, seed);   // 초원·사막·항구 배경 구획
     const t0 = performance.now();
-    const built = buildTerrain(game.r, this.L, this.biome, seed, this.hmap, plan);
+    const deck = new Set();   // 외나무 다리 상판 칸 (밑을 비워 다리처럼 보이게)
+    for (const sg of this.segments) if (sg.type === 'bridge') for (let x = sg.a; x < sg.b; x++) for (let z = -3; z <= 2; z++) if (this.hmap.get(x + ',' + z) !== PIT) deck.add(x + ',' + z);
+    const built = buildTerrain(game.r, this.L, this.biome, seed, this.hmap, plan, deck);
     const t1 = performance.now();
     this.terrain = built.mesh;
     this.buildHazard();
     // 장애물(벽·잔해·바리케이드)과 낭떠러지 단면: 바이옴에 맞는 물건으로
-    const obs = buildObstacles(game.r, this, this.biome.city ? 'city' : biomeKey);
+    const obs = buildObstacles(game.r, this, this.biome.city ? 'city' : biomeKey, deck);
     this.obstacles = obs.chunks; this.pitEdges = obs.edges;
     const t2 = performance.now();
     if (plan) {
@@ -240,7 +243,7 @@ export class Stage {
       this.facades = makeFacades(game.r, built.nyc.facades);
       this.signs = makeNYCSigns(game.r, built.signSpecs);
       this.roadMarks = buildNYCRoad(game.r, this.L, isPit);
-      this.decor = buildNYCDecor(this.L).filter(d => !isPit(d.x, d.z));
+      this.decor = buildNYCDecor(this.L).filter(d => !isPit(d.x, d.z) && !this.solids.some(o => d.x > o.x - 1 && d.x < o.x + o.len + 1 && d.z > o.z - 1 && d.z < o.z + o.dep + 1));   // 주차된 차 위에 장식이 겹치지 않게
       this.towers = built.nyc.towers;
       this.fogCards = buildFogCards(game.r, this.L);
       this.poles = []; this.wireCount = 0;
@@ -266,13 +269,8 @@ export class Stage {
         waves.push(...this.curveWaves(game, Math.min(1, zoneT(index, zi) + ((game.run.chapter || 1) - 1)), zi === triggers.length - 1));
       }
       this.zones.push({ trigger: tx, waves, boss: isBoss });
-      // 구역 근처 폭발 드럼통
-      const nb = randi(1, 2);
-      for (let k = 0; k < nb; k++) this.placeProp('barrel', tx + rand(1, 8));
     });
-    // 나무 상자
-    for (let x = 8 + rand(0, 4); x < this.L - 8; x += rand(7, 12)) this.placeProp('crate', x);
-    // 가시 함정 (평지 2x2)
+    // 가시 함정 (평지 2x2) — 상자·드럼통보다 먼저 놓고, 그 위에는 소품이 놓이지 않게 함
     for (let k = 0; k < triggers.length - 1; k++) {
       for (let tries = 0; tries < 12; tries++) {
         const x0 = Math.floor((triggers[k] + triggers[k + 1]) / 2 + rand(-6, 6));
@@ -283,6 +281,10 @@ export class Stage {
         }
       }
     }
+    // 구역 근처 폭발 드럼통
+    for (const tx of triggers) { const nb = randi(1, 2); for (let k = 0; k < nb; k++) this.placeProp('barrel', tx + rand(1, 8)); }
+    // 나무 상자
+    for (let x = 8 + rand(0, 4); x < this.L - 8; x += rand(7, 12)) this.placeProp('crate', x);
     // 첫 무기 + 구간마다 무작위 무기 (서로 다른 종류)
     const first = index === 0 ? 'pipe' : rollWeapon(['pipe']);
     const got = [first];
@@ -344,18 +346,21 @@ export class Stage {
   }
 
   // 낭떠러지 가장자리에 노랑·검정 경고 줄무늬 (바닥에 칠한 것처럼 표면 바로 아래에 묻힌 얇은 큐브)
+  // 동전 노랑과 겹치지 않게 황토색으로 누름. 도시 밖은 가장자리에서 조금 안쪽에 칠한, 군데군데 벗겨진 페인트 자국
   buildHazard() {
-    const out = [], T = 0.25, e = 0.012;
-    const Y = [0.95, 0.78, 0.1], K = [0.08, 0.08, 0.09];
+    const city = !!this.biome.city, out = [], T = city ? 0.25 : 0.2, inset = city ? 0.02 : 0.07, e = 0.012;
+    const Y = [0.66, 0.565, 0.25], K = [0.1, 0.095, 0.09];
     for (let x = 0; x < this.L; x++) for (let z = -5; z <= 6; z++) {
       const h = this.heightAt(x + .5, z + .5);
       if (h === PIT || h > 1) continue;
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         if (this.heightAt(x + .5 + dx, z + .5 + dz) !== PIT) continue;
-        for (let i = 0; i < 4; i++) {
-          const u = (i + .5) * T;                       // 가장자리를 따라 4칸
-          const px = dx ? x + (dx > 0 ? 1 - T / 2 - 0.02 : T / 2 + 0.02) : x + u;
-          const pz = dz ? z + (dz > 0 ? 1 - T / 2 - 0.02 : T / 2 + 0.02) : z + u;
+        const n = Math.round(1 / T);
+        for (let i = 0; i < n; i++) {
+          if (!city && hash3(x * 4 + i, z, dx * 3 + dz) < 0.14) continue;   // 벗겨진 곳
+          const u = (i + .5) * T;                       // 가장자리를 따라
+          const px = dx ? x + (dx > 0 ? 1 - T / 2 - inset : T / 2 + inset) : x + u;
+          const pz = dz ? z + (dz > 0 ? 1 - T / 2 - inset : T / 2 + inset) : z + u;
           const c = (i + x + z) % 2 ? K : Y;
           out.push(px, h - T / 2 + e, pz, T * 0.96, c[0], c[1], c[2]);
         }
@@ -409,7 +414,8 @@ export class Stage {
         for (let dz = 0; dz < 6; dz += 0.5) {
           for (const sz of [z + dz, z - dz]) {
             if (sz < LANE.zMin + 0.2 || sz > LANE.zMax - 0.2) continue;
-            if (this.heightAt(sx, sz) === 0 && this.heightAt(sx + .4, sz) === 0 && this.heightAt(sx - .4, sz) === 0) return { x: sx, z: sz };
+            if (this.traps.some(t => Math.abs(sx - t.x) < 1.5 && Math.abs(sz - t.z) < 1.5)) continue;   // 가시 함정 위는 피함
+            if (this.heightAt(sx, sz) === 0 && this.heightAt(sx + .4, sz) === 0 && this.heightAt(sx - .4, sz) === 0 && this.heightAt(sx, sz + .4) === 0 && this.heightAt(sx, sz - .4) === 0) return { x: sx, z: sz };
           }
         }
       }

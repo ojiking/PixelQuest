@@ -18,6 +18,16 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   await page.keyboard.press('Enter'); await page.waitForTimeout(150);
   await page.keyboard.press('Enter'); await page.waitForTimeout(800);
   const ev = (f, a) => page.evaluate(f, a);
+  // 게임 시간 기준 대기: 그래픽카드 없는 느린 환경에서도 실제 시간 대신 게임 안의 시간이 ms만큼 흐를 때까지 기다림
+  // (메뉴처럼 게임 시간이 멈춘 화면이면 실제 시간 ms×6까지만 기다림)
+  const wait = async ms => {
+    const t0 = await page.evaluate(() => window.__game?.time ?? 0), w0 = Date.now();
+    while (Date.now() - w0 < ms * 6) {
+      await page.waitForTimeout(Math.min(100, ms));
+      const t = await page.evaluate(() => window.__game?.time ?? 0);
+      if (t - t0 >= ms / 1000 || (t === t0 && Date.now() - w0 >= ms)) break;
+    }
+  };
   const setup = () => ev(() => {
     const g = window.__game, p = g.player, st = g.stage;
     st.hmap.clear(); g.items.length = 0; g.props.length = 0; g.traps.length = 0;
@@ -36,7 +46,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     g.dropWeapon({ weapon: { type: 'pipe', dur: 9 }, x: 14.8, z: -0.5, facing: 1 });
     const e = g.spawnEnemy('grunt', 1); e.weapon = null; e.x = 17; e.z = -0.5; window.__a = e;
   });
-  await page.waitForTimeout(5500);
+  await wait(5500);
   console.log('A weapon on block: enemy goItem', await ev(() => window.__a.goItem ? 'still going' : 'gave up/none'), 'state', await ev(() => window.__a.state), 'dist to player', await ev(() => Math.abs(window.__a.x - window.__game.player.x).toFixed(1)));
 
   // (B) 벽(높이 2)이 길을 완전히 막고 그 뒤에 적
@@ -46,18 +56,18 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     for (let z = -5; z <= 7; z++) st.hmap.set('21,' + z, 2);
     const e = g.spawnEnemy('grunt', 1); e.x = 23; e.z = 0; window.__b = e;
   });
-  await page.waitForTimeout(5000);
+  await wait(5000);
   console.log('B trapped behind wall: enemy x', await ev(() => window.__b.x.toFixed(1)), '(screen right edge', await ev(() => (window.__game.lock.cx + window.__game.viewHalf).toFixed(1)) + ')');
 
   // (C) 죽는 중인데 착지하지 못한 적
   await setup();
   await ev(() => { const g = window.__game; const e = g.spawnEnemy('grunt', 1); e.x = 13; e.z = 0; g.kill(e, { dir: 1, knock: 3 }); e.vy = 0; e.y = 3; e.grounded = false; e.update = function (dt) { this.st += dt; this.updateCommon(dt); }; window.__c = e; });
-  await page.waitForTimeout(3200);
+  await wait(3200);
   console.log('C stuck dying removed:', await ev(() => window.__c.remove));
 
   // 잠금 해제까지
   await ev(() => { const g = window.__game; for (const e of g.enemies) if (!e.dead) g.kill(e, { dir: 1, knock: 3 }); });
-  await page.waitForTimeout(2500);
+  await wait(2500);
   console.log('lock released:', await ev(() => !window.__game.lock));
   console.log('ERRORS:', errs.length ? errs : 'none');
   await browser.close();

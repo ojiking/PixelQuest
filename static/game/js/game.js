@@ -1270,11 +1270,12 @@ export class Game {
     const near = x => Math.abs(x - this.camX) < this.viewHalf + 8;
     const chunks = (list, stained) => { for (const c of list ?? []) if (chunkVisible(c, this.camX)) r.drawMesh(c.mesh, IDENT, null, 0, 1, null, stained); };
     if (st.roadMarks) r.drawMesh(st.roadMarks, IDENT, null, 0);
-    chunks(st.envGround, true);                                // 바닥 무늬 (핏자국이 묻음)
+    const lite = r.software;                                   // 그래픽카드 없는(소프트웨어) 환경: 장식층은 건너뜀 (가볍게)
+    if (!lite) chunks(st.envGround, true);                     // 바닥 무늬 (핏자국이 묻음)
     chunks(st.obstacles, true);                                // 벽·잔해·바리케이드
     chunks(st.pitEdges, false);                                // 낭떠러지 단면
     chunks(st.envNear, true);                                  // 길 뒤 건물·울타리·소품
-    chunks(st.envFar, false);                                  // 원경
+    if (!lite) chunks(st.envFar, false);                       // 원경
     for (const s of st.solids) {
       if (!near(s.x)) continue;
       mat4.identity(M); mat4.translate(M, s.x + 0.02, 0, s.z + 0.1);
@@ -1319,7 +1320,7 @@ export class Game {
   // 알파 포그: 반투명 안개막 (뒤에서 앞으로), 색은 안개색 그대로
   drawFogCards(r) {
     const st = this.stage;
-    if (!st.fogCards || !r.lightMode) return;
+    if (!st.fogCards || !r.lightMode || r.software) return;
     const f = st.biome.fog;
     for (const c of st.fogCards) {
       mat4.identity(M); mat4.translate(M, 0, c.y, 0);
@@ -1329,7 +1330,7 @@ export class Game {
   // 공중에 떠다니는 입자: 먼지(도시·초원) / 모래바람(사막) / 눈송이(항구). 카메라를 따라 순환
   drawDust(r) {
     const P = this.stage.biome.particles;
-    if (!P || !r.lightMode) return;
+    if (!P || !r.lightMode || r.software) return;
     const N = P.n, dt = this.frameDt || 1 / 60, snow = P.kind === 'snow', sand = P.kind === 'sand';
     if (!this.dust || this.dustKind !== P) {
       this.dustKind = P; this.dust = []; this.dustBuf = new Float32Array(N * 7);
