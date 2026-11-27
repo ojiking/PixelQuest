@@ -2,6 +2,8 @@
 import { V } from './config.js';
 import { VoxGrid, meshGrid } from './voxel.js';
 import { buildHeroV2 } from './hero_model.js';
+import { CHAR_BUILDERS } from './chars_enemies.js';
+import { ITEM_BUILDERS } from './items_hd.js';
 
 // 뱀돌이 모델 선택: 'player' = 새 고밀도 모델(v2, 기본), 'player_v1' = 예전 모델. 무기방 6번으로 바꿔 비교 (브라우저에 저장)
 export function heroModelKey() {
@@ -608,6 +610,11 @@ for (let i = 0; i < 7; i++) {
     });
   };
 }
+
+// 적·보스·로봇: 고밀도 모델(chars_enemies.js)로 교체 (예전 humanoid 정의는 위에 남아 있지만 덮어씀)
+Object.assign(BUILDERS, CHAR_BUILDERS);
+// 무기·소품: 고밀도 모델(items_hd.js)로 교체 (손잡이 원점·길이는 예전과 같음)
+Object.assign(BUILDERS, ITEM_BUILDERS);
 
 export const WEAPON_MODEL = {
   pipe: 'w_pipe', machete: 'w_machete', block: 'w_block', golf: 'w_golf', chainsaw: 'w_chainsaw',
