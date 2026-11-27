@@ -348,6 +348,12 @@ export class Actor {
             T.armF = 1.0 + b; T.handF = 2.0; T.armB = .85 - b; T.handB = 2.15; T.torso = -.06;
             T.legF = .25; T.shinF = -.1; T.legB = -.2; T.shinB = -.15; lift = Math.abs(b) * .3;
           }
+        } else if (this.model.brawl) {
+          // 적·볼트 고밀도 모델: 원화의 싸움 자세 — 주먹은 허리 높이(얼굴을 가리지 않게), 팔꿈치는 바깥, 다리는 넓게
+          const b = Math.sin(t * 2.2) * .04, B = this.model.brawl;
+          T.armF = B.arm + b; T.handF = B.hand; T.armB = B.arm - .1 - b; T.handB = B.hand + .05; T.torso = -.04;
+          T.legF = B.leg; T.shinF = -.12; T.legB = -B.leg; T.shinB = -.1;
+          if (B.grip !== undefined) T.grip = B.grip;
         } else { T.armF = .15 + Math.sin(t * 2.2) * .05; T.armB = .1 - Math.sin(t * 2.2) * .05; T.shinF = -.05; }
         this.gunHold(T, t);
         break;
@@ -755,7 +761,8 @@ export class Actor {
     if (this.shieldUp()) {
       // 맨홀 방패: 몸 앞쪽에
       mat4.copy(WM, root);
-      mat4.translate(WM, 0.42, 0.95, 0.05);
+      mat4.translate(WM, 0.36, 0.95, 0.24);   // 카메라 쪽(+z)으로 내밀고 살짝 카메라를 향해 돌림 (턱~무릎을 가리는 큰 원판)
+      mat4.rotateY(WM, -0.35);
       r.drawMesh(getModel(r, 'manhole').mesh, WM, this.guardBroken > 0 ? WARN : tint);
     }
     for (const k of PART_ORDER) {

@@ -3,6 +3,7 @@
 // 복셀 1칸 = 기존(V)의 절반. 짜리몽땅한 보통 체형: 큰 머리, 넓은 어깨, 굵은 팔에 큰 주먹, 짧고 굵은 다리.
 import { V } from './config.js';
 import { VoxGrid, meshGrid, hash3 } from './voxel.js';
+import { Sub } from './chars_hd.js';
 
 const H = V / 2;                       // 4.5cm
 const WOUND = [0xc81e24, 0x9e1219, 0xe0382c, 0xb3161d];
@@ -43,7 +44,7 @@ const shade = (c, k) => { const r = Math.min(255, ((c >> 16) & 255) * k) | 0, gg
 // ---------------------------------------------------------------- 머리 (x19 × y17 × z18): 키의 약 35%, 머리보다 넓은 곱슬 덩어리
 // 얼굴 블록 x7..17, y0..9, z3..14 / 앞면 x=17 / 머리띠 y7..8 / 머리카락 y9 이상
 function head() {
-  const g = new VoxGrid(19, 17, 18);
+  const G = new VoxGrid(19 + 12, 17, 18), g = new Sub(G, 12, 0, 0);   // 뒤로 12칸 여유 (길게 날리는 머리띠 꼬리)
   for (let y = 0; y <= 9; y++) {
     const z0 = y === 0 ? 5 : y === 1 ? 4 : 3, z1 = 17 - z0, x0 = y <= 1 ? 9 : 7;
     for (let z = z0; z <= z1; z++) for (let x = x0; x <= 17; x++) g.set(x, y, z, shade(C.skin, z <= 4 || z >= 13 ? .9 : 1));
@@ -58,9 +59,10 @@ function head() {
   // 눈: 흰자 3×2 + 안쪽 눈동자 (노려봄)
   for (const [z0, pz] of [[4, 6], [11, 11]]) { g.fill(17, 4, z0, 17, 5, z0 + 2, C.eyeW); g.fill(17, 4, pz, 17, 5, pz, C.pupil); }
   // 굵은 화난 눈썹: 바깥 높고 안쪽이 눈을 누름 (한 칸 도드라짐)
-  for (let z = 3; z <= 7; z++) g.set(18, 6, z, C.brow);
-  for (let z = 10; z <= 14; z++) g.set(18, 6, z, C.brow);
-  g.set(18, 5, 7, C.brow); g.set(18, 5, 10, C.brow); g.set(17, 5, 7, C.brow); g.set(17, 5, 10, C.brow);
+  // (얼굴면과 같은 높이로 칠함 — 튀어나오면 윤곽선 때문에 안경처럼 보임)
+  for (let z = 3; z <= 7; z++) g.set(17, 6, z, C.brow);
+  for (let z = 10; z <= 14; z++) g.set(17, 6, z, C.brow);
+  g.set(17, 5, 7, C.brow); g.set(17, 5, 10, C.brow);
   // 미간 주름
   g.set(17, 6, 8, C.skinD); g.set(17, 6, 9, C.skinD);
   // 귀
@@ -83,9 +85,10 @@ function head() {
   }
   // 뒤통수 매듭 + 뒤로 날리는 꼬리 두 가닥 (물결)
   g.fill(5, 7, 7, 5, 8, 10, C.bandD); g.set(5, 9, 8, C.band);
-  const tail = (z0, y0, dy) => { for (let i = 0; i <= 5; i++) { const x = 4 - i, y = Math.round(y0 - i * dy + (i % 2 ? .6 : 0)), z = z0 + (i >= 3 ? 1 : 0); if (x < 0) break; g.set(x, y, z, C.band); g.set(x, y - 1, z, C.bandD); } };
-  tail(7, 9, .35); tail(10, 8, .7);
-  return { g, origin: [12.5, 0, 9], eyes: [[(18.7 - 12.5) * H, 5 * H, (5.5 - 9) * H], [(18.7 - 12.5) * H, 5 * H, (12.5 - 9) * H]] };
+  // 꼬리: 예전보다 2.5배 길게, 물결치며 뒤로 날림
+  const tail = (z0, y0, dy, len, ph) => { for (let i = 0; i < len; i++) { const x = 4 - i, y = Math.round(y0 - i * dy + Math.sin(i * .65 + ph) * 1.1), z = z0 + Math.round(i * .12); g.set(x, y, z, C.band); g.set(x, y - 1, z, C.bandD); if (i < len - 3) g.set(x, y, z + 1, C.band); } };
+  tail(7, 9, .18, 15, 0); tail(10, 8, .32, 13, 1.7);
+  return { g: G, origin: [12.5 + 12, 0, 9], eyes: [[(18.7 - 12.5) * H, 5 * H, (5.5 - 9) * H], [(18.7 - 12.5) * H, 5 * H, (12.5 - 9) * H]] };
 }
 
 // ---------------------------------------------------------------- 몸통 (x11 × y11 × z18): 짧고 넓은 몸통, 목을 덮는 승모근

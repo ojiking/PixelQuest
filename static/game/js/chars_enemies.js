@@ -4,7 +4,7 @@
 //  큰 체형: 다리 21 · 몸통 12 · 팔 20칸, 어깨·팔이 훨씬 굵음 (config 배율 1.3~1.7과 곱해 약 1.4배 이상)
 //  꼬마: 다리 13 · 몸통 7 · 팔 12칸, 머리가 큼
 import { VoxGrid, hash3 } from './voxel.js';
-import { H, shade, pick, tone, grime, mul, recolor, Sub, ell, rbox, spike, line, stamp, faceBase, torsoShape, armShape, legShape, assemble } from './chars_hd.js';
+import { H, desat, shade, pick, tone, grime, mul, recolor, Sub, ell, rbox, spike, line, stamp, faceBase, torsoShape, armShape, legShape, assemble } from './chars_hd.js';
 
 // ---------------------------------------------------------------- 공통 색
 const SK = { tan: 0xcf9466, pale: 0xdca478, dark: 0xa86c44, olive: 0xbf8758, kid: 0xe8b48a, ruddy: 0xd39272 };
@@ -20,10 +20,10 @@ function headGrid(w = 28, h = 30, d = 28, dx = 4, dz = 5) {
   return { g, s, origin: [12.5 + dx, 0, 9 + dz] };
 }
 // 몸통: 아래로 3칸(허리 아래 늘어지는 장식), 뒤로 dx칸(배낭·칼집) 여유
-function torsoGrid(P, dx = 5, up = 20) {
+function torsoGrid(P, dx = 5, up = 20, pz = 5) {
   const X = P.X ?? 10, TH = P.TH ?? 9, D = P.D ?? 18;
-  const g = new VoxGrid(X + dx + 6, TH + up, D + 10), s = new Sub(g, dx, 3, 5);
-  return { g, s, origin: [X / 2 + dx, 3, D / 2 + 5], joint: TH - 1 + 3, far: 3 };
+  const g = new VoxGrid(X + dx + 6, TH + up, D + 2 * pz), s = new Sub(g, dx, 3, pz);
+  return { g, s, origin: [X / 2 + dx, 3, D / 2 + pz], joint: TH - 1 + 3, far: 3 };
 }
 // 신발 마무리: 밑창 홈, 끈, 발목 테두리
 function bootDeco(g, P, B) {
@@ -79,24 +79,28 @@ const TOR_B = { X: 12, TH: 12, D: 22, inset: y => y <= 1 ? 3 : y <= 4 ? 2 : y <=
 // 1) 골목 깡패 — 후드를 푹 눌러쓴 길거리 펑크 (뾰족한 후드 실루엣, 붕대 감은 주먹)
 // =====================================================================================
 function grunt(r) {
-  const skin = SK.tan, HO = 0x5a5654, HOt = tone(HO, .3, .18), STR = 0xb4ac9c, TEE = 0x2a2828;
+  const skin = SK.tan, HO = 0x5a5654, HOt = tone(HO, .18, .08, .9, 1.08), STR = 0xccc4b4, TEE = 0x2a2828;
   // 머리 + 후드
   const hd = headGrid(); const s = hd.s;
   faceBase(s, { skin, stub: 0x4a3424, mouth: 'grit', brow: 0x1a100a, cranium: 3, beardH: 2 });
-  for (let z = 3; z <= 14; z++) for (let y = 6; y <= 9; y++) for (let x = 15; x <= 18; x++) mul(s, x, y, z, y >= 8 ? .55 : .75);   // 후드 그늘에 묻힌 이마·눈
-  // 후드: 얼굴보다 한참 큰 천 덩어리. 얼굴 둘레는 두툼한 테두리, 이마 위로 챙처럼 튀어나오고, 옆은 어깨까지 늘어짐
-  const cloth = (x, y, z) => pick(x, y, z, HO, shade(HO, .9), shade(HO, 1.08), .2, .08);
-  const inFace = (x, y, z) => x >= 14 && y <= 9 && z >= 3 && z <= 14;
-  ell(s, 11.2, 9.0, 8.5, 8.6, 10.4, 9.6, cloth, (x, y, z) => !inFace(x, y, z) && s.get(x, y, z) < 0 && y >= 0);
-  ell(s, 5.0, 15.6, 8.5, 5.6, 4.6, 5.0, cloth, (x, y, z) => s.get(x, y, z) < 0);                       // 뒤로 늘어진 뾰족한 끝
-  ell(s, 1.6, 17.0, 8.5, 2.6, 2.2, 2.6, cloth, (x, y, z) => s.get(x, y, z) < 0);
-  for (let y = 0; y <= 13; y++) for (let z = 0; z <= 17; z++) for (let x = 15; x <= 20; x++) {         // 얼굴 둘레 두툼한 테두리 (밝게)
-    if (s.get(x, y, z) < 0 || s.get(x + 1, y, z) >= 0) continue;
-    const near = (z >= 1 && z <= 2) || (z >= 15 && z <= 16) || (y >= 10 && y <= 11 && z >= 2 && z <= 15);
-    if (near) s.set(x, y, z, shade(HO, 1.22));
+  for (let z = 3; z <= 14; z++) for (let y = 6; y <= 9; y++) for (let x = 15; x <= 18; x++) mul(s, x, y, z, y >= 8 ? .6 : .8);   // 후드 그늘에 묻힌 이마·눈
+  // 후드: 얼굴보다 한참 큰 매끈한 천 덩어리(주름은 줄무늬 명암), 얼굴 앞으로 2칸 더 나와 얼굴이 어두운 구멍 안에 들어앉음
+  const cloth = (x, y, z) => shade(HO, 1 + Math.sin(y * .8 + Math.abs(z - 8.5) * .35) * .05 - (x < 8 ? .06 : 0) + (hash3(x, y, z) < .08 ? -.06 : 0));
+  const inFace = (x, y, z) => x >= 13 && y <= 9 && z >= 3 && z <= 14;
+  ell(s, 11.6, 8.8, 8.5, 8.6, 10.2, 9.4, cloth, (x, y, z) => !inFace(x, y, z) && s.get(x, y, z) < 0 && y >= 0);
+  for (const [x, y, rr] of [[7, 16, 4.2], [5, 18, 3.2], [3, 19.6, 2.2], [1.6, 20.6, 1.3]]) ell(s, x, y, 8.5, rr, rr * .9, rr, cloth, (a, b, c) => s.get(a, b, c) < 0);   // 뒤로 솟은 뾰족한 끝
+  // 얼굴 구멍: 안쪽 안감은 아주 어둡게, 가장 바깥 테두리는 밝게 → 어두운 틀이 얼굴을 감쌈
+  for (let y = 0; y <= 12; y++) for (let z = 0; z <= 17; z++) {
+    let fx = -1; for (let x = 21; x >= 13; x--) if (s.get(x, y, z) >= 0) { fx = x; break; }
+    if (fx < 0) continue;
+    const opening = (z >= 3 && z <= 14 && y <= 9);
+    if (opening) continue;
+    const edge = (z === 2 || z === 15) && y <= 10 || (y === 10 || y === 11) && z >= 2 && z <= 15;
+    if (edge) { s.set(fx, y, z, shade(HO, 1.3)); for (let x = 15; x < fx; x++) if (s.get(x, y, z) >= 0) s.set(x, y, z, 0x1a1818); }
   }
-  for (let z = 2; z <= 15; z++) { s.set(19, 10, z, shade(HO, 1.25)); s.set(18, 10, z, shade(HO, 1.1)); s.set(18, 9, z, 0x1c1a1a); }   // 이마 위 챙 + 그늘
-  for (let x = 0; x <= 17; x++) for (let y = 10; y <= 20; y++) recolor(s, x, y, 8, shade(HO, .8));   // 가운데 솔기
+  for (let z = 3; z <= 14; z++) for (let x = 15; x <= 19; x++) if (s.get(x, 10, z) >= 0 && s.get(x, 9, z) < 0) s.set(x, 10, z, 0x161414);   // 챙 밑면 그늘
+  for (let y = 0; y <= 10; y++) for (const z of [3, 14]) for (let x = 16; x <= 19; x++) if (s.get(x, y, z) < 0 && x >= 18) s.set(x, y, z, 0x1a1818);   // 얼굴 양옆 어두운 틈
+  for (let x = 0; x <= 19; x++) for (let y = 11; y <= 21; y++) recolor(s, x, y, 8, shade(HO, .78));   // 가운데 솔기
   // 몸통: 열린 후드 집업 + 검은 티 + 목걸이 체인 + 허리 체인
   const T = { X: 10, TH: 9, D: 18 }; const tg = torsoGrid(T); const t = tg.s;
   torsoShape(t, T, (rg, x, y, z) => {
@@ -116,7 +120,7 @@ function grunt(r) {
     if (rg === 'fist') return x >= W - 1 && y <= 2 ? skinT(skin)(x, y, z) : tapeT(x, y, z);
     if (rg === 'wrist') return tapeT(x, y, z);
     if (rg === 'fore') return y === 8 ? ((x + z) % 2 ? shade(HO, .78) : shade(HO, .9)) : skinT(skin)(x, y, z);
-    if (outer && (x === 3 || x === 5)) return STR;
+    if (outer && (x === 2 || x === 3 || x === 5 || x === 6)) return STR;                              // 바깥 두 줄 (굵게)
     return HOt(x, y, z);
   }, front);
   const armF = mkArm(true), armB = mkArm(false);
@@ -133,8 +137,8 @@ function grunt(r) {
 // 2) 돌격 헬멧 — 뼈 뿔 두 개 달린 찌그러진 강철 투구 + 징 박힌 붉은 가죽 재킷 + 큰 건틀릿
 // =====================================================================================
 function charger(r) {
-  const skin = SK.ruddy, LEA = 0x6a2420, LT = tone(LEA, .3, .16), TANK = 0xc4bba6, GL = 0x5a3a22, GLT = tone(GL, .28, .14);
-  const hd = headGrid(); const s = hd.s;
+  const skin = SK.ruddy, LEA = desat(0x6a2420, .25), LT = tone(LEA, .3, .16), TANK = 0xc4bba6, GL = 0x5a3a22, GLT = tone(GL, .28, .14);
+  const hd = headGrid(30, 34, 42, 4, 12); const s = hd.s;
   faceBase(s, { skin, stache: 0x2a1a10, mouth: 'frown', brow: 0x1e120a, thickBrow: true, stub: 0x7a5a44, beardH: 1 });
   // 투구: 둥근 강철 + 리벳 띠 + 코 가리개 + 녹
   const helm = (x, y, z) => grime(x, y, z, pick(x, y, z, STEEL, STEEL_D, STEEL_L, .26, .14), RUST, .16, 3);
@@ -145,9 +149,15 @@ function charger(r) {
   for (let y = 10; y <= 15; y++) for (let z = 0; z <= 17; z++) if (z === 8 && s.get(19, y, z) >= 0) s.set(19, y, z, STEEL_D);   // 가운데 이음매
   s.fill(19, 5, 8, 19, 7, 9, STEEL); s.set(19, 7, 8, STUD);
   // 뼈 뿔: 옆으로 뻗다가 위로 휘어 오름 (밑동은 갈색 띠)
+  // 굵은 뼈 뿔: 옆으로 크게 뻗었다가 위로 휘어 오르며 가늘어짐 (3/4 시점에서도 양쪽 다 보이게 멀리 뻗음)
   const horn = (side) => {
-    const P = [[12, 11.5, 0, 2.6], [12.2, 12.2, -2, 2.4], [12.6, 13.2, -3.8, 2.1], [13.2, 14.8, -5, 1.8], [13.8, 16.6, -5.5, 1.5], [14.6, 18.4, -5.3, 1.2], [15.4, 19.8, -4.6, .9], [16, 20.8, -3.9, .7]];
-    P.forEach(([x, y, z, rr], i) => { const zz = side > 0 ? 17 - z : z; ell(s, x, y, zz + .5, rr, rr, rr, (a, b, c) => i === 0 ? 0x5a3e28 : i >= 6 ? 0x9a8a6a : pick(a, b, c, 0xd8cdb0, 0xc4b898, 0xe6dcc4), (a, b, c) => s.get(a, b, c) < 0 || i > 0); });
+    const P = [[12, 11, 0, 3.4], [12.2, 12, -3, 3.3], [12.6, 13.2, -5.8, 3.0], [13.2, 15.2, -8, 2.6], [13.8, 17.8, -9.2, 2.2], [14.4, 20.4, -9.4, 1.7], [15, 22.6, -8.8, 1.2], [15.6, 24.2, -7.8, .8]];
+    for (let i = 0; i < P.length - 1; i++) for (let k = 0; k < 4; k++) {
+      const t = k / 4, A = P[i], B = P[i + 1], q = A.map((v, j) => v + (B[j] - v) * t);
+      const zz = side > 0 ? 17 - q[2] : q[2], seg = i + t;
+      ell(s, q[0], q[1], zz + .5, q[3], q[3], q[3], (a, b, c) => seg < .8 ? 0x5a3e28 : seg > 5.6 ? 0x8a7a5a : seg > 4.6 ? 0xb4a684 : pick(a, b, c, 0xd8cdb0, 0xc4b898, 0xe6dcc4, .25, .12), (a, b, c) => s.get(a, b, c) < 0 || seg > .5);
+    }
+    for (let k = 0; k < 3; k++) { const q = P[1].map((v, j) => v + (P[2][j] - v) * (k / 3)); ell(s, q[0], q[1], (side > 0 ? 17 - q[2] : q[2]) + .5, q[3] + .25, q[3] * .35, q[3] + .25, () => 0x5a3e28); }   // 밑동 가죽 띠
   };
   horn(-1); horn(1);
   // 몸통: 열린 라이더 재킷(옷깃·징) + 더러운 흰 러닝셔츠
@@ -186,21 +196,26 @@ function charger(r) {
 // 3) 벽돌 배달부 — 노란 모자 + 녹색 조끼 + 등에 벽돌을 산더미처럼 쌓은 큰 배낭 (등이 솟은 실루엣)
 // =====================================================================================
 function thrower(r) {
-  const skin = SK.pale, CAP = 0xb8902a, CT = tone(CAP, .26, .14), VEST = 0x4c5632, VT = tone(VEST, .28, .16), TEE = 0xcfc8b8;
+  const skin = SK.pale, CAP = desat(0xb8902a, .25), CT = tone(CAP, .26, .14), VEST = 0x4c5632, VT = tone(VEST, .28, .16), TEE = 0xcfc8b8;
   const PACK = 0x5a4028, PKT = tone(PACK, .3, .16), BRICK = 0xb4462e;
   const hd = headGrid(); const s = hd.s;
   faceBase(s, { skin, stub: 0x5a3a22, mouth: 'snarl', brow: 0x2a180c, cranium: 3, beardH: 2 });
   for (const z of [3, 14]) s.fill(12, 3, z, 15, 7, z, 0x4a2c18);                                          // 구레나룻
   for (let y = 5; y <= 9; y++) for (let z = 3; z <= 14; z++) { recolor(s, 7, y, z, 0x4a2c18); recolor(s, 8, y, z, 0x4a2c18); }   // 뒷머리
   // 모자: 둥근 정수리 + 앞으로 뻗은 챙 + 앞 패치
-  ell(s, 12, 9, 8.5, 6.4, 6.4, 7.0, CT, (x, y) => y >= 9);
-  for (let x = 6; x <= 18; x++) for (let z = 1; z <= 16; z++) if (s.get(x, 9, z) >= 0 || (x >= 17 && z >= 3 && z <= 14)) s.set(x, 9, z, shade(CAP, .86));
-  for (let x = 18; x <= 22; x++) for (let z = 3 + (x >= 21 ? 1 : 0); z <= 14 - (x >= 21 ? 1 : 0); z++) s.set(x, 9, z, x === 22 ? shade(CAP, .75) : shade(CAP, .92));   // 챙
-  for (let x = 18; x <= 21; x++) for (let z = 4; z <= 13; z++) s.set(x, 8, z, 0x5a4418);                // 챙 밑 그늘
+  // 야구 모자: 머리에 꼭 맞는 높은 돔(여섯 쪽 솔기·꼭지 단추) + 앞으로만 뻗은 휜 챙 — 옆·뒤로는 챙 없음
+  ell(s, 12.2, 9, 8.5, 6.1, 7.2, 6.7, (x, y, z) => (Math.abs(z - 8.5) < .6 || Math.abs(x - 12.2) < .6) && y >= 12 ? shade(CAP, .84) : CT(x, y, z), (x, y) => y >= 9);
+  for (let x = 5; x <= 18; x++) for (let z = 1; z <= 16; z++) if (s.get(x, 9, z) >= 0 && (s.get(x + 1, 9, z) < 0 || s.get(x, 9, z + 1) < 0 || s.get(x, 9, z - 1) < 0 || x === 18)) s.set(x, 9, z, shade(CAP, .8));   // 띠
+  for (let x = 18; x <= 22; x++) for (let z = 4; z <= 13; z++) {                                           // 챙 (가장자리는 아래로 휨)
+    if (x === 22 && (z === 4 || z === 13)) continue;
+    const y = (z <= 4 || z >= 13) ? 8 : 9;
+    s.set(x, y, z, x === 22 ? shade(CAP, .72) : shade(CAP, .9)); if (y === 9) s.set(x, 8, z, 0x4a3a1a);
+  }
   stamp(s, ['###', '#.#', '###'], 18, 13, 7, 'x', 0x6a3a1a); s.set(18, 12, 8, 0xd8c8a0);                    // 앞 패치
-  s.set(12, 15, 8, shade(CAP, .7)); s.set(12, 15, 9, shade(CAP, .7));
+  s.fill(12, 16, 8, 12, 16, 9, shade(CAP, .7));
+  for (let z = 6; z <= 11; z++) recolor(s, 6, 10, z, 0x3a3a3a);                                           // 뒤 조절끈
   // 몸통 + 큰 배낭(뒤로 9칸) + 벽돌 더미
-  const T = { X: 10, TH: 9, D: 18 }; const tg = torsoGrid(T, 13, 30); const t = tg.s;
+  const T = { X: 10, TH: 9, D: 18 }; const tg = torsoGrid(T, 13, 30, 9); const t = tg.s;
   torsoShape(t, T, (rg, x, y, z) => {
     if (rg === 'belt') return z >= 8 && z <= 9 && x >= 8 ? STUD : tone(0x3a2818)(x, y, z);
     if ((rg === 'chest' || x >= 9) && z >= 6 && z <= 11) return tone(TEE, .2, .1)(x, y, z);
@@ -209,24 +224,21 @@ function thrower(r) {
   for (const z of [3, 14]) { for (let y = 3; y <= 5; y++) for (let zz = z - 1; zz <= z + 1; zz++) t.set(10, y, zz, y === 5 ? shade(VEST, .75) : shade(VEST, 1.08)); t.set(10, 5, z, STUD); }   // 조끼 주머니
   for (const z of [4, 13]) for (let y = 2; y <= 10; y++) t.set(y >= 9 ? 6 : 10, y, z, shade(PACK, .8));      // 멜빵
   for (const z of [4, 13]) { t.set(10, 6, z, STUD); t.set(10, 6, z + (z < 9 ? 1 : -1), STUD_D); }
-  rbox(t, -10, 0, -1, -1, 15, 18, PKT, 2);                                                               // 배낭 몸체
+  rbox(t, -11, 0, -3, -1, 15, 20, PKT, 2);                                                               // 배낭 몸체
   for (let y = 2; y <= 7; y++) for (let z = 3; z <= 14; z++) t.set(-11, y, z, y === 7 ? shade(PACK, .75) : shade(PACK, 1.05));   // 뒤 주머니
   t.set(-11, 7, 8, STUD); t.set(-11, 7, 9, STUD); t.set(-11, 4, 6, STUD_D); t.set(-11, 4, 11, STUD_D);
   for (const z of [-1, 18]) for (let y = 3; y <= 9; y++) for (let x = -7; x <= -3; x++) t.set(x, y, z, y === 9 ? shade(PACK, .75) : shade(PACK, 1.02));   // 옆 주머니
   for (let x = -10; x <= -1; x++) for (const z of [0, 17]) t.set(x, 12, z, 0x3a2a1a);                  // 끈
-  // 벽돌: 엇갈려 쌓은 3단 (구멍 뚫린 붉은 벽돌)
-  const brick = (x0, y0, z0, alongZ) => {
-    const lx = alongZ ? 3 : 6, lz = alongZ ? 6 : 3;
-    for (let x = 0; x < lx; x++) for (let y = 0; y < 2; y++) for (let z = 0; z < lz; z++) {
-      const holes = y === 1 && ((alongZ ? z : x) % 2 === 1) && x > 0 && z > 0 && x < lx - 1 && z < lz - 1;
-      t.set(x0 + x, y0 + y, z0 + z, holes ? 0x4a1a12 : pick(x0 + x, y0 + y, z0 + z, BRICK, shade(BRICK, .82), shade(BRICK, 1.15), .26, .16));
-    }
+  // 벽돌 더미: 머리 뒤에 어깨보다 넓게, 계단식으로 쌓은 붉은 벽돌 (줄눈·윗면 구멍)
+  const brickC = (x, y, z) => {
+    const course = Math.floor((y - 16) / 2), off = course % 2 ? 3 : 0, bz = Math.floor((z + 8 + off) / 6), bx = Math.floor((x + 20 + off) / 4);
+    const joint = (z + 8 + off) % 6 === 0 || (x + 20 + off) % 4 === 0;
+    const b = shade(BRICK, .86 + hash3(bz, course, bx) * .26);
+    return joint ? 0x6a3a2a : pick(x, y, z, b, shade(b, .9), shade(b, 1.08), .2, .1);
   };
-  for (const z of [-1, 5, 11, 15]) for (const x of [-11, -6]) brick(x, 16, Math.min(z, 15), false);      // 1단: 배낭보다 넓게
-  for (const x of [-11, -8, -5, -2]) { brick(x, 18, 0, true); brick(x, 18, 6, true); brick(x, 18, 12, true); }   // 2단: 엇갈림
-  for (const z of [1, 7, 13]) for (const x of [-10, -6]) brick(x, 20, Math.min(z, 13), false);          // 3단
-  for (const x of [-10, -7, -4]) { brick(x, 22, 3, true); brick(x, 22, 9, true); }                       // 4단
-  brick(-9, 24, 5, false); brick(-6, 24, 9, false); brick(-8, 26, 7, true);                              // 꼭대기 (머리보다 한참 높게)
+  const layers = [[16, 19, -12, -2, -8, 25], [20, 23, -12, -3, -7, 24], [24, 25, -11, -4, -2, 6], [24, 25, -10, -5, 13, 21]];   // 어깨보다 넓은 납작한 더미 + 위에 몇 덩이
+  for (const [y0, y1, x0, x1, z0, z1] of layers) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) t.set(x, y, z, brickC(x, y, z));
+  for (const [y0, y1, x0, x1, z0, z1] of layers) for (let x = x0 + 1; x < x1; x += 2) for (let z = z0 + 1; z < z1; z += 3) if (t.get(x, y1 + 1, z) < 0) t.set(x, y1, z, 0x4a1a12);   // 윗면 구멍
   // 팔: 흰 반팔 + 맨 팔뚝 + 손목 붕대
   const mkArm = front => armShape(ARM_N, (rg, x, y, z) => {
     if (rg === 'sh' || (rg === 'bic' && y >= 10)) return y === 10 ? shade(TEE, .85) : tone(TEE, .2, .1)(x, y, z);
@@ -256,9 +268,9 @@ function shielder(r) {
   ell(s, 12, 8.6, 8.5, 6.6, 5.4, 7.2, (x, y, z) => (y === 9 && x >= 16) ? shade(BAN, .82) : BT(x, y, z), (x, y) => y >= 9);
   for (let z = 2; z <= 15; z++) for (let y = 7; y <= 8; y++) if (s.get(18, y, z) < 0 && s.get(17, y, z) >= 0 && y === 8) s.set(18, y, z, shade(BAN, .9));
   s.fill(4, 9, 7, 5, 11, 10, shade(BAN, .78)); s.set(4, 10, 8, shade(BAN, .65));                        // 매듭
-  const tail = (z0, y0, dy) => { for (let i = 0; i <= 7; i++) { const x = 3 - i, y = Math.round(y0 - i * dy + (i % 3 === 1 ? .7 : 0)); g2(x, y, z0 + (i >= 4 ? 1 : 0)); } };
+  const tail = (z0, y0, dy) => { for (let i = 0; i <= 4; i++) { const x = 3 - i, y = Math.round(y0 - i * dy + (i % 3 === 1 ? .7 : 0)); g2(x, y, z0 + (i >= 4 ? 1 : 0)); } };
   const g2 = (x, y, z) => { s.set(x, y, z, BT(x, y, z)); s.set(x, y - 1, z, shade(BAN, .78)); s.set(x, y, z + 1, BT(x, y, z + 1)); };
-  tail(6, 11, .25); tail(10, 10, .6);
+  tail(6, 10, 1.1); tail(10, 10, 1.5);   // 짧게 아래로 늘어짐
   // 몸통: 올리브 민소매(겨드랑이가 깊게 파임), 굵은 맨 어깨
   const T = { X: 10, TH: 9, D: 18 }; const tg = torsoGrid(T); const t = tg.s;
   torsoShape(t, T, (rg, x, y, z) => {
@@ -294,12 +306,12 @@ function shielder(r) {
 // 5) 폭주족 — 불꽃 무늬 광택 빨강 풀페이스 헬멧 + 어깨 가시 가죽 조끼 + 문신 맨팔
 // =====================================================================================
 function biker(r) {
-  const skin = SK.tan, HEL = 0xa82820, LEA = 0x242020, LT = tone(LEA, .3, .14), TANK = 0xbdb4a2, TAT = 0x2a2226;
+  const skin = SK.tan, HEL = desat(0xa82820, .2), LEA = 0x242020, LT = tone(LEA, .3, .14), TANK = 0xbdb4a2, TAT = 0x2a2226;
   const hd = headGrid(); const s = hd.s;
   // 헬멧: 머리보다 큰 둥근 공 + 검은 바이저 + 턱 환기구 + 옆 볼트 + 불꽃
   const flame = (x, y, z) => {          // 옆면 불꽃: 뒤쪽 아래에서 앞쪽으로 혀처럼 뻗음
-    if (x > 13 || x < 3 || y < 3 || y > 14) return 0;
-    const d = ((y + x * .7) % 4.4 + 4.4) % 4.4, len = 13 - Math.floor((y + x * .7) / 4.4) * 2;   // 뒤에서 앞으로 뻗는 불꽃 혀
+    if (x > 9 || x < 2 || y < 3 || y > 14) return 0;
+    const d = ((y + x * .7) % 4.4 + 4.4) % 4.4, len = 9 - Math.floor((y + x * .7) / 4.4) * 1.5;   // 뒤에서 앞으로 뻗는 불꽃 혀
     if (x > len) return 0;
     return d < .9 && x < len - 2 ? 2 : d < 2.1 ? 1 : 0;
   };
@@ -309,10 +321,14 @@ function biker(r) {
     if (f === 2) return 0xe8b030; if (f === 1) return 0xd8661c;
     return y >= 13 && x >= 12 && Math.abs(z - 8.5) < 3 ? shade(HEL, 1.35) : pick(x, y, z, HEL, shade(HEL, .85), shade(HEL, 1.15), .2, .1);
   });
-  for (let y = 4; y <= 9; y++) for (let z = 2; z <= 15; z++) for (let x = 15; x <= 21; x++) {           // 바이저
-    if (s.get(x, y, z) >= 0 && s.get(x + 1, y, z) < 0) s.set(x, y, z, y === 8 && z >= 4 && z <= 7 ? 0x5a5e66 : y === 9 ? 0x101012 : 0x18181c);
+  // 바이저: 앞에서 옆까지 감싸는 검은 띠 (3/4 시점에서도 보이게)
+  const surf = (x, y, z) => s.get(x + 1, y, z) < 0 || s.get(x - 1, y, z) < 0 || s.get(x, y, z + 1) < 0 || s.get(x, y, z - 1) < 0 || s.get(x, y + 1, z) < 0;
+  for (let y = 4; y <= 9; y++) for (let z = -1; z <= 18; z++) for (let x = 9; x <= 21; x++) {
+    if (s.get(x, y, z) < 0 || !surf(x, y, z)) continue;
+    if (x >= 15 || ((z <= 3 || z >= 14) && x >= 10)) s.set(x, y, z, y === 8 && (x + z) % 5 === 0 ? 0x5a5e66 : y === 9 || y === 4 ? 0x0e0e10 : 0x1c1c22);
   }
-  for (let z = 5; z <= 12; z++) for (let y = 0; y <= 2; y++) { let fx = -1; for (let x = 21; x >= 10; x--) if (s.get(x, y, z) >= 0) { fx = x; break; } if (fx > 0 && (z % 2 === 0)) s.set(fx, y, z, 0x1a1a1a); }   // 턱 환기구
+  // 턱 가리개: 앞으로 한 칸 튀어나온 턱 + 환기구
+  for (let y = 0; y <= 3; y++) for (let z = 4; z <= 13; z++) { let fx = -1; for (let x = 21; x >= 10; x--) if (s.get(x, y, z) >= 0) { fx = x; break; } if (fx > 0) { s.set(fx + 1, y, z, y === 3 ? shade(HEL, .7) : (y === 1 && z % 2 === 0 && z > 4 && z < 13) ? 0x1a1a1a : pick(fx, y, z, HEL, shade(HEL, .86), shade(HEL, 1.1))); } }
   for (const z of [-1, 18]) { s.fill(11, 6, z, 13, 8, z, 0x6a6a6e); s.set(12, 7, z, STUD); }
   // 몸통: 징·가시 박힌 가죽 조끼 + 흰 러닝 + 체인 목걸이
   const T = { X: 10, TH: 9, D: 18 }; const tg = torsoGrid(T); const t = tg.s;
@@ -353,7 +369,7 @@ function biker(r) {
 // 6) 그림자 닌자 — 검은 두건·복면 + 뒤로 길게 날리는 빨간 머리띠 꼬리 + 등에 멘 칼집 + 빨간 허리띠
 // =====================================================================================
 function ninja(r) {
-  const skin = SK.tan, CL = 0x262224, CT = tone(CL, .3, .16, .8, 1.25), RED = 0x9a1c1c, RT = tone(RED, .26, .12);
+  const skin = SK.tan, CL = 0x3a3638, CT = tone(CL, .3, .16, .8, 1.22), RED = desat(0x9a1c1c, .18), RT = tone(RED, .26, .12);
   const hd = headGrid(34, 30, 28, 12, 5); const s = hd.s;
   faceBase(s, { skin, mouth: 'none', nose: false, brow: 0x140c08, stub: 0, ears: false });
   // 두건: 머리를 감싸고 눈만 드러남 (복면은 코까지)
@@ -410,52 +426,61 @@ function ninja(r) {
 // 7) 폭죽 꼬마 — 도화선 붙은 둥근 폭탄 헬멧(해골·귀마개) + 미친 웃음 + 줄무늬 티 + 빨간 운동화
 // =====================================================================================
 function bomber(r) {
-  const skin = SK.kid, HEL = 0x2e2c2c, HT = tone(HEL, .28, .14, .8, 1.3), RED = 0xa8302a, WH = 0xd8d0c0;
+  const skin = SK.kid, HEL = 0x2e2c2e, RED = desat(0xa8302a, .2), WH = 0xd8d0c0;
+  const HT = (x, y, z) => pick(x, y, z, HEL, shade(HEL, .92), shade(HEL, 1.08), .12, .05);   // 매끈한 쇠 껍데기 (얼룩 적게)
   const hd = headGrid(); const s = hd.s;
-  faceBase(s, { skin, mouth: 'grin', brow: 0x3a2214, wild: true, eyeH: 3, eyeY: 4, angry: true, top: 9 });
+  faceBase(s, { skin, mouth: 'grin', brow: 0x3a2214, wild: true, eyeH: 3, eyeY: 4, angry: true, top: 9, jaw: true });
   s.set(17, 2, 3, 0xd88a6a); s.set(17, 3, 14, 0xd88a6a); s.set(16, 5, 15, 0xd88a6a);                       // 볼 상처
   s.fill(17, 4, 13, 17, 4, 14, 0xd8ccb0); s.set(17, 5, 14, 0xc0b498);                                       // 반창고
-  // 폭탄 헬멧: 큰 공 (눈썹 위까지 덮음) + 테두리 + 귀마개 + 해골 + 도화선
-  ell(s, 11.6, 10.0, 8.5, 9.4, 9.8, 10.2, HT, (x, y) => y >= 8 && !(x >= 17 && y <= 8));
-  for (let x = 2; x <= 21; x++) for (let z = -1; z <= 18; z++) if (s.get(x, 8, z) >= 0 && s.get(x, 7, z) < 0 && (x <= 16 || z <= 2 || z >= 15)) s.set(x, 8, z, shade(HEL, 1.4));
-  for (let z = 3; z <= 14; z++) s.set(19, 8, z, shade(HEL, 1.4));
-  for (const z of [-2, 19]) { ell(s, 11.5, 6, z + .5, 2.8, 2.8, 1.2, (x, y) => (x + y) % 3 ? 0x6a6a6e : 0x8a8a8e); s.set(11, 6, z + (z < 0 ? -1 : 1), STUD); }
-  for (const z of [-1, 18]) stamp(s, ['.###.', '#.#.#', '#####', '.#.#.'], 8, 16, z, 'z', 0xd8d0c0);        // 해골
-  
-  s.fill(10, 19, 7, 13, 20, 10, 0x5a5a5e); s.fill(11, 21, 8, 12, 21, 9, 0x6a6a6e);                       // 도화선 꽂이
-  line(s, 12, 22, 9, 10, 25, 9, 0x8a6a3a); s.set(9, 26, 9, 0x8a6a3a);
-  for (const [x, y, z, c] of [[9, 27, 9, 0xffd040], [8, 27, 9, 0xff8a1f], [10, 28, 9, 0xffe060], [9, 28, 10, 0xff6a1a], [8, 28, 8, 0xffd040], [10, 27, 10, 0xff8a1f], [9, 29, 9, 0xfff0a0], [7, 26, 9, 0xff6a1a]]) s.set(x, y, z, c);
-  // 몸통(작음): 빨강·흰 줄무늬 티 + 가방 끈 + 허리띠
-  const T = { X: 9, TH: 7, D: 16, inset: y => y <= 1 ? 2 : y <= 3 ? 1 : 0, trap: 1, chestY: [4, 5] };
+  // 폭탄 헬멧: 머리보다 훨씬 큰 매끈한 공 + 밝은 반사 + 테두리 + 귀마개 + 앞이마 해골 + 도화선
+  ell(s, 11.6, 10.4, 8.5, 9.8, 10.2, 10.6, HT, (x, y) => y >= 8 && !(x >= 17 && y <= 8));
+  ell(s, 15.5, 15.5, 6.5, 2.6, 2.2, 2.4, () => 0x6a686c, (x, y, z) => s.get(x, y, z) >= 0 && (s.get(x + 1, y, z) < 0 || s.get(x, y + 1, z) < 0));   // 반사광
+  for (let x = 1; x <= 22; x++) for (let z = -2; z <= 19; z++) if (s.get(x, 8, z) >= 0 && s.get(x, 7, z) < 0 && (x <= 16 || z <= 2 || z >= 15)) s.set(x, 8, z, 0x4a484c);
+  for (let z = 3; z <= 14; z++) { s.set(19, 8, z, 0x4a484c); s.set(20, 8, z, 0x3a383c); }                  // 이마 위 테
+  for (const z of [-3, 20]) { ell(s, 11.5, 6, z + .5, 3.0, 3.0, 1.3, (x, y) => (x + y) % 3 ? 0x6a6a6e : 0x8a8a8e); s.set(11, 6, z + (z < 0 ? -1 : 1), STUD); }
+  // 해골: 헬멧 앞면(이마 위)에 — 앞에서 보이는 가장 바깥 복셀에 칠함
+  const SKULL = ['.#####.', '#######', '#..#..#', '#######', '.##.##.', '..###..', '..#.#..'];
+  SKULL.forEach((row, rr) => [...row].forEach((ch, i) => {
+    const y = 17 - rr, z = 5 + i; let fx = -1; for (let x = 23; x >= 10; x--) if (s.get(x, y, z) >= 0) { fx = x; break; }
+    if (fx > 0) s.set(fx, y, z, ch === '#' ? 0xd8d0c0 : 0x141414);
+  }));
+  s.fill(10, 20, 7, 13, 21, 10, 0x5a5a5e); s.fill(11, 22, 8, 12, 22, 9, 0x6a6a6e);                       // 도화선 꽂이
+  line(s, 12, 23, 9, 10, 26, 9, 0x8a6a3a); s.set(9, 27, 9, 0x8a6a3a);
+  for (const [x, y, z, c] of [[9, 28, 9, 0xffd040], [8, 28, 9, 0xff8a1f], [10, 29, 9, 0xffe060], [9, 29, 10, 0xff6a1a], [8, 29, 8, 0xffd040], [10, 28, 10, 0xff8a1f], [9, 30, 9, 0xfff0a0], [7, 27, 9, 0xff6a1a]]) s.set(x, y, z, c);
+  // 몸통: 넓고 통통한 꼬마 몸 (볼록한 배) — 빨강·흰 줄무늬 티 + 가방 끈 + 허리띠
+  const T = { X: 11, TH: 8, D: 20, inset: y => y <= 1 ? 2 : y <= 2 ? 1 : 0, trap: 2, chestY: [4, 6], belly: [1, 5, 1] };
   const tg = torsoGrid(T); const t = tg.s;
   torsoShape(t, T, (rg, x, y, z) => {
-    if (rg === 'belt' && y === 0) return z >= 7 && z <= 8 && x >= 7 ? STUD : 0x4a3424;
-    return grime(x, y, z, (y % 2 ? RED : WH), 0x8a7a6a, .07);
+    if (rg === 'belt' && y === 0) return z >= 9 && z <= 10 && x >= 9 ? STUD : 0x4a3424;
+    if (rg === 'trap') return skinT(skin)(x, y, z);
+    return grime(x, y, z, ((y >> 0) % 2 ? RED : WH), 0x8a7a6a, .07);
   });
-  line(t, 10, 6, 3, 10, 1, 12, 0x6a4a2a); line(t, -1, 6, 12, -1, 1, 3, 0x6a4a2a);
-  rbox(t, 9, -2, 11, 10, 1, 14, tone(0x7a5432), 1); t.set(10, 0, 12, STUD_D);                             // 작은 가방
-  for (let y = -2; y <= 1; y++) for (let x = 1; x <= 3; x++) t.set(x, y, -1, [0xa8302a, 0xc84a3a, 0x8a2622][(x + y + 3) % 3]);   // 옆에 찬 폭죽 다발
-  // 팔: 줄무늬 반팔 + 짧고 통통한 팔 + 붕대 + 동그란 주먹
-  const AP = { W: 8, D: 8, AH: 12, f1: 3, w1: 4, fo1: 6, b1: 8 };
+  line(t, 12, 7, 3, 12, 1, 15, 0x6a4a2a); line(t, 11, 7, 3, 11, 1, 15, 0x5a3a20); line(t, -1, 7, 16, -1, 1, 3, 0x6a4a2a);
+  rbox(t, 10, -2, 13, 12, 1, 17, tone(0x7a5432), 1); t.set(12, 0, 15, STUD_D);                            // 작은 가방
+  for (let y = -2; y <= 1; y++) for (let x = 1; x <= 4; x++) t.set(x, y, -1, [0xa8302a, 0xc84a3a, 0x8a2622][(x + y + 3) % 3]);   // 옆에 찬 폭죽 다발
+  // 팔: 줄무늬 반팔 + 짧고 굵은 팔 + 붕대 + 큰 주먹
+  const AP = { W: 9, D: 9, AH: 13, f1: 4, w1: 5, fo1: 8, b1: 10 };
   const mkArm = front => armShape(AP, (rg, x, y, z) => {
-    if (rg === 'sh' || (rg === 'bic' && y >= 8)) return y % 2 ? RED : WH;
-    if (rg === 'wrist' || (rg === 'fore' && y === 5)) return (x + y + z) % 3 ? 0xd8ccb0 : 0xb8ac94;
+    if (rg === 'sh' || (rg === 'bic' && y >= 10)) return y % 2 ? RED : WH;
+    if (rg === 'wrist' || (rg === 'fore' && y === 6)) return (x + y + z) % 3 ? 0xd8ccb0 : 0xb8ac94;
     return skinT(skin)(x, y, z);
   }, front);
   const armF = mkArm(true), armB = mkArm(false);
-  // 다리: 청반바지 + 맨무릎(반창고) + 빨간 줄 양말 + 큰 빨간 운동화
-  const LP = { Wx: 12, D: 8, LH: 13, boot1: 4, toe: 11, px0: 1, px1: 8 };
+  // 다리: 굵고 짧은 다리 — 청반바지 + 맨무릎(반창고) + 빨간 줄 양말 + 큰 빨간 운동화
+  const LP = { Wx: 13, D: 10, LH: 12, boot1: 4, toe: 12, px0: 1, px1: 9 };
   const DEN = 0x3e4a66;
   const leg = legShape(LP, (rg, x, y, z) => {
-    if (rg === 'pant') return y >= 9 ? tone(DEN, .3, .16)(x, y, z) : y <= 6 ? (y === 6 ? RED : WH) : skinT(skin)(x, y, z);
+    if (rg === 'pant') return y >= 8 ? tone(DEN, .3, .16)(x, y, z) : y <= 6 ? (y === 6 ? RED : WH) : skinT(skin)(x, y, z);
     if (rg === 'sole') return 0xd8d0c0;
     return tone(RED, .22, .12)(x, y, z);
   });
-  for (let z = 0; z < 8; z++) for (let x = 0; x <= 9; x++) if (leg.get(x, 9, z) >= 0 && hash3(x, 9, z) < .5) leg.set(x, 9, z, THREAD);   // 해진 밑단
-  for (let z = 0; z < 8; z++) for (let x = 7; x < 12; x++) { recolor(leg, x, 2, z, WH); }                  // 흰 앞코
+  for (let z = 0; z < 10; z++) for (let x = 0; x <= 10; x++) if (leg.get(x, 8, z) >= 0 && hash3(x, 8, z) < .5) leg.set(x, 8, z, THREAD);   // 해진 밑단
+  for (let y = 8; y <= 11; y++) for (let z = 0; z < 10; z++) for (const x of [0, 10]) if (leg.get(x === 0 ? 1 : 9, y, z) >= 0) leg.set(x, y, z, tone(DEN, .3, .16)(x, y, z));   // 통 넓은 반바지
+  for (let z = 0; z < 10; z++) for (let x = 8; x < 13; x++) { recolor(leg, x, 2, z, WH); }                  // 흰 앞코
   bootDeco(leg, LP, { lace: WH });
-  leg.fill(8, 7, 3, 8, 7, 4, 0xd8ccb0);
-  return assemble(r, { THn: 7, AU: 5, AL: 7, LU: 6, LL: 7, shZ: 10, hipZ: 0.17, shUp: 2, head: hd, torso: tg, armF, armB, leg, legO: [5, 4] });
+  leg.fill(9, 7, 4, 9, 7, 5, 0xd8ccb0);
+  return assemble(r, { THn: 8, AU: 5, AL: 8, LU: 5, LL: 7, shZ: 12.5, hipZ: 0.22, shUp: 2, head: hd, torso: tg, armF, armB, leg, legO: [5.5, 5],
+    opts: { brawl: { arm: .15, hand: .75, leg: .22 }, armSpread: .4, legSpread: .14 } });
 }
 
 // =====================================================================================
@@ -466,8 +491,12 @@ function brute(r) {
   const hd = headGrid(); const s = hd.s;
   faceBase(s, { skin, mouth: 'snarl', brow: 0x140c08, thickBrow: true, stub: 0x6a4a34, cranium: 3.2, earring: STUD, jaw: true, scalp: (x, y, z) => Math.abs(z - 8.5) < 2.5 ? 0x2a1e18 : shade(SK.tan, hash3(x, y, z) < .4 ? .82 : .9) });
   s.set(17, 7, 4, 0xe0a888); s.set(17, 8, 5, 0xe0a888); s.set(17, 6, 4, 0xe0a888);                       // 흉터
-  // 모히칸: 앞이 높은 검은 가시 다발
-  mohawk(s, { n: 9, x0: 4, x1: 17, base: 11, spread: .35, mid: .4, len: t => 5 + t * 4, c: 0x221a16, cd: 0x2e2420, cl: 0x141010 });
+  // 무거운 턱·광대·눈두덩: 턱이 옆과 앞으로 튀어나오고 이마뼈가 눈을 덮음
+  for (let y = 0; y <= 3; y++) for (let x = 9; x <= 16; x++) for (const z of [1, 2, 15, 16]) if (!(y === 3 && (z === 1 || z === 16))) s.set(x, y, z, hash3(x, y, z) < .6 ? 0x7a5a40 : shade(SK.tan, .86));
+  for (let z = 4; z <= 13; z++) { s.set(18, 0, z, hash3(z, 0, 18) < .6 ? 0x7a5a40 : shade(SK.tan, .9)); s.set(17, 0, z, shade(SK.tan, .86)); }
+  for (let z = 2; z <= 15; z++) { s.set(18, 7, z, shade(SK.tan, .9)); s.set(19, 6, z, z <= 7 || z >= 10 ? 0x140c08 : shade(SK.tan, .82)); }
+  // 모히칸: 앞이 높은 검은 가시 다발 (머리 반 높이)
+  mohawk(s, { n: 9, x0: 4, x1: 17, base: 11, spread: .35, mid: .4, len: t => 8 + t * 3, c: 0x221a16, cd: 0x2e2420, cl: 0x141010 });
   // 몸통 (큰 체형): 구멍 나고 얼룩진 흰 러닝 + 맨어깨 + 체인 허리띠
   const tg = torsoGrid(TOR_B); const t = tg.s;
   torsoShape(t, TOR_B, (rg, x, y, z) => {
@@ -503,16 +532,22 @@ function brute(r) {
 // 9) 철거반장 굴삭 (보스, 큰 체형) — 전등 달린 노란 안전모 + 큰 콧수염 + 형광 조끼 + 배불뚝이 + 노란 장갑 + 공구 허리띠
 // =====================================================================================
 function boss(r) {
-  const skin = SK.ruddy, HAT = 0xc8a024, VEST = 0xc8601c, REF = 0xb4b2a8, UNDER = 0xcac2ac, PANT = 0x34405e, GLV = 0xc09a2c;
+  const skin = SK.ruddy, HAT = desat(0xc8a024, .22), VEST = desat(0xc8601c, .2), REF = 0xb4b2a8, UNDER = 0xcac2ac, PANT = 0x34405e, GLV = desat(0xc09a2c, .22);
   const hd = headGrid(); const s = hd.s;
   faceBase(s, { skin, stache: 0x5a3418, bushy: true, mouth: 'none', brow: 0x3a2214, thickBrow: true, bigNose: true, noseC: 0xc0604e, stub: 0x8a6a54, beardH: 1, jaw: true });
-  // 안전모: 둥근 정수리 + 사방 챙 + 가운데 골 + 이마 전등
-  ell(s, 12, 9.4, 8.5, 6.6, 7.2, 7.4, (x, y, z) => grime(x, y, z, pick(x, y, z, HAT, shade(HAT, .86), shade(HAT, 1.12)), 0x8a6a2a, .1), (x, y) => y >= 10);
-  for (let x = 3; x <= 21; x++) for (let z = -1; z <= 18; z++) if (((x - 12) / 9.2) ** 2 + ((z + .5 - 9) / 9.6) ** 2 <= 1) { s.set(x, 9, z, shade(HAT, .82)); if (s.get(x, 10, z) < 0 && ((x - 12) / 9.2) ** 2 + ((z + .5 - 9) / 9.6) ** 2 > .8) s.set(x, 10, z, shade(HAT, .9)); }
-  for (let x = 5; x <= 18; x++) recolor(s, x, 17, 8, shade(HAT, 1.2)), recolor(s, x, 16, 9, shade(HAT, 1.2));
-  s.fill(18, 11, 7, 19, 13, 10, 0x4a4a4e); s.fill(20, 11, 7, 20, 13, 10, 0x3a3a3e); s.fill(20, 12, 8, 20, 12, 9, 0xf0e8b0); s.fill(20, 11, 8, 20, 11, 9, 0xd8d0a0);
+  // 안전모: 높은 돔 + 앞뒤로 지나는 가운데 돋은 줄 + 짧은 챙(앞만 조금 길게) + 이마 전등
+  const hatC = (x, y, z) => grime(x, y, z, pick(x, y, z, HAT, shade(HAT, .93), shade(HAT, 1.07), .14, .06), 0x7a6a3a, .06);
+  ell(s, 12, 10, 8.5, 7.0, 7.6, 7.6, hatC, (x, y) => y >= 10);
+  for (let x = 4; x <= 20; x++) for (const z of [8, 9]) { let top = -1; for (let y = 25; y >= 10; y--) if (s.get(x, y, z) >= 0) { top = y; break; } if (top > 10) s.set(x, top + 1, z, shade(HAT, 1.1)); }   // 가운데 돋은 줄
+  for (let x = 3; x <= 21; x++) for (let z = -1; z <= 18; z++) {                                            // 챙: 돔 둘레 한 칸, 앞은 세 칸
+    if (s.get(x, 10, z) >= 0) { s.set(x, 10, z, shade(HAT, .86)); continue; }
+    const near = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => s.get(x + a, 10, z + b) >= 0 && s.get(x + a, 11, z + b) >= 0);
+    if (near || (x >= 18 && x <= 21 && z >= 3 && z <= 14)) s.set(x, 10, z, x >= 20 ? shade(HAT, .78) : shade(HAT, .86));
+  }
+  for (let x = 18; x <= 21; x++) for (let z = 3; z <= 14; z++) if (s.get(x, 9, z) < 0) s.set(x, 9, z, 0x3a3020);   // 챙 밑 그늘
+  s.fill(18, 12, 7, 19, 15, 10, 0x4a4a4e); s.fill(20, 12, 7, 20, 15, 10, 0x3a3a3e); s.fill(20, 13, 8, 20, 14, 9, 0xf0e8b0); s.fill(19, 16, 8, 19, 16, 9, 0x3a3a3e);   // 전등
   // 몸통 (큰 체형 + 배): 흰 속셔츠 + 열린 형광 주황 조끼(반사띠) + 공구 허리띠
-  const T = { ...TOR_B, belly: [1, 8, 3] }; const tg = torsoGrid(T); const t = tg.s;
+  const T = { ...TOR_B, belly: [0, 9, 5] }; const tg = torsoGrid(T); const t = tg.s;   // 배불뚝이
   const VT = tone(VEST, .26, .14);
   torsoShape(t, T, (rg, x, y, z) => {
     if (rg === 'belt') return z >= 10 && z <= 11 && x >= 10 ? STUD : tone(0x4a3020)(x, y, z);
@@ -558,7 +593,7 @@ function cyborg(r) {
   for (const [x, y, z] of [[17, 9, 3], [17, 1, 3], [15, 11, 2], [10, 9, 1], [17, 9, 7]]) s.set(x, y, z, STUD);
   s.fill(17, 4, 4, 17, 5, 6, 0x3a0a0a); s.fill(18, 4, 5, 18, 5, 5, 0xff3018); s.set(18, 5, 6, 0xff7050); s.set(18, 4, 4, 0xc81810); s.set(19, 4, 5, 0xff5030);
   // 모히칸: 부채처럼 펼쳐진 아주 높은 붉은 가시 (보스 실루엣의 핵심)
-  mohawk(s, { n: 9, thin: .82, x0: 2, x1: 17, base: 11, spread: 1.6, mid: .5, len: t => 9 + Math.sin(t * Math.PI) * 6, c: 0xa82418, cd: 0x7a160e, cl: 0xd0402a });
+  mohawk(s, { n: 9, thin: .8, x0: 3, x1: 17, base: 11, spread: .5, mid: .5, len: t => 8 + Math.sin(t * Math.PI) * 4, c: desat(0xa82418, .22), cd: desat(0x7a160e, .2), cl: desat(0xc8402a, .22) });   // 머리 하나 높이, 좁게 (피와 겹치지 않게 채도 낮춤)
   // 몸통: 가시 박힌 검은 가죽 조끼(앞이 열려 복근이 보임) + 해골 장식 + 가슴 체인
   const tg = torsoGrid(TOR_B); const t = tg.s;
   torsoShape(t, TOR_B, (rg, x, y, z) => {
@@ -591,7 +626,7 @@ function cyborg(r) {
   for (const y of [13, 17]) for (let z = 0; z < 11; z += 10) recolor(leg, 6, y, z, STUD);
   bootDeco(leg, LEG_B, { collar: 0x3a3e42, buckle: 0x2a2a2e });
   rip(leg, 11, 11, 12, 3, 6, skin);
-  return assemble(r, { ...BIG, head: hd, torso: tg, armF: mech, armB, leg, legO: [6.5, 5.5] });
+  return assemble(r, { ...BIG, head: hd, torso: tg, armF: mech, armB, leg, legO: [6.5, 5.5], opts: { brawl: { arm: .15, hand: .75, leg: .24, grip: -.75 } } });   // 전기톱은 허리 높이에서 앞으로 (바닥에 묻히지 않게)
 }
 
 // =====================================================================================
@@ -599,35 +634,36 @@ function cyborg(r) {
 // =====================================================================================
 function robot(r, k) {
   const C = {
-    bot:  { body: 0xb4b0aa, acc: 0xa82a22, joint: 0x4a4a4c, visor: 0x30e0f0, big: false },
-    tank: { body: 0x4c5670, acc: 0xc8a020, joint: 0x2e3238, visor: 0x60f040, big: true },
-    atk:  { body: 0xc8c4bc, acc: 0xb02a22, joint: 0x3e3e42, visor: 0xff3020, big: false },
+    bot:  { body: 0xb4b0aa, acc: desat(0xa82a22, .2), joint: 0x4a4a4c, visor: 0x30e0f0, big: false },
+    tank: { body: 0x4c5670, acc: desat(0xc8a020, .22), joint: 0x2e3238, visor: 0x60f040, big: true },
+    atk:  { body: 0xc8c4bc, acc: desat(0xb02a22, .2), joint: 0x3e3e42, visor: 0xff3020, big: false },
   }[k];
   const BT = (x, y, z) => grime(x, y, z, pick(x, y, z, C.body, shade(C.body, .88), shade(C.body, 1.08), .22, .1), hash3(x, z, y) < .5 ? RUST : RUST_D, .07, 21);
   const AT = (x, y, z) => grime(x, y, z, pick(x, y, z, C.acc, shade(C.acc, .86), shade(C.acc, 1.1), .2, .1), RUST, .06, 23);
   const JT = tone(C.joint, .2, .1);
   const hazard = (a, b) => ((a + b) >> 1) % 2 ? C.acc : 0x2a2a2c;
+  // 볼트는 보통 체형보다 작게 (키 약 0.75배) — 게임 배율은 config 그대로
   // 머리: 각진 상자 + 이마 이음선 + 빛나는 두 눈 + 입 그릴 + 귀 원판 + 안테나
   const hd = headGrid(); const s = hd.s;
-  const hz0 = k === 'tank' ? 3 : 2, hz1 = k === 'tank' ? 14 : 15, hy1 = k === 'tank' ? 10 : 12;
-  rbox(s, 6, 1, hz0, 17, hy1, hz1, BT, 1);
+  const hz0 = k === 'tank' ? 4 : 3, hz1 = k === 'tank' ? 13 : 14, hy1 = k === 'tank' ? 9 : 10;
+  rbox(s, 7, 1, hz0, 17, hy1, hz1, BT, 1);
   rbox(s, 9, 0, hz0 + 2, 15, 0, hz1 - 2, JT, 0);                                                         // 목
   for (let z = hz0; z <= hz1; z++) recolor(s, 17, hy1 - 2, z, shade(C.body, .72));
   for (let x = 7; x <= 17; x++) { recolor(s, x, hy1 - 2, hz0, shade(C.body, .72)); recolor(s, x, hy1 - 2, hz1, shade(C.body, .72)); }
-  const ey = k === 'tank' ? 5 : 6;
-  for (const z0 of [4, 11]) { s.fill(18, ey, z0, 18, ey + 1, z0 + 2, C.visor); s.set(18, ey + 1, z0, shade(C.visor, 1.3)); s.fill(17, ey - 1, z0 - 1, 17, ey + 2, z0 + 3, 0x141416); }
+  const ey = k === 'tank' ? 4 : 5;
+  for (const z0 of [k === 'tank' ? 5 : 4, k === 'tank' ? 10 : 11]) { s.fill(18, ey, z0, 18, ey + 1, z0 + 2, C.visor); s.set(18, ey + 1, z0, shade(C.visor, 1.3)); s.fill(17, ey - 1, z0 - 1, 17, ey + 2, z0 + 3, 0x141416); }
   for (let z = 6; z <= 11; z++) { s.set(18, 2, z, z % 2 ? 0x2a2a2c : 0xc89a2a); s.set(18, 3, z, 0x2a2a2c); }   // 입 그릴(노란 불빛)
   for (const z of [hz0 - 1, hz1 + 1]) { rbox(s, 10, 4, z, 14, 8, z, (x, y) => (x === 12 && y === 6) ? C.acc : JT(x, y, z), 1); }
-  s.fill(9, hy1 + 1, hz1 - 1, 10, hy1 + 2, hz1, JT(0, 0, 0)); s.fill(9, hy1 + 3, hz1 - 1, 9, hy1 + 7, hz1 - 1, 0x6a6a6e);
-  s.fill(9, hy1 + 8, hz1 - 1, 9, hy1 + 8, hz1 - 1, k === 'tank' ? 0xf0a020 : 0xff3020);
+  s.fill(9, hy1 + 1, hz1 - 1, 10, hy1 + 2, hz1, JT(0, 0, 0)); s.fill(9, hy1 + 3, hz1 - 1, 9, hy1 + 5, hz1 - 1, 0x6a6a6e);
+  s.fill(9, hy1 + 6, hz1 - 1, 9, hy1 + 6, hz1 - 1, k === 'tank' ? 0xf0a020 : 0xff3020);
   for (const [x, y, z] of [[17, hy1, hz0], [17, hy1, hz1], [17, 1, hz0], [17, 1, hz1]]) s.set(x, y, z, STUD_D);
   if (k === 'atk') for (let x = 8; x <= 16; x++) s.set(x, hy1 + 1, 8 + (x % 2), C.acc);                     // 공격형: 머리 위 붉은 볏
   // 몸통
-  const T = C.big ? { X: 12, TH: 11, D: 22, inset: y => y <= 2 ? 3 : y <= 4 ? 1 : 0, chestY: [5, 9] } : { X: 10, TH: 9, D: 18, inset: y => y <= 2 ? 3 : y <= 3 ? 1 : 0 };
+  const T = C.big ? { X: 12, TH: 9, D: 20, inset: y => y <= 1 ? 3 : y <= 3 ? 1 : 0, chestY: [4, 7] } : { X: 9, TH: 8, D: 16, inset: y => y <= 1 ? 3 : y <= 2 ? 1 : 0, chestY: [4, 6] };
   const tg = torsoGrid(T); const t = tg.s, X = T.X, D = T.D, TH = T.TH;
   torsoShape(t, T, (rg, x, y, z) => {
     if (rg === 'belt') return y === 0 ? JT(x, y, z) : (x >= X - 1 && Math.abs(z - D / 2 + .5) < 2 ? 0xc89a2a : JT(x, y, z));
-    if (k === 'tank' && (rg === 'chest' || x === X - 1) && y >= 5 && y <= 8 && z >= 4 && z <= D - 5) return hazard(y, z);
+    if (k === 'tank' && (rg === 'chest' || x === X - 1) && y >= 4 && y <= 7 && z >= 4 && z <= D - 5) return hazard(y, z);
     if (k !== 'tank' && (rg === 'chest' || x >= X - 1) && ((z >= D / 2 - 1 && z <= D / 2) || (y >= TH - 2 && z >= 5 && z <= D - 6))) return AT(x, y, z);   // 가슴의 붉은 T자
     if (y === 3 && rg !== 'trap') return shade(C.body, .7);
     return BT(x, y, z);
@@ -637,7 +673,7 @@ function robot(r, k) {
   rbox(t, -3, 2, 4, -1, TH - 1, D - 5, BT, 1);                                                             // 등 배터리
   for (let y = 3; y <= TH - 2; y += 2) for (let z = 5; z <= D - 6; z++) t.set(-4, y, z, shade(C.body, .7));
   // 어깨 덩어리 (팔 어깨 부분 = 각진 장갑판)
-  const AP = C.big ? { W: 13, D: 12, AH: 18, f1: 6, w1: 7, fo1: 10, b1: 13, foIn: 0, wIn: 2 } : { W: 9, D: 9, AH: 15, f1: 4, w1: 5, fo1: 8, b1: 10, foIn: 0, wIn: 2, padX: 4, padZ: 3 };
+  const AP = C.big ? { W: 12, D: 11, AH: 14, f1: 5, w1: 6, fo1: 8, b1: 10, foIn: 0, wIn: 2 } : { W: 8, D: 8, AH: 12, f1: 3, w1: 4, fo1: 6, b1: 8, foIn: 0, wIn: 2, padX: 2, padZ: 4, padY: k === 'atk' ? 7 : 0 };
   const mkArm = front => {
     const a = armShape(AP, (rg, x, y, z) => {
       if (rg === 'fist') return y === AP.f1 ? shade(C.body, .8) : BT(x, y, z);
@@ -651,29 +687,32 @@ function robot(r, k) {
     rbox(sb, 0, AP.AH - 4, -1, W - 1, AP.AH - 1, Dd, (x, y, z) => k === 'tank' && y >= AP.AH - 3 && (z === -1 || z === Dd || x === W) ? hazard(x + z, y) : k === 'tank' ? BT(x, y, z) : AT(x, y, z), 1);
     for (const [x, z] of [[1, -1], [W - 2, -1], [1, Dd], [W - 2, Dd]]) sb.set(x, AP.AH - 2, z, STUD_D);
     for (let z = 1; z < Dd - 1; z += 2) for (let y = 1; y < AP.f1; y++) mul(sb, W - 1, y, z, .7);        // 손가락 마디
-    if (k === 'atk') {                                                                                      // 팔뚝 칼날 지느러미: 손목에서 팔꿈치 뒤로 길게 뻗음
+    if (k === 'atk') {                                                                                      // 팔뚝 강철 칼날: 바깥쪽에서 주먹 밑으로 길게 뻗어 윤곽을 깸
       const oz = front ? Dd : -1, dz = front ? 1 : -1;
-      for (let y = 1; y <= AP.fo1 + 4; y++) {
-        const back = Math.round((y - 1) * .55), x0 = 2 - back, x1 = Math.min(6, x0 + 3 + (y < 4 ? y - 1 : 2));
-        for (let x = x0; x <= x1; x++) for (let j = 0; j < 2; j++) sb.set(x, y, oz + dz * j, x === x0 ? 0xdce0e4 : x === x0 + 1 ? 0xb0b4b8 : j ? shade(C.acc, .8) : AT(x, y, oz));
+      for (let y = -7; y <= AP.fo1 + 2; y++) {
+        const w = y < -3 ? Math.max(1, y + 8) : y > AP.fo1 ? AP.fo1 + 3 - y : 4;                           // 아래 끝은 뾰족, 위는 팔꿈치에서 줄어듦
+        const out = y < 0 ? Math.round(-y / 4) : 0;                                                          // 아래로 갈수록 바깥으로 벌어짐
+        for (let i = 0; i < w; i++) { const x = 6 - i; for (let j = 0; j < 2; j++) sb.set(x, y, oz + dz * (j + out), i === 0 ? 0xe8ecf0 : i === 1 ? 0xc4c8cc : y >= 1 && i === w - 1 ? shade(C.acc, .85) : pick(x, y, j, 0x9aa0a6, 0x8a9096, 0xaab0b6)); }
       }
+      for (let y = 1; y <= 3; y++) for (let x = 2; x <= 5; x++) sb.set(x, y, oz, shade(C.joint, 1.2));        // 칼날 받침
     }
     return a;
   };
   const armF = mkArm(true), armB = mkArm(false);
-  const LP = C.big ? { Wx: 15, D: 11, LH: 15, boot1: 5, toe: 14, px0: 1, px1: 11, sole: 1 } : { Wx: 13, D: 9, LH: 15, boot1: 4, toe: 12, px0: 1, px1: 9 };
+  const LP = C.big ? { Wx: 15, D: 11, LH: 13, boot1: 4, toe: 14, px0: 1, px1: 11, sole: 1 } : { Wx: 12, D: 8, LH: 12, boot1: 3, toe: 11, px0: 1, px1: 8 };
+  const KN = C.big ? 7 : 7;   // 무릎 줄
   const leg = legShape(LP, (rg, x, y, z) => {
     if (rg === 'sole') return 0x2a2a2c;
     if (rg === 'boot') return k === 'tank' ? BT(x, y, z) : AT(x, y, z);
-    if (y === 9 || y === 10) return JT(x, y, z);
-    if (x >= LP.px1 - 1 && y >= 8 && y <= 11) return k === 'tank' ? hazard(y, z) : AT(x, y, z);             // 무릎 보호대
+    if (y === KN || y === KN + 1) return JT(x, y, z);
+    if (x >= LP.px1 - 1 && y >= KN - 1 && y <= KN + 2) return k === 'tank' ? hazard(y, z) : AT(x, y, z);             // 무릎 보호대
     return BT(x, y, z);
   });
   for (let z = 1; z < LP.D - 1; z += 2) recolor(leg, 0, 0, z, 0x1a1a1a);
-  const half = C.big ? { LU: 7, LL: 8 } : { LU: 6, LL: 9 };
+  const half = C.big ? { LU: 6, LL: 7 } : { LU: 5, LL: 7 };
   return assemble(r, {
-    THn: TH, AU: C.big ? 8 : 7, AL: C.big ? 10 : 8, ...half,
-    shZ: C.big ? 13.5 : 11, hipZ: C.big ? .27 : .21, shUp: 2, head: hd, torso: tg, armF, armB, leg, legO: C.big ? [6.5, 5.5] : [5.5, 4.5],
+    THn: TH, AU: C.big ? 6 : 5, AL: C.big ? 8 : 7, ...half,
+    shZ: C.big ? 12.5 : 9.5, hipZ: C.big ? .24 : .18, shUp: 2, head: hd, torso: tg, armF, armB, leg, legO: C.big ? [6.5, 5.5] : [5, 4],
   });
 }
 

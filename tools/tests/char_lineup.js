@@ -91,6 +91,13 @@ const HQ = process.env.LQ ? false : true;
   await shot('lineup_big_front', { keys: BIGL, gap: 1.7, allBots: true, twist: -1.15 });
   await shot('lineup_big_side', { keys: BIGL, gap: 1.7, allBots: true, twist: 0.42 });
   await shot('lineup_bike', { keys: ['hero', 'biker', 'shield', 'ninja'], gap: 2.2, bike: true, zoom: 1.8 });
+  // 무기방 진열대의 무기들 (바닥에 놓인 무기 모델 확인)
+  await page.evaluate(async () => { const C = await import('/js/config.js'); C.CAMERA.zoom = 1.8; C.CAMERA.eye = [...window.__cam0.eye]; C.CAMERA.look = [...window.__cam0.look]; window.__camHold = 12; });
+  await page.waitForTimeout(HQ ? 2500 : 600);
+  await page.screenshot({ path: `${SP}/lineup_weapons.png` });
+  await page.evaluate(() => { window.__camHold = 21; });
+  await page.waitForTimeout(HQ ? 2500 : 600);
+  await page.screenshot({ path: `${SP}/lineup_weapons2.png` });
   console.log('errors', errs.length ? errs : 'none');
   await browser.close();
 })();

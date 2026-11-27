@@ -9,6 +9,8 @@ const WOUND = [0xc81e24, 0x9e1219, 0xe0382c, 0xb3161d];
 
 // ---------------------------------------------------------------- 색 도우미
 export const shade = (c, k) => { const r = Math.min(255, ((c >> 16) & 255) * k) | 0, gg = Math.min(255, ((c >> 8) & 255) * k) | 0, b = Math.min(255, (c & 255) * k) | 0; return (r << 16) | (gg << 8) | b; };
+// 채도 낮추기: k만큼 회색(밝기)으로 섞음 — 피가 아닌 빨강·노랑·주황은 15~25% 낮춰 피만 선명하게
+export const desat = (c, k = .2) => { const r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255, l = r * .3 + g * .59 + b * .11; const m = v => Math.round(v + (l - v) * k); return (m(r) << 16) | (m(g) << 8) | m(b); };
 // 재질 얼룩(색 세 단계) — 위치 해시로 고정
 export const pick = (x, y, z, a, b, c, pb = .22, pc = .14) => { const h = hash3(x * 3 + 11, y * 5 + 7, z * 7 + 3); return h < pc ? c : h < pc + pb ? b : a; };
 // 재질 함수: 기본색에서 어두운/밝은 얼룩을 섞음
@@ -83,7 +85,7 @@ export function faceBase(g, F) {
   // 수염 자국 (턱·아래 뺨)
   if (F.stub) for (let y = 0; y <= (F.beardH ?? 2); y++) for (let z = 3; z <= 14; z++) for (let x = 8; x <= 17; x++) if (g.get(x, y, z) >= 0 && (x === 17 || z <= 4 || z >= 13 || y === 0)) g.set(x, y, z, hash3(x, y, z) < .7 ? F.stub : sd);
   // 입
-  const M = F.mouthC ?? 0x3a1410, T = 0xe8e2d2, TD = 0xc8c0ae;
+  const M = F.mouthC ?? 0x2a1c14, T = 0xe8e2d2, TD = 0xc8c0ae;
   switch (F.mouth ?? 'grit') {
     case 'grit':     // 악문 이
       for (let z = 5; z <= 12; z++) { g.set(17, 1, z, M); g.set(17, 2, z, z % 2 ? T : TD); g.set(17, 3, z, M); }
@@ -166,8 +168,8 @@ export function torsoShape(g, P, paint) {
 // P: { W, D, AH, f1(주먹 윗줄), w1(손목 윗줄), fo1(팔뚝 윗줄), b1(이두 윗줄), foIn(팔뚝 안쪽 들임), foreBulge }
 export function armShape(P, paint, front) {
   const W = P.W ?? 9, D = P.D ?? 9, AH = P.AH ?? 16, f1 = P.f1 ?? 4, w1 = P.w1 ?? 6, fo1 = P.fo1 ?? 8, b1 = P.b1 ?? 11;
-  const px = P.padX ?? 0, pz = P.padZ ?? 1;                          // 둘레 여유 (징·칼날 지느러미용)
-  const g = new VoxGrid(W + 2 + px, AH, D + 2 * pz), s = new Sub(g, px, 0, pz);
+  const px = P.padX ?? 0, pz = P.padZ ?? 1, py = P.padY ?? 0;       // 둘레 여유 (징·칼날 지느러미용, 아래 = 주먹 밑으로 뻗는 칼날)
+  const g = new VoxGrid(W + 2 + px, AH + py, D + 2 * pz), s = new Sub(g, px, py, pz);
   const fi = P.foIn ?? 1, wi = P.wIn ?? 1;
   // 주먹
   rbox(s, 0, 0, 0, W - 1, f1, D - 1, (x, y, z) => paint('fist', x, y, z), 2);
@@ -187,7 +189,7 @@ export function armShape(P, paint, front) {
   for (let z = 1; z <= D - 2; z++) mul(s, 1, fo1 + 1, z, .88);                                       // 삼두 그늘
   const cy = b1 + 1.6, ry = AH - cy + .2;
   ell(s, W / 2, cy, D / 2, W / 2 + .1, ry, D / 2 + .1, (x, y, z) => paint('sh', x, y, z), (x, y) => y > b1);
-  return { g, s, W, D, px, pz };
+  return { g, s, W, D, px, pz, py };
 }
 
 // ---------------------------------------------------------------- 다리 틀
@@ -239,8 +241,8 @@ export function assemble(r, s) {
   const { AU, AL, LU, LL, THn } = s, AH = AU + AL, LHn = LU + LL;
   const LH = LHn * H, TH = THn * H;
   const armPart = a => {
-    const ox = a.W / 2 + a.px, oz = a.D / 2 + a.pz;   // armShape의 둘레 여유
-    return { U: mk(slice(a.g, AL, AH - 1), [ox, AU, oz], AU - 1, 0), L: mk(slice(a.g, 0, AL - 1), [ox, AL, oz], AL - 1) };
+    const ox = a.W / 2 + a.px, oz = a.D / 2 + a.pz, py = a.py ?? 0;   // armShape의 둘레 여유
+    return { U: mk(slice(a.g, py + AL, py + AH - 1), [ox, AU, oz], AU - 1, 0), L: mk(slice(a.g, 0, py + AL - 1), [ox, py + AL, oz], py + AL - 1) };
   };
   const aF = armPart(s.armF), aB = s.armB === s.armF ? aF : armPart(s.armB);
   const lo = s.legO ?? [5.5, 4.5];
@@ -257,6 +259,7 @@ export function assemble(r, s) {
     height: s.height ?? (LHn + THn) * H + headTop * H,
     armLen: AH * H, armULen: AU * H, handLen: AL * H,
     legLen: LH, legULen: LU * H,
+    brawl: { arm: .15, hand: .75, leg: .24 }, armSpread: .34, legSpread: .1,   // 적 기본 싸움 자세 (actor.js idle)
     ...s.opts,
     parts: {
       legB:  { ...legB.U, pivot: [0, LH, -hipZ] },

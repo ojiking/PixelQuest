@@ -2,7 +2,7 @@
 // 규칙은 예전과 똑같음: 무기는 +x로 뻗고 원점 = 손잡이(쥐는 곳), 전체 길이·크기(미터)도 예전과 같게
 //   → 공격 거리·무기 끝 위치(weaponTip)가 그대로 맞음. 원점·격자 크기는 예전 값 × 2
 import { VoxGrid, meshGrid, hash3 } from './voxel.js';
-import { H, shade, pick, tone, grime, ell, rbox, line, stamp } from './chars_hd.js';
+import { H, desat, shade, pick, tone, grime, ell, rbox, line, stamp } from './chars_hd.js';
 
 const single = (r, w, h, d, origin, paint) => { const g = new VoxGrid(w, h, d); paint(g); return meshGrid(r, g, H, origin); };
 const STEEL = 0x8a8e92, STEEL_D = 0x5a5e62, STEEL_L = 0xc4c8cc, RUST = 0x7a4a2c, WOOD = 0x8a5a32, BLADE = 0xc8ccd0, EDGE = 0xeef0f2;
@@ -83,7 +83,7 @@ export const ITEM_BUILDERS = {
   }),
   // ---------------- 전기톱: 주황 본체(냉각 핀·손잡이 고리·시동줄) + 긴 날 + 톱니 체인
   w_chainsaw: r => single(r, 37, 11, 8, [4, 4, 4], g => {
-    const OR = 0xd0661a, ORT = rusty(tone(OR, .26, .12), .08);
+    const OR = desat(0xc8661e, .28), ORT = rusty(tone(OR, .26, .12), .08);
     rbox(g, 0, 0, 0, 11, 8, 7, ORT, 2);
     for (let x = 1; x <= 9; x += 2) for (let y = 2; y <= 6; y++) { g.set(x, y, 0, 0x2a2a2c); g.set(x, y, 7, 0x2a2a2c); }   // 냉각 핀
     for (let x = 1; x <= 9; x++) { g.set(x, 10, 3, 0x2a2a2c); g.set(x, 10, 4, 0x2a2a2c); } g.fill(1, 9, 3, 1, 9, 4, 0x2a2a2c); g.fill(9, 9, 3, 9, 9, 4, 0x2a2a2c);   // 손잡이 고리
@@ -144,7 +144,7 @@ export const ITEM_BUILDERS = {
   w_flamer: r => single(r, 28, 10, 8, [6, 4, 4], g => {
     rodX(g, 0, 7, 4.5, 4, 3.6, rusty(tone(0xa8281e, .22, .12), .1));
     for (let y = 0; y < 10; y++) for (let z = 0; z < 8; z++) { if (g.get(0, y, z) >= 0) g.set(0, y, z, 0x5a1610); if (g.get(7, y, z) >= 0) g.set(7, y, z, 0x5a1610); }
-    for (let x = 2; x <= 5; x++) for (let y = 2; y <= 6; y++) if (g.get(x, y, 7) >= 0) g.set(x, y, 7, ((x + y) >> 1) % 2 ? 0xd8b020 : 0x2a2a2a);
+    for (let x = 2; x <= 5; x++) for (let y = 2; y <= 6; y++) if (g.get(x, y, 7) >= 0) g.set(x, y, 7, ((x + y) >> 1) % 2 ? 0xb09a40 : 0x2a2a2a);
     g.fill(3, 8, 3, 4, 9, 4, 0xc8c8c0); g.set(4, 9, 4, 0x2a2a2a);
     rodX(g, 8, 23, 4.5, 4, 1.2, (x, y, z) => x % 3 ? 0x5d636b : 0x7d838b);
     g.fill(9, 1, 3, 11, 3, 4, 0x2a2a2a);
@@ -152,7 +152,7 @@ export const ITEM_BUILDERS = {
     g.set(27, 6, 4, 0xff8a1f); g.set(27, 7, 4, 0xffd040);
   }),
   // ---------------- 맨홀 방패 (몸 앞에 세워 듦: 원판이 y-z면, 바깥 = +x)
-  manhole: r => single(r, 5, 20, 20, [2, 10, 10], g => paintManhole(g, (u, v, t, c) => g.set(t, v, 19 - u, c))),
+  manhole: r => single(r, 5, 22, 22, [2, 11, 11], g => manholeDisc((u, v, t, c) => g.set(t, v, u, c), 22, 4)),   // 턱~무릎을 가리는 큰 원판 (지름 약 1m)
   // ---------------- 맨홀 휘두를 때: 원판이 x-z면, 손에서 +x로
   w_manhole: r => single(r, 20, 5, 20, [0, 2, 10], g => paintManhole(g, (u, v, t, c) => g.set(u, t, v, c))),
   // ---------------- 카타나: 붉은·검은 마름모 손잡이 + 금색 코등이 + 긴 칼날(날 끝선·물결 무늬)
@@ -230,11 +230,11 @@ export const ITEM_BUILDERS = {
   }),
   // ---------------- 드럼통: 붉은 원통 + 테 두 줄 + 경고 표시 + 뚜껑 마개 + 녹·움푹
   barrel: r => single(r, 16, 20, 16, [8, 0, 8], g => {
-    rodY(g, 0, 19, 8, 8, y => (y === 0 || y === 19) ? 7.4 : 7.9, rusty((x, y, z) => (y === 1 || y === 18 || y === 6 || y === 13) ? 0x5a1a14 : pick(x, y, z, 0xa8301e, 0x8a2618, 0xc03e2a, .26, .12), .1));
+    rodY(g, 0, 19, 8, 8, y => (y === 0 || y === 19) ? 7.4 : 7.9, rusty((x, y, z) => (y === 1 || y === 18 || y === 6 || y === 13) ? 0x5a1a14 : pick(x, y, z, 0x962c1e, 0x7a2418, 0xa83a28, .26, .12), .1));
     for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) if (g.get(x, 19, z) >= 0) g.set(x, 19, z, Math.hypot(x - 7.5, z - 7.5) > 6.5 ? 0x6a1e16 : pick(x, 19, z, 0x8a2618, 0x7a2014, 0x9a2c1c));
     g.fill(10, 19, 4, 11, 19, 5, 0x3a3a3c);
-    stamp(g, ['..#..', '.#.#.', '#.#.#', '#####'], 15, 11, 6, 'x', 0xd8b020);
-    stamp(g, ['..#..', '.#.#.', '#.#.#', '#####'], 5, 11, 15, 'z', 0xd8b020);
+    stamp(g, ['..#..', '.#.#.', '#.#.#', '#####'], 15, 11, 6, 'x', 0xb09a40);
+    stamp(g, ['..#..', '.#.#.', '#.#.#', '#####'], 5, 11, 15, 'z', 0xb09a40);
   }),
   // ---------------- 오토바이 (앞 = +x): 바큇살 바퀴 + 엔진 + 붉은 연료통(불꽃) + 안장 + 핸들 + 배기관 + 전조등
   moto: r => single(r, 44, 22, 12, [22, 0, 6], g => {
@@ -267,7 +267,7 @@ export const ITEM_BUILDERS = {
   spikePlate: r => single(r, 44, 2, 44, [22, 0, 22], g => {
     for (let x = 0; x < 44; x++) for (let z = 0; z < 44; z++) {
       const edge = x < 2 || z < 2 || x > 41 || z > 41;
-      g.set(x, 0, z, edge ? (((x + z) >> 2) % 2 ? 0xc9a20f : 0x1e1e1e) : rusty((a, b, c) => pick(a, b, c, 0x4a4a4e, 0x3e3e42, 0x5a5a5e), .1)(x, 0, z));
+      g.set(x, 0, z, edge ? (((x + z) >> 2) % 2 ? 0xa89040 : 0x1e1e1e) : rusty((a, b, c) => pick(a, b, c, 0x4a4a4e, 0x3e3e42, 0x5a5a5e), .1)(x, 0, z));
     }
     for (let x = 3; x < 44; x += 8) for (let z = 3; z < 44; z += 8) { g.fill(x, 0, z, x + 1, 0, z + 1, 0x141414); }
     for (const [x, z] of [[1, 1], [42, 1], [1, 42], [42, 42], [21, 1], [21, 42], [1, 21], [42, 21]]) g.set(x, 1, z, 0x8a8e92);
