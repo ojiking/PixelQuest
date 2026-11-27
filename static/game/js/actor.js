@@ -510,8 +510,10 @@ export class Actor {
     const w = this.weapon?.type;
     if (w !== 'shotgun' && w !== 'flamer') return;
     const bob = Math.sin(t * 3) * .03;
-    T.armF = .85 + bob; T.handF = .85; T.grip = -1.82;       // 오른손: 손잡이, 개머리판은 옆구리에 (총구는 거의 수평, 살짝 아래)
-    T.armB = 1.2 + bob; T.handB = .55;                       // 왼손: 앞쪽 펌프를 받침
+    // 허리 높이에서 총구를 앞으로 수평: 오른팔은 팔꿈치를 뒤로 접어 개머리판을 옆구리에 끼고, 왼팔은 앞에서 총열을 받침
+    T.armF = .15 + bob; T.handF = 1.55; T.grip = -1.72;
+    T.armB = .75 + bob; T.handB = .85; T.twist = .42;   // 몸을 옆으로 돌려 총이 화면 가로로 보이게
+                          // 왼손: 앞쪽 펌프를 받침
     T.torso = -.05;
   }
 
@@ -571,6 +573,7 @@ export class Actor {
       case 'shoot': { // 샷건: 어깨에 붙여 조준 → 발사 반동 → 펌프 장전
         const ta = a.t - d.startup;                      // 발사 순간부터 지난 시간
         T.legF = .5; T.shinF = -.15; T.legB = -.45; T.shinB = -.3;   // 앞발을 내딛고 버티는 자세
+        T.twist = .42;                                   // 옆모습: 총이 화면 가로로 길게 보이게
         if (ta < 0) {                                    // 조준: 개머리판을 어깨에, 총열 수평
           T.armF = 1.78; T.handF = .05; T.grip = -1.83; T.armB = 1.7; T.handB = .2;   // 어깨 높이로 들어 총열 수평
           T.torso = -.12; T.head = .08;
