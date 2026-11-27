@@ -2,7 +2,7 @@
 import { mat4, rand } from './math.js';
 import { hexToRgb } from './voxel.js';
 import { WOUND } from './models.js';
-import { GIB_THROW, GIB_BOUNCE } from './config.js';
+import { GIB_THROW, GIB_BOUNCE, SETTLE } from './config.js';
 import { applyHit } from './combat.js';
 
 const M = mat4.create(), R = mat4.create();
@@ -104,6 +104,7 @@ export class Gibs {
     const debris = this.game.debris;
     for (let i = this.list.length - 1; i >= 0; i--) {
       const g = this.list[i];
+      g.settle = g.rest ? (g.settle || 0) + dt : 0;          // 멈춰 있는 시간 (움직이면 0 → 원래 색)
       if (!g.rest) {
         g.vel[1] -= 22 * dt;
         g.pos[0] += g.vel[0] * dt; g.pos[1] += g.vel[1] * dt; g.pos[2] += g.vel[2] * dt;
@@ -213,10 +214,16 @@ export class Gibs {
     const { camX, viewHalf } = this.game;
     for (const g of this.list) {
       if (Math.abs(g.pos[0] - camX) > viewHalf + 4) continue; // 화면 밖은 그리지 않음
-      for (const mem of g.members) r.drawMesh(mem.mesh, this.matrix(g, mem, M));
+      const k = settleK(g.settle);
+      let tint = null;
+      if (k > 0) { g.tint ??= [...SETTLE.rgb, 0]; g.tint[3] = k * SETTLE.amount; tint = g.tint; }
+      for (const mem of g.members) r.drawMesh(mem.mesh, this.matrix(g, mem, M), tint);
     }
   }
 }
+
+// 멈춘 시간 → 가라앉는 정도(0~1)
+export function settleK(t) { return Math.max(0, Math.min(1, ((t || 0) - SETTLE.delay) / SETTLE.time)); }
 
 // 피 대신 붉은 블록이 튐
 export function bleed(debris, x, y, z, dir, n) {

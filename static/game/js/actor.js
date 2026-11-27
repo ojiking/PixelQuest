@@ -1,6 +1,7 @@
 // 모든 캐릭터(플레이어/동료/적)의 공통 기반: 물리, 상태, 공격 진행, 절차적 애니메이션, 부위 렌더링
+import { settleK } from './gibs.js';
 import { mat4, clamp } from './math.js';
-import { BLOOD, BERSERK, GRAVITY, LANE, ATTACKS, WEAPONS, LIMB_WEAPONS, FLEX } from './config.js';
+import { BLOOD, BERSERK, SETTLE, GRAVITY, LANE, ATTACKS, WEAPONS, LIMB_WEAPONS, FLEX } from './config.js';
 import { hexToRgb } from './voxel.js';
 import { getModel, WEAPON_MODEL } from './models.js';
 import { tryHits } from './combat.js';
@@ -677,9 +678,19 @@ export class Actor {
     for (const k in this.blood) this.blood[k] = Math.max(0, this.blood[k] - rate * dt);
   }
 
+  // 시체: 튀고 미끄러지기를 멈추면 서서히 가라앉는 색, 다시 맞거나 들리면 즉시 원래 색
+  updateSettle(dt) {
+    const still = this.dead && this.grounded && Math.abs(this.vx) < 0.05 && Math.abs(this.vz) < 0.05 && !this.flung && !this.grabbedBy && !this.remove;
+    this.settleT = still ? (this.settleT || 0) + dt : 0;
+  }
+
   tint() {
     if (this.flash > 0) return FLASH;
     if (this.charred) return CHAR;
+    if (this.dead && this.settleT > 0) {
+      const k = settleK(this.settleT);
+      if (k > 0) { this.settleTint ??= [...SETTLE.rgb, 0]; this.settleTint[3] = k * SETTLE.amount; return this.settleTint; }
+    }
     if (this.burnT > 0 && Math.floor(this.game.time * 12) % 2) return BURN;
     const a = this.attack;
     if (a && a.def.telegraph && this.attackPhase() === 'startup' && Math.floor(this.game.time * 14) % 2) return WARN;

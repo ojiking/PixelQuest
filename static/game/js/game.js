@@ -221,7 +221,7 @@ export class Game {
     for (const t of this.traps) t.update(dt, this);
     this.updateCars(dt);
     this.debris.update(dt, (x, z) => this.floorAt(x, z), this.bloodHooks);
-    for (const a of this.actors) a.updateBlood(dt);
+    for (const a of this.actors) { a.updateBlood(dt); a.updateSettle(dt); }
     this.updateLHint();
     this.gibs.update(dt);
 
