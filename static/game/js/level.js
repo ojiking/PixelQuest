@@ -5,9 +5,10 @@ import { rand, randi, weightedPick } from './math.js';
 import { Prop, SpikeTrap, Item } from './props.js';
 import { rollWeapon } from './game.js';
 import { buildCityBlocks, makeSigns, buildRoadMarks, buildPoles } from './city.js';
+import { buildNYCBlocks, makeFacades, makeNYCSigns, buildNYCRoad, buildNYCDecor, buildFogCards } from './nyc.js';
 
 const AIR = 0, GRASS = 1, DIRT = 2, LANEB = 3, STONE = 4, WALL = 5, WALL2 = 6, GLASS = 7, WOOD = 8, LEAVES = 9, VOID = 10;
-const SIDE = 11, TRIM = 12, FAR = 13, BUILD0 = 20; // 도시용 블록 (BUILD0~ 건물 외벽 색)
+const SIDE = 11, TRIM = 12, FAR = 13, RAIL = 14, BUILD0 = 20; // 도시용 블록 (BUILD0~ 건물 외벽 색)
 export const PIT = -100;           // 낭떠러지 (떨어지면 사망)
 const DEPTH = -12;                 // 낭떠러지 바닥 깊이
 const LANE_Z0 = -4, LANE_Z1 = 4;   // 걸을 수 있는 블록 줄 (z 셀)
@@ -67,8 +68,11 @@ function buildTerrain(r, L, biome, seed, hmap) {
     }
   }
   const occupied = new Set();
-  let signSpecs = [];
-  if (city) {
+  let signSpecs = [], nyc = null;
+  if (city && biome.nyc) {
+    nyc = buildNYCBlocks(w, L, { build: biome.build.map((_, i) => BUILD0 + i), trim: TRIM, far: FAR, rail: RAIL });
+    signSpecs = nyc.signs;
+  } else if (city) {
     signSpecs = buildCityBlocks(w, L, { build: biome.build.map((_, i) => BUILD0 + i), glass: GLASS, trim: TRIM, far: FAR });
   } else {
   // 무너진 건물
@@ -141,7 +145,7 @@ function buildTerrain(r, L, biome, seed, hmap) {
     [WOOD]: { top: C('wood'), side: C('wood') },
     [VOID]: { top: [0.05, 0.04, 0.06], side: [0.05, 0.04, 0.06] },
     [SIDE]: { top: C('grass'), side: C('stone') },
-    ...(city ? { [TRIM]: { top: C('trim'), side: C('trim') }, [FAR]: { top: C('far'), side: C('far') } } : {}),
+    ...(city ? { [TRIM]: { top: C('trim'), side: C('trim') }, [FAR]: { top: C('far'), side: C('far') }, [RAIL]: { top: C(biome.rail ? 'rail' : 'trim'), side: C(biome.rail ? 'rail' : 'trim') } } : {}),
     ...(city ? Object.fromEntries(biome.build.map((c, i) => [BUILD0 + i, { top: hexToRgb(c), side: hexToRgb(c) }])) : {}),
     [LEAVES]: snowy ? { top: C('grass'), side: C('leaves'), strip: 1, stripC: C('grass') } : { top: C('leaves'), side: C('leaves') },
   };
@@ -162,7 +166,7 @@ function buildTerrain(r, L, biome, seed, hmap) {
       }
     }
   }
-  return { mesh: mb.build(r), signSpecs };
+  return { mesh: mb.build(r), signSpecs, nyc };
 }
 
 export const STAGE_COUNT = 2;
@@ -270,7 +274,16 @@ export class Stage {
     const built = buildTerrain(game.r, this.L, this.biome, randi(1, 9999), this.hmap);
     this.terrain = built.mesh;
     this.buildHazard();
-    if (this.biome.city) {
+    if (this.biome.nyc) {   // 폐허 뉴욕: 0.2m 외벽·영어 간판·바랜 도로·거리 장식·물탱크·안개막
+      const isPit = (x, z) => this.heightAt(x, z) === PIT;
+      this.facades = makeFacades(game.r, built.nyc.facades);
+      this.signs = makeNYCSigns(game.r, built.signSpecs);
+      this.roadMarks = buildNYCRoad(game.r, this.L, isPit);
+      this.decor = buildNYCDecor(this.L).filter(d => !isPit(d.x, d.z));
+      this.towers = built.nyc.towers;
+      this.fogCards = buildFogCards(game.r, this.L);
+      this.poles = []; this.wireCount = 0;
+    } else if (this.biome.city) {
       this.signs = makeSigns(game.r, built.signSpecs);
       this.roadMarks = buildRoadMarks(game.r, this.L, (x, z) => this.heightAt(x, z) === PIT);
       Object.assign(this, buildPoles(this.L));
@@ -452,5 +465,7 @@ export class Stage {
     r.deleteMesh(this.terrain);
     if (this.roadMarks) r.deleteMesh(this.roadMarks);
     for (const s of this.signs ?? []) r.deleteMesh(s.mesh);
+    for (const f of this.facades ?? []) r.deleteMesh(f.mesh);
+    for (const f of this.fogCards ?? []) r.deleteMesh(f.mesh);
   }
 }

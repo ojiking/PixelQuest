@@ -1281,6 +1281,22 @@ export class Game {
       }
       r.drawMesh(getModel(r, s.model).mesh, M, tint, 0, 1, null, true);
     }
+    for (const f of st.facades ?? []) {                       // 뉴욕 외벽 (핏자국이 묻음)
+      if (Math.abs(f.x + f.w / 2 - this.camX) > this.viewHalf + 8 + f.w / 2) continue;
+      mat4.identity(M); mat4.translate(M, f.x, 0, -6);
+      r.drawMesh(f.mesh, M, null, 0, 1, null, true);
+    }
+    for (const d of st.decor ?? []) {
+      if (!near(d.x)) continue;
+      mat4.identity(M); mat4.translate(M, d.x, 0, d.z);
+      if (d.model === 'streetlamp') mat4.rotateZ(M, d.rot); else mat4.rotateY(M, d.rot);
+      r.drawMesh(getModel(r, d.model).mesh, M, null, 0, 1, null, true);
+    }
+    for (const t of st.towers ?? []) {
+      if (!near(t.x)) continue;
+      mat4.identity(M); mat4.translate(M, t.x, t.y, t.z);
+      r.drawMesh(getModel(r, 'watertower').mesh, M);
+    }
     for (const p of st.poles) {
       if (!near(p.x)) continue;
       mat4.identity(M); mat4.translate(M, p.x, 0, p.z);
@@ -1294,6 +1310,29 @@ export class Game {
     if (st.wireCount) r.drawInstances(st.wires, st.wireCount);
   }
 
+  // 알파 포그: 반투명 안개막 (뒤에서 앞으로), 색은 안개색 그대로 + 공중에 떠다니는 먼지
+  drawFogCards(r) {
+    const st = this.stage;
+    if (!st.fogCards || !r.lightMode) return;
+    const f = st.biome.fog;
+    for (const c of st.fogCards) {
+      mat4.identity(M); mat4.translate(M, 0, c.y, 0);
+      r.drawMesh(c.mesh, M, [f[0], f[1], f[2], 1], 0, c.a);
+    }
+  }
+  drawDust(r) {
+    if (!this.stage.biome.nyc || !r.lightMode) return;
+    const N = 70, dt = this.frameDt || 1 / 60;
+    if (!this.dust) { this.dust = []; this.dustBuf = new Float32Array(N * 7); for (let i = 0; i < N; i++) this.dust.push({ x: rand(-12, 12), y: rand(0.2, 5), z: rand(-5.5, 5), v: rand(.15, .45), ph: rand(0, 6.3) }); }
+    const b = this.dustBuf, fc = this.stage.biome.fog;
+    this.dust.forEach((d, i) => {
+      d.x += d.v * dt; d.y += Math.sin(this.time * .8 + d.ph) * .08 * dt;
+      let wx = this.camX + ((d.x % 24) + 24) % 24 - 12;      // 카메라를 따라 순환
+      b.set([wx, d.y, d.z, .035 + (i % 3) * .015, fc[0] * 1.25, fc[1] * 1.22, fc[2] * 1.18], i * 7);
+    });
+    r.drawInstances(b, N, .55, true);
+  }
+
   // ------------------------------------------------ 렌더링
   render() {
     const r = this.r;
@@ -1305,11 +1344,12 @@ export class Game {
     mat4.lookAt(this.view, eye, [this.camX + sx * .5, ly, lz], [0, 1, 0]);
     mat4.multiply(this.vp, this.proj, this.view);
     const b = this.stage.biome;
-    r.begin(this.vp, eye, { sky: b.sky, fog: b.fog, fogNear: 34, fogFar: 80, light: LIGHT, lights: this.collectLights() });
+    r.begin(this.vp, eye, { sky: b.sky, fog: b.fog, fogNear: b.fogNear ?? 34, fogFar: b.fogFar ?? 80, hfog: b.hfog, light: b.light ?? LIGHT, lights: this.collectLights() });
     this.stains.flush();
     r.drawMesh(this.stage.terrain, IDENT, null, 8, 1, null, true);
     this.drawCity(r);
     if (this.stage.hazardN) r.drawInstances(this.stage.hazard, this.stage.hazardN);
+    this.drawFogCards(r);
     for (const t of this.traps) t.draw(r, this);
     for (const p of this.props) p.draw(r, this);
     for (const it of this.items) it.draw(r, this);
@@ -1322,6 +1362,7 @@ export class Game {
       r.drawMesh(getModel(r, key).mesh, M);
     }
     this.gibs.draw(r);
+    this.drawDust(r);
     let rn = 0;
     for (const a of this.actors) rn = a.fillRope(this.ropeBuf, rn, 1200);
     r.drawInstances(this.ropeBuf, rn);

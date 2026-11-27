@@ -12,6 +12,7 @@ uniform vec4 uPL[8];                   // 불빛: xyz 위치, w 반경
 uniform vec4 uPLC[8];                  // 불빛 색(세기 포함)
 uniform int uPLN;
 uniform float uRim;                    // 가장자리 빛 (캐릭터만)
+uniform vec2 uHFog;                    // 바닥 먼지 안개: x 세기, y 높이(m)
 vec3 shade(vec3 col, vec3 n, vec3 world) {
   float d = max(dot(n, uLight), 0.0);
   if (uLightMode < 0.5) {
@@ -35,6 +36,10 @@ vec3 shade(vec3 col, vec3 n, vec3 world) {
   }
   float dist = length(world - uCam);
   float f = clamp((dist - uFog.x) / (uFog.y - uFog.x), 0.0, 1.0);
+  if (uHFog.x > 0.0) {   // 바닥에 깔린 먼지 안개: 낮을수록·멀수록 짙게
+    float low = 1.0 - clamp(world.y / uHFog.y, 0.0, 1.0);
+    f = max(f, uHFog.x * low * low * clamp((dist - 8.0) / 30.0, 0.0, 1.0));
+  }
   // 낭떠러지: 아래로 내려갈수록 칠흑같이 어두워짐
   float deep = clamp((world.y + 5.5) / 5.0, 0.0, 1.0);
   col *= mix(0.04, 1.0, deep);
@@ -282,6 +287,7 @@ export class Renderer {
       gl.uniform1i(prog.u.uPLN, n);
       if (n) { gl.uniform4fv(prog.u['uPL[0]'], this.plBuf); gl.uniform4fv(prog.u['uPLC[0]'], this.plcBuf); }
       gl.uniform1f(prog.u.uRim, 0);
+      gl.uniform2fv(prog.u.uHFog, this.lightMode && env.hfog ? env.hfog : [0, 1]);
     }
     this.current = null;
   }
@@ -298,7 +304,9 @@ export class Renderer {
     gl.uniform4fv(pr.u.uSplat, splat || NO_SPLAT);
     gl.uniform1f(pr.u.uStainOn, stained && this.stainTex ? 1 : 0);
     gl.bindVertexArray(mesh.vao);
+    if (alpha < 1) { gl.enable(gl.BLEND); gl.depthMask(false); }   // 반투명(알파 포그 등): 뒤가 비치게, 깊이는 안 씀
     gl.drawElements(gl.TRIANGLES, mesh.count, gl.UNSIGNED_INT, 0);
+    if (alpha < 1) { gl.disable(gl.BLEND); gl.depthMask(true); }
   }
 
   // 배경 핏자국 3D 맵 (R8, 한 칸 = 1/res m). origin/size는 월드 좌표

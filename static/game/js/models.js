@@ -310,6 +310,41 @@ function single(r, w, h, d, origin, paint) {
 }
 
 const BUILDERS = {
+  // ---------------- 폐허 뉴욕 거리 장식
+  streetlamp: r => single(r, 14, 70, 4, [2, 0, 2], g => {          // 기울어진 가로등 (짙은 녹색 철)
+    g.fill(0, 0, 0, 3, 3, 3, 0x2a3028); g.fill(1, 4, 1, 2, 64, 2, 0x3a4236);
+    for (let x = 2; x < 12; x++) g.set(x, 64 + Math.min(3, (x - 2) >> 1), 1, 0x3a4236);
+    g.fill(9, 64, 0, 13, 66, 3, 0x2a3028); g.fill(10, 63, 1, 12, 63, 2, 0xd8c890);
+  }),
+  trashbags: r => single(r, 12, 7, 10, [6, 0, 5], g => {             // 검은 쓰레기봉투 더미
+    for (const [cx, cz, rr] of [[4, 4, 3.4], [8, 6, 3], [6, 2, 2.6]]) for (let x = 0; x < 12; x++) for (let y = 0; y < 7; y++) for (let z = 0; z < 10; z++) {
+      const d = Math.hypot(x + .5 - cx, (y + .5) * 1.3, z + .5 - cz);
+      if (d < rr) g.set(x, y, z, (x + y + z) % 5 ? 0x1c1c1e : 0x2e2e30);
+    }
+    g.set(4, 5, 4, 0x3a3a3c); g.set(8, 4, 6, 0x3a3a3c);
+  }),
+  rubble: r => single(r, 14, 5, 10, [7, 0, 5], g => {                // 벽돌·콘크리트 잔해
+    for (let i = 0; i < 46; i++) {
+      const x = (i * 7) % 13, z = (i * 5) % 9, y = (i * 3) % 4 > 1 && x > 3 && x < 10 ? 1 + ((i >> 2) % 3) : 0;
+      g.fill(x, y, z, x + (i % 2), y, z + ((i >> 1) % 2), [0x8a4a38, 0x7a7068, 0x6a3a2c, 0x9a9088][i % 4]);
+    }
+  }),
+  newspaper: r => single(r, 8, 1, 6, [4, 0, 3], g => { g.fill(0, 0, 0, 7, 0, 5, 0xc8c0a8); g.fill(1, 0, 1, 6, 0, 1, 0x6a6a64); g.fill(1, 0, 3, 4, 0, 3, 0x6a6a64); }),
+  barrier: r => single(r, 22, 9, 6, [11, 0, 3], g => {              // 붉은·흰 줄무늬 바리케이드
+    g.fill(0, 0, 0, 21, 2, 5, 0x9a9488);
+    for (let x = 0; x < 22; x++) for (let y = 3; y < 9; y++) { if (y > 6 && (x < 2 || x > 19)) continue; g.set(x, y, 1, ((x + y) >> 2) % 2 ? 0xb83a2e : 0xd8d0c0); g.set(x, y, 4, ((x + y) >> 2) % 2 ? 0xb83a2e : 0xd8d0c0); g.fill(x, y, 2, x, y, 3, 0xa09888); }
+  }),
+  hydrant: r => single(r, 6, 10, 6, [3, 0, 3], g => {                // 녹슨 소화전
+    g.fill(1, 0, 1, 4, 7, 4, 0x8a3428); g.fill(0, 4, 2, 5, 5, 3, 0x7a2e24); g.fill(2, 8, 2, 3, 9, 3, 0x6a2a20); g.set(1, 3, 1, 0x5a3424);
+  }),
+  watertower: r => single(r, 24, 34, 24, [12, 0, 12], g => {         // 옥상 나무 물탱크
+    for (const [x, z] of [[3, 3], [19, 3], [3, 19], [19, 19]]) g.fill(x, 0, z, x + 1, 12, z + 1, 0x3a2e26);
+    g.fill(2, 12, 2, 21, 13, 21, 0x3a2e26);
+    for (let y = 14; y < 28; y++) for (let x = 0; x < 24; x++) for (let z = 0; z < 24; z++) {
+      const d = Math.hypot(x + .5 - 12, z + .5 - 12); if (d < 10.5 && d > 9) g.set(x, y, z, (y % 5 === 0) ? 0x2a2420 : ((x + z) % 3 ? 0x6a5038 : 0x5a4430));
+    }
+    for (let y = 28; y < 34; y++) for (let x = 0; x < 24; x++) for (let z = 0; z < 24; z++) { const d = Math.hypot(x + .5 - 12, z + .5 - 12); if (d < 10.5 - (y - 28) * 1.8) g.set(x, y, z, 0x4a3a2c); }
+  }),
   player: r => buildHeroV2(r),
   player_v1: r => humanoid(r, {
     head: 'hairBand', torso: 'jacket', sleeve: 6,
@@ -553,8 +588,9 @@ const BUILDERS = {
 // 주차된 승용차 (색만 다름)
 for (let i = 0; i < 7; i++) {
   BUILDERS['car' + i] = r => {
-    const col = [0xf2f2f2, 0x1c1c1e, 0xb8bcc2, 0xc0392b, 0x1f5aa8, 0x2e6b3a, 0xd8c8a0][i];
-    const glass = 0x22334a;
+    // 폐허 뉴욕: 바래고 녹슨 색 + 노란 택시(0, 1)
+    const col = [0xc8a030, 0xb8902a, 0x6a6660, 0x7a3a2c, 0x3a4652, 0x4a5240, 0x8a7a62][i];
+    const glass = 0x1e2630, taxi = i <= 1;
     return single(r, 44, 15, 20, [0, 0, 0], g => {
       for (const wx of [8, 35]) for (const z0 of [0, 17]) g.fill(wx - 3, 0, z0, wx + 3, 5, z0 + 2, 0x1a1a1a);
       g.fill(0, 3, 1, 43, 8, 18, col);
@@ -564,6 +600,11 @@ for (let i = 0; i < 7; i++) {
       g.fill(43, 5, 2, 43, 6, 5, 0xfff3a0); g.fill(43, 5, 14, 43, 6, 17, 0xfff3a0);
       g.fill(0, 5, 2, 0, 6, 5, 0xd02020); g.fill(0, 5, 14, 0, 6, 17, 0xd02020);
       g.fill(0, 3, 1, 0, 3, 18, 0x333333); g.fill(43, 3, 1, 43, 3, 18, 0x333333);
+      for (let x = 2; x < 42; x += 3) for (let y = 3; y < 9; y++) if (((x * 7 + y * 13 + i * 5) % 11) === 0) { g.set(x, y, 1, 0x6a3a22); g.set(x, y, 18, 0x6a3a22); }   // 녹
+      if (taxi) {   // 택시: 체크 띠 + 지붕 표시등
+        for (let x = 2; x < 42; x += 2) { g.set(x, 7, 1, (x >> 1) % 2 ? 0x1a1a1a : 0xd8d0b8); g.set(x, 7, 18, (x >> 1) % 2 ? 0x1a1a1a : 0xd8d0b8); }
+        g.fill(19, 15, 8, 25, 15, 11, 0xe8d8a0);
+      }
     });
   };
 }

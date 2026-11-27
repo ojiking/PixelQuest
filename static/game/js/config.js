@@ -360,10 +360,13 @@ export const TRAPS = {
 // 블록 색만 바꿔도 분위기가 크게 달라지는지 검증하기 위한 3종
 export const BIOMES = {
   city: {
-    name: '뒷골목 도심', sky: [0.62, 0.66, 0.74], fog: [0.6, 0.63, 0.7], city: true,
-    grass: 0xa8a8a2, dirt: 0x6e6e70, lane: 0x3a3a3e, stone: 0x5a5a5e,
-    wall: 0x8a5040, wall2: 0x5e3a30, glass: 0x2a3a50, wood: 0x5a4030, leaves: 0x3f7a35, flora: 'none',
-    trim: 0x4a4a50, far: 0x6a7280, build: [0xc8beb0, 0x9aa0a6, 0xb5654a, 0xd8d0c0, 0x8a8070, 0x6f7a86, 0xa89a7a],
+    // 폐허가 된 뉴욕 거리 (docs/art/target_ingame.webp): 바랜 벽돌, 먼지 낀 흙빛 하늘, 짙은 먼지 안개
+    name: '폐허 뉴욕 거리', sky: [0.66, 0.56, 0.47], fog: [0.6, 0.51, 0.43], city: true, nyc: true,
+    fogNear: 16, fogFar: 62, hfog: [0.55, 3.2],    // 거리 안개(시작·끝 m), 바닥 먼지 안개(세기·높이 m)
+    light: { sky: [.44, .42, .44], ground: [.3, .23, .17], sun: [.82, .6, .4] },   // 먼지 낀 늦은 오후: 따뜻하고 낮은 해
+    grass: 0x857c70, dirt: 0x5e5650, lane: 0x3e3a37, stone: 0x5a5450,
+    wall: 0x7a4434, wall2: 0x5a3428, glass: 0x1e242a, wood: 0x5a4030, leaves: 0x4a5a38, flora: 'none',
+    trim: 0x4a4440, far: 0x6e625a, rail: 0x4a463c, build: [0x7a4434, 0x6a3a2c, 0x8a5038, 0x5e4a3e, 0x7e5c46],
   },
   plains: {
     name: '폐허 초원', sky: [0.56, 0.76, 0.96], fog: [0.66, 0.80, 0.95],
