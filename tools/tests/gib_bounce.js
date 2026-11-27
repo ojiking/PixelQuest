@@ -14,10 +14,12 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   await ev(() => { const g = window.__game, p = g.player; for (const e of g.enemies) { e.remove = true; e.dead = true; } g.zoneIdx = g.stage.zones.length; g.lock = null; g.stage.hmap.clear(); p.x = 8; g.camX = 11;
     const e = g.spawnEnemy('grunt', 1); e.x = 11; e.z = 0.5; e.dead = true; e.vx = 2; e.shatter(); g.kill(e, { dir: 1, knock: 3 });
     window.__log = []; const t0 = performance.now();
-    window.__iv = setInterval(() => { const list = g.gibs.list.filter(q => q.part !== 'torso'); window.__log.push(list.map(q => q.pos[1].toFixed(2) + (q.rest ? 'R' : '') + ':' + (q.bounces || 0))); }, 120); });
+    window.__iv = setInterval(() => { const list = g.gibs.list.filter(q => q.part !== 'torso'); const hd = g.gibs.list.find(q => q.part === 'head'); if (hd) (window.__head ||= []).push(hd.pos[1].toFixed(2) + '@' + hd.pos[0].toFixed(1) + (hd.rest ? 'R' : '')); window.__log.push(list.map(q => q.pos[1].toFixed(2) + (q.rest ? 'R' : '') + ':' + (q.bounces || 0))); }, 120); });
   await page.waitForTimeout(500); await page.screenshot({ path: SP + '/88_bounce.png' });
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(6000);
   const log = await ev(() => { clearInterval(window.__iv); return window.__log; });
+  const head = await ev(() => window.__head || []);
+  console.log('head height@x over time:', head.join(' '));
   const last = log[log.length - 1];
   console.log('parts (height:bounces) at end:', last.join(' '));
   console.log('first part height over time:', log.map(r => r[0]).join(' '));

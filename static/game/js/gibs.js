@@ -2,7 +2,7 @@
 import { mat4, rand } from './math.js';
 import { hexToRgb } from './voxel.js';
 import { WOUND } from './models.js';
-import { GIB_THROW } from './config.js';
+import { GIB_THROW, GIB_BOUNCE } from './config.js';
 import { applyHit } from './combat.js';
 
 const M = mat4.create(), R = mat4.create();
@@ -118,19 +118,24 @@ export class Gibs {
           // 머리·팔·다리는 바닥에서 몇 번 통통 튀다가 멈춤 (몸통은 무겁게 털썩)
           const limb = g.part !== 'torso' && g.part !== 'upper' && g.part !== 'lower';
           g.bounces = (g.bounces || 0) + 1;
-          const minB = !limb ? 1 : g.part === 'head' ? 4 : 3;
+          if (g.part === 'head') { this.ballBounce(g, fl, dt); continue; }
+          const B = GIB_BOUNCE.limb;
+          const minB = limb ? B.times : 1;
           if (g.bounces > minB && Math.abs(g.vel[1]) < 2 && Math.hypot(g.vel[0], g.vel[2]) < 0.8) {
             g.rest = true;
           } else {
             let up = -g.vel[1] * (limb ? 0.62 : 0.35);
-            if (limb && g.bounces <= minB) up = Math.max(up, (g.part === 'head' ? 4.2 : 3.4) - g.bounces * 0.85);
+            if (limb && g.bounces <= minB) up = Math.max(up, B.speed - g.bounces * B.drop);
             g.vel[1] = up;
-            const f = limb ? 0.72 : 0.55;
+            const f = limb ? B.keep : 0.55;
             g.vel[0] *= f; g.vel[2] *= f;
-            g.wx *= limb ? 0.75 : 0.5; g.wz *= limb ? 0.75 : 0.5;
+            if (limb && g.bounces <= minB) {
+              // 튈 때마다 옆으로 툭 차여 이리저리 굴러다님
+              g.vel[0] += (Math.random() - .5) * 2 * B.roll; g.vel[2] += (Math.random() - .5) * B.roll;
+              g.wx = g.wx * B.spin + (Math.random() - .5) * 6; g.wz = g.wz * B.spin + (Math.random() - .5) * 6;
+            } else { g.wx *= limb ? 0.75 : 0.5; g.wz *= limb ? 0.75 : 0.5; }
             if (limb && up > 1.2) {
               this.game.bleed(g.pos[0], fl + 0.08, g.pos[2], g.vel[0] >= 0 ? 1 : -1, 3);   // 튈 때마다 핏방울
-              if (g.part === 'head' && g.bounces === 1) this.game.sfx?.('land');
             }
           }
         }
@@ -148,6 +153,34 @@ export class Gibs {
         const [r, gg, b] = WOUND_RGB[Math.floor(Math.random() * WOUND_RGB.length)];
         debris.spawn(M[12], M[13], M[14], -dir * rand(0.5, 2.5), rand(2, 4.5), rand(-1, 1), r, gg, b, rand(0.06, 0.1), rand(1.8, 2.8), 1, 1);
       }
+    }
+  }
+
+  // 잘린 머리: 축구공처럼 탄성으로 통통 → 낮아지면 데굴데굴 구르다 멈춤
+  ballBounce(g, fl, dt) {
+    const B = GIB_BOUNCE.head;
+    const vy = -g.vel[1];
+    if (vy > 1.4 || g.bounces === 1) {
+      // 튀어오름
+      let up = vy * B.bounce;
+      if (g.bounces === 1) {
+        up = Math.max(up, B.speed);                                     // 첫 튐은 뻥 차올림
+        const dir = g.vel[0] >= 0 ? 1 : -1;
+        if (Math.abs(g.vel[0]) < B.kick) g.vel[0] = dir * B.kick;
+      }
+      g.vel[1] = up;
+      g.vel[0] *= B.keep; g.vel[2] = g.vel[2] * B.keep + (Math.random() - .5) * B.roll;
+      g.wz = -g.vel[0] / g.r * 0.6; g.wx = g.vel[2] / g.r * 0.6;         // 진행 방향으로 굴러가듯 회전
+      if (up > 1.2) this.game.bleed(g.pos[0], fl + 0.08, g.pos[2], g.vel[0] >= 0 ? 1 : -1, 5);   // 튈 때마다 핏방울
+      if (up > 2.5) this.game.sfx?.('land');                                                     // '퉁'
+    } else {
+      // 구르기: 바닥에 붙어서 마찰로 느려짐
+      g.vel[1] = 0;
+      const f = Math.pow(B.rollFric, dt);
+      g.vel[0] *= f; g.vel[2] *= f;
+      g.wz = -g.vel[0] / g.r; g.wx = g.vel[2] / g.r;
+      if (Math.random() < dt * 6 && Math.hypot(g.vel[0], g.vel[2]) > 0.6) this.game.bleed(g.pos[0], fl + 0.05, g.pos[2], g.vel[0] >= 0 ? 1 : -1, 1);   // 굴러간 자리에 핏자국
+      if (Math.hypot(g.vel[0], g.vel[2]) < 0.25) { g.rest = true; g.wx = g.wz = 0; }
     }
   }
 

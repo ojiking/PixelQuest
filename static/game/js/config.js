@@ -151,6 +151,15 @@ export const ENEMY_CURVE = {
 // 웨이브 크기 [초반, 막판], 구역당 웨이브 수 [초반, 막판]
 export const WAVE_CURVE = { size: [3, 6.5], waves: [2, 3] };
 
+// ---------------- 떨어진 부위가 튀는 정도 (막장 과장 연출) ----------------
+//  times: 최소 튀는 횟수 / speed: 첫 튐 속도(높이 ≈ speed²/44 m) / drop: 튈 때마다 줄어드는 속도 / roll: 튈 때마다 옆으로 차이는 힘
+export const GIB_BOUNCE = {
+  // 머리: 축구공처럼. 첫 튐을 speed로 차올린 뒤 탄성(bounce)으로 점점 낮아지고, 다 튀면 바닥을 데굴데굴 굴러가다 멈춤
+  //  bounce: 탄성(1이면 영원히 튐) / kick: 첫 튐 때 최소 수평 속도 / rollFric: 구를 때 1초에 남는 속도 비율
+  head: { speed: 10, bounce: 0.8, keep: 0.94, roll: 0.5, kick: 2.6, rollFric: 0.35 },
+  limb: { times: 3, speed: 3.6, drop: 0.85, keep: 0.72, roll: 0.6, spin: 0.75 },  // 팔·다리
+};
+
 // ---------------- 해금 전 기본 콘텐츠 ----------------
 export const BASE_UNLOCKS = { weapons: ['pipe', 'machete', 'block', 'golf', 'bat', 'katana', 'manhole'], biomes: ['plains', 'city'], bosses: ['boss'] };
 // 챕터: 스테이지 2개 + 보스. 보스를 잡으면 아지트를 거쳐 다음 챕터로 (챕터마다 강해짐)
