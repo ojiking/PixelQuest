@@ -34,6 +34,7 @@ node full_run.js
 | `heal_charger_pitwarn.js` | 스테이지 클리어 회복, 첫 스테이지 돌격 헬멧 1명 제한, 낭떠러지 경고 |
 | `unlocks_difficulty.js` | 해금·난이도·예전 저장 환불 |
 | `hideout.js` | 아지트 화면, 창 4개, 챕터 클리어 → 다음 챕터 |
+| `weapon_lab.js` | 무기방(개발자): 진열·집기·버리면 재생성·실험용 적·옵션·나가기 |
 | `perf.js` | 핏자국 1.5만 개일 때 프레임 시간 |
 | `play.js` + `bot.js` | **자동 플레이어**: 실제 키 입력만으로 여러 판 플레이하고 피해 원인·사망·막힘·프레임을 기록 (`RUNS=3 MAXMIN=25 node play.js`) |
 

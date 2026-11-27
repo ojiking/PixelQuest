@@ -83,6 +83,7 @@ function showTitle() {
         <div class="dim"><b>P</b> 픽셀 크기 · <b>B</b> (테스트) 적 소환</div>
       </div>`}
       <button class="btn primary" data-act="start">시작 (Enter)</button>
+      <div class="row"><button class="btn ghost small" data-act="lab">🔧 무기방 (개발자 전용)</button></div>
     </div>`);
 }
 
@@ -167,6 +168,64 @@ function heatRow() {
   return `<div class="heat">난이도 <button class="btn small" data-heat="-1" ${h <= 0 ? 'disabled' : ''}>◀</button>
     <b class="hv">${h}</b> / ${mx} <button class="btn small" data-heat="1" ${h >= mx ? 'disabled' : ''}>▶</button>
     <span class="dim">적 체력 +${Math.round(HEAT.enemyHp * h * 100)}% · 공격력 +${Math.round(HEAT.enemyPow * h * 100)}% · 부품 +${Math.round(HEAT.scrap * h * 100)}%</span></div>`;
+}
+
+// ------------------------------------------------------------ 무기방 (개발자 전용)
+const labUI = document.createElement('div');
+labUI.id = 'labui'; labUI.className = 'hidden';
+$('stage').appendChild(labUI);
+const labTags = document.createElement('div');
+labTags.id = 'labtags'; labTags.className = 'hidden';
+$('stage').appendChild(labTags);
+
+function renderLabUI() {
+  const L = game.lab;
+  labUI.innerHTML = `<div class="lt">무기방 <span class="dim">개발자 전용</span></div>
+    <button class="btn small" data-lab="attack">적 공격: <b>${L.attack ? '켬' : '끔'}</b> (1)</button>
+    <button class="btn small" data-lab="count">적 수: <b>${L.count}</b> (2)</button>
+    <button class="btn small" data-lab="infinite">내구도: <b>${L.infinite ? '무한' : '정상'}</b> (3)</button>
+    <button class="btn small ghost" data-lab="exit">나가기</button>`;
+  if (IS_MOBILE) labUI.innerHTML = labUI.innerHTML.replace(/ \([123]\)/g, '');
+  labTags.innerHTML = L.slots.map((s, i) => `<span data-i="${i}">${WEAPONS[s.type].name}</span>`).join('');
+}
+function labOption(k) {
+  const L = game.lab;
+  if (!game.run?.lab || !L) return;
+  if (k === 'attack') L.attack = !L.attack;
+  if (k === 'count') { L.count = L.count === 1 ? 3 : L.count === 3 ? 0 : 1; for (const e of game.enemies.filter(e => !e.dead).slice(L.count)) { e.dead = true; e.remove = true; game.releaseToken(e); } }
+  if (k === 'infinite') L.infinite = !L.infinite;
+  if (k === 'exit') { leaveLab(); showTitle(); return; }
+  renderLabUI();
+}
+function startLab() {
+  leaveHub(); hubCont = false;
+  game.startLab(computeStats(meta));
+  mode = 'run';
+  setScreen('');
+  hud.classList.remove('hidden');
+  $('hp-bot').closest('.unit').classList.add('hidden');
+  helpT = 0;
+  renderLabUI();
+  labUI.classList.remove('hidden'); labTags.classList.remove('hidden');
+}
+function leaveLab() {
+  labUI.classList.add('hidden'); labTags.classList.add('hidden');
+  $('hp-bot').closest('.unit').classList.remove('hidden');
+  if (game.run?.lab) { game.running = false; game.run.lab = false; preview(); }
+}
+labUI.addEventListener('click', e => { const t = e.target.closest('[data-lab]'); if (t) { playSfx('ui'); labOption(t.dataset.lab); } });
+// 진열대 무기 이름표를 무기 위에 붙임
+function placeLabTags() {
+  if (!game.run?.lab || !game.lab) return;
+  const st = $('stage'), W = st.clientWidth, H = st.clientHeight, v = game.vp;
+  for (const el of labTags.children) {
+    const s = game.lab.slots[+el.dataset.i], y = 1.0;
+    const cx = v[0] * s.x + v[4] * y + v[8] * s.z + v[12], cy = v[1] * s.x + v[5] * y + v[9] * s.z + v[13], cw = v[3] * s.x + v[7] * y + v[11] * s.z + v[15];
+    const sx = (cx / cw * 0.5 + 0.5) * W, sy = (1 - (cy / cw * 0.5 + 0.5)) * H;
+    el.style.display = sx < -60 || sx > W + 60 ? 'none' : '';
+    el.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, -100%)`;
+    el.classList.toggle('held', game.player.weapon?.type === s.type);
+  }
 }
 
 function startRun() {
@@ -263,6 +322,7 @@ function finishChapter() {
 }
 
 function finishRun(win) {
+  if (game.run?.lab) { leaveLab(); showTitle(); return; }   // 무기방은 기록·부품을 남기지 않음
   mode = 'result';
   const r = game.run;
   const gained = bankRun(0);
@@ -337,13 +397,14 @@ function act(a) {
   switch (a) {
     case 'hub': panel = null; showHub(); break;
     case 'close': panel = null; showHub(); break;
+    case 'lab': startLab(); break;
     case 'start':
       if (mode === 'hub' && hubCont && game.run) { leaveHub(); setScreen(''); hubCont = false; game.continueRun(computeStats(meta)); mode = 'run'; hud.classList.remove('hidden'); }
       else startRun();
       break;
     case 'resume': togglePause(); break;
     case 'mute': setMuted(!isMuted()); mode = 'run'; togglePause(); break;
-    case 'giveup': game.running = false; finishRun(false); break;
+    case 'giveup': if (game.run?.lab) { leaveLab(); showTitle(); break; } game.running = false; finishRun(false); break;
     case 'reset':
       if (resetArmed) { resetArmed = false; meta = resetMeta(); hubCont = false; showHub('기록을 초기화했습니다.'); }
       else { resetArmed = true; showHub('한 번 더 누르면 부품과 업그레이드 기록이 모두 지워집니다.'); }
@@ -367,6 +428,7 @@ addEventListener('keydown', e => {
     else if (mode === 'hub' && !panel) act('start');
   }
   if (mode === 'perk' && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) choosePerk(+e.code.slice(5) - 1);
+  if (mode === 'run' && game.run?.lab && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) labOption(['attack', 'count', 'infinite'][+e.code.slice(5) - 1]);
 });
 
 // ------------------------------------------------------------ HUD
@@ -401,6 +463,7 @@ function updateHud(dt) {
   setText('tactic', b.state === 'ko' ? `수리 중 ${Math.ceil(b.koT)}s` : game.rescuePending ? '구조 중!' : b.tacticDef.name);
   setText('scrap-n', String(Math.floor(game.run.scrap)));
   const z = game.stage.zones.length;
+  if (game.run.lab) setText('stage-info', `무기방 (개발자) · 적 공격 ${game.lab.attack ? '켬' : '끔'} · 적 ${game.lab.count}명`); else
   setText('stage-info', `CHAPTER ${game.run.chapter || 1} · STAGE ${game.run.stage + 1}/${STAGE_COUNT} · ${game.stage.biome.name} · 구역 ${Math.min(game.zoneIdx + 1, z)}/${z}`);
   setText('ptitle', game.stats.title ? `「${game.stats.title}」 ` : '');
   const boss = game.enemies.find(e => e.isBoss && !e.dead);
@@ -447,6 +510,7 @@ function frame(now) {
   } else if (game.stage) {
     game.render();
     texts.update(mode === 'run' ? dt : 0, game.vp);
+    placeLabTags();
   }
   updateHud(dt);
   requestAnimationFrame(frame);

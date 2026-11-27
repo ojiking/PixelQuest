@@ -35,7 +35,7 @@ export class Enemy extends Actor {
 
   // 근처에 떨어진 무기를 찾아 주우러 감 (전기톱 제외)
   seekWeapon() {
-    if (!this.def.pickup || this.mounted || this.weapon || !this.hasArms() || this.goItem) return;
+    if (!this.def.pickup || this.mounted || this.weapon || !this.hasArms() || this.goItem || this.game.run.lab) return;
     const g = this.game;
     let best = null, bd = 4.5;
     for (const it of g.items) {

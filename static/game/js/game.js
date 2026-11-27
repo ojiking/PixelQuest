@@ -77,6 +77,54 @@ export class Game {
     if (fx?.has('startSaw')) this.player.weapon = { type: 'chainsaw', dur: Math.round(WEAPONS.chainsaw.dur / 2) };
     else if (fx?.has('startLid')) this.player.weapon = { type: 'manhole', dur: WEAPONS.manhole.dur };
   }
+  // ------------------------------------------------ 무기방 (개발자 전용 실험실)
+  // 모든 무기를 위쪽 라인에 일렬로 진열. 버리거나 던지거나 부서지면 사라지고 제자리에 다시 생김.
+  // 가장 평범한 적(골목 깡패)이 어슬렁거림. 적 공격·적 수·내구도 무한은 실시간 옵션
+  startLab(stats) {
+    this.stats = stats;
+    WEAPON_POOL = null; WEAPON_MUL = {};
+    this.heat = 0;
+    this.run = {
+      lab: true, chapter: 1, stat: {}, stage: 0, scrap: 0, kills: 0, severs: 0, maxCombo: 0, time: 0,
+      perks: new Set(), biomes: ['plains'], boss: 'boss', introduced: new Set(), seen: new Set(['grunt']), rescueUsed: true,
+      hintSeen: new Set(Object.keys(SEG_HINTS)),
+    };
+    this.lab = { attack: false, count: 1, infinite: true, spawnT: 0.6, slots: [] };
+    this.player = new Player(this, stats.player);
+    this.bot = new Companion(this, stats.bot);
+    this.rescuePending = false;
+    this.endTimer = -1;
+    this.loadStage(0);
+    // 볼트는 쉬게 함 (실험 방해 방지)
+    Object.assign(this.bot, { hidden: true, x: -40, koT: 1e9 }); this.bot.setState('ko');
+    Object.keys(WEAPONS).forEach((type, i) => this.lab.slots.push({ type, x: 6 + i * 1.35, z: LANE.zMin + 0.7, item: null }));
+    this.player.x = 6; this.player.z = 0.6;
+    this.banner('무기방 — 개발자 전용', 1.6);
+  }
+
+  updateLab(dt) {
+    const L = this.lab, p = this.player;
+    p.hp = p.maxHp;                                            // 실험 중엔 죽지 않음
+    if (L.infinite && p.weapon) p.weapon.dur = WEAPONS[p.weapon.type].dur;
+    // 진열대: 집어 간 무기만 빼고, 사라진 자리는 다시 채움
+    for (const s of L.slots) {
+      const held = p.weapon?.type === s.type;
+      const flying = this.projectiles.some(pr => pr.kind === 'weapon' && pr.weaponType === s.type);
+      if ((!s.item || s.item.remove) && !held && !flying) {
+        s.item = new Item('weapon', s.type, s.x, s.z, { y: 1.2, vy: 1 });
+        this.items.push(s.item);
+        this.debris.puff(s.x, 0.3, s.z, [0xd8d0c0, 0xffffff], 5, 1, .1, .35, -0.3);
+      }
+    }
+    // 실험용 적: 정해진 수만큼 유지, 공격은 옵션
+    const alive = this.enemies.filter(e => !e.dead && !e.remove);
+    if (alive.length < L.count) {
+      L.spawnT -= dt;
+      if (L.spawnT <= 0) { L.spawnT = 1.0; const e = this.spawnEnemy('grunt', Math.random() < .5 ? -1 : 1); e.weapon = null; }
+    }
+    if (!L.attack) for (const e of alive) { e.cool = Math.max(e.cool, 1); if (e.state === 'attack' && e.attackPhase?.() === 'startup') { e.interrupt(); e.setState('idle'); } }
+  }
+
   stat(k, n = 1) { if (this.run?.stat) this.run.stat[k] = (this.run.stat[k] || 0) + n; }
 
   // 보스를 잡고 아지트에 다녀온 뒤: 같은 판을 이어서 다음 챕터 (특성·처치 기록 유지, 업그레이드 반영)
@@ -182,9 +230,9 @@ export class Game {
     this.items = this.items.filter(i => !i.remove);
     this.props = this.props.filter(p => !p.broken);
 
-    this.updateZones(dt);
+    if (this.run.lab) this.updateLab(dt); else this.updateZones(dt);
     this.updateCamera(dt);
-    this.cullBehind(dt);
+    if (!this.run.lab) this.cullBehind(dt);
     if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0) this.combo = 0; }
     if (this.goT > 0) this.goT -= dt;
 
@@ -192,7 +240,7 @@ export class Game {
       this.endTimer -= dt;
       if (this.endTimer < 0) { this.running = false; this.hooks.onRunEnd(false); }
     }
-    if (!this.lock && this.zoneIdx >= this.stage.zones.length && this.player.x > this.stage.L - 5 && this.endTimer < 0) {
+    if (!this.run.lab && !this.lock && this.zoneIdx >= this.stage.zones.length && this.player.x > this.stage.L - 5 && this.endTimer < 0) {
       this.running = false;
       this.hooks.onStageClear(this.run.stage + 1 >= STAGE_COUNT);
     }
@@ -255,7 +303,7 @@ export class Game {
 
   updateCamera(dt) {
     this.viewHalf = Math.min(10.5, 5.3 * this.aspect - 0.6);
-    let target = this.lock ? this.lock.cx : Math.max(this.camX, this.player.x + 1.2);
+    let target = this.lock ? this.lock.cx : this.run?.lab ? this.player.x : Math.max(this.camX, this.player.x + 1.2);   // 무기방은 좌우 자유
     target = clamp(target, this.viewHalf - 1.5, this.stage.L - this.viewHalf + 1);
     if (this.camX === 0) this.camX = target;
     this.camX += (target - this.camX) * Math.min(1, dt * 4);
@@ -985,6 +1033,7 @@ export class Game {
 
   dropWeapon(a) {
     if (!a.weapon) return;
+    if (this.run?.lab && a === this.player) { this.debris.puff(a.x, 0.8, a.z, [0xd8d0c0, 0xffffff], 6, 1.2, .1, .35, -0.3); a.weapon = null; return; }   // 무기방: 버린 무기는 사라짐(진열대에 다시 생김)
     this.items.push(new Item('weapon', a.weapon.type, a.x, a.z, { y: 0.8, vy: 3, vx: -a.facing * 1.5, dur: Math.min(a.weapon.dur, WEAPONS[a.weapon.type].dur) }));
     a.weapon = null;
   }
@@ -1174,7 +1223,7 @@ export class Game {
       this.explode(pr.x, pr.z, T.throwRadius, T.throwDmg * (pr.owner === this.player ? this.stats.player.throwMul : 1), null, pr.team);
       return;
     }
-    if (pr.kind === 'weapon' && pr.dur > 1) {
+    if (pr.kind === 'weapon' && pr.dur > 1 && !this.run.lab) {
       this.items.push(new Item('weapon', pr.weaponType, pr.x, pr.z, { y: Math.max(0.2, pr.y), vy: 3, vx: -sign(pr.vx) * 1.5, dur: pr.dur - 1 }));
     } else {
       const key = pr.kind === 'weapon' ? WEAPON_MODEL[pr.weaponType] : pr.kind === 'barrel' || pr.kind === 'moto' ? pr.kind : pr.kind === 'shuriken' ? 'shuriken' : 'brick';

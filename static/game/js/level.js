@@ -239,7 +239,8 @@ export class Stage {
     this.final = index === STAGE_COUNT - 1;
     this.biome = BIOMES[biomeKey];
     this.biomeKey = biomeKey;
-    this.L = this.final ? 106 : 100;
+    this.lab = !!game.run.lab;            // 무기방(개발자): 평평한 빈 마당
+    this.L = this.lab ? 44 : this.final ? 106 : 100;
     this.props = [];
     this.traps = [];
     this.items = [];
@@ -247,7 +248,7 @@ export class Stage {
     this.hmap = new Map();
     this.segments = [];
 
-    const triggers = stageTriggers(index);
+    const triggers = this.lab ? [] : stageTriggers(index);
 
     // ---- 지형 구간 배치: 전투 구역(아레나) 사이를 이동 구간으로 채움
     const arenaSpan = t => [t - 5, t + 13];
@@ -259,11 +260,12 @@ export class Stage {
       this.addSeg(boss ? 'open' : this.pickSeg(ARENA_TYPES), Math.max(cursor, a0), a1);
       cursor = a1;
     });
-    if (this.L - 6 - cursor >= 5) this.addSeg(this.pickSeg(PATH_TYPES), cursor, this.L - 6);
+    if (this.lab) this.addSeg('open', 0, this.L);
+    else if (this.L - 6 - cursor >= 5) this.addSeg(this.pickSeg(PATH_TYPES), cursor, this.L - 6);
 
     this.solid = new Map();   // 주차된 차·쓰레기통 (올라설 수 있는 장애물 높이)
     this.solids = [];
-    if (this.biome.city) this.placeCityProps();
+    if (this.biome.city && !this.lab) this.placeCityProps();
     const built = buildTerrain(game.r, this.L, this.biome, randi(1, 9999), this.hmap);
     this.terrain = built.mesh;
     this.buildHazard();
@@ -272,6 +274,7 @@ export class Stage {
       this.roadMarks = buildRoadMarks(game.r, this.L, (x, z) => this.heightAt(x, z) === PIT);
       Object.assign(this, buildPoles(this.L));
     }
+    if (this.lab) return;                 // 무기방: 구역·소품·함정·무기 배치 없음 (game.startLab이 무기를 진열)
 
     triggers.forEach((tx, zi) => {
       const waves = [];

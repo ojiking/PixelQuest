@@ -163,6 +163,14 @@ h3 small { color: var(--bot); }
 .hub .row { position: sticky; bottom: -22px; background: var(--panel); padding: 10px 0 4px; margin-bottom: -4px; }
 @media (max-height: 520px) { .hub .row { bottom: -12px; padding: 6px 0 2px; } }
 
+/* 무기방 (개발자 전용) */
+#labui { position: absolute; right: 2cqw; top: 9cqh; z-index: 5; display: flex; flex-direction: column; gap: 5px; align-items: stretch;
+  background: rgba(10, 12, 18, .72); border: 2px solid #556; padding: 8px; border-radius: 6px; font-size: 12px; }
+#labui .lt { color: var(--accent); font-weight: 700; margin-bottom: 2px; }
+#labui .btn.small { text-align: left; }
+#labtags { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+#labtags span { position: absolute; left: 0; top: 0; font-size: 11px; color: #e8e2d4; background: rgba(10, 12, 18, .6); padding: 0 4px; border-radius: 3px; white-space: nowrap; text-shadow: 1px 1px 0 #000; }
+#labtags span.held { color: var(--accent); border: 1px solid var(--accent); }
 /* 아지트: 3D 장면 위 버튼 */
 #hubui { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
 #hubui .hbtn { position: absolute; left: 0; top: 0; pointer-events: auto; font-family: var(--font); font-size: clamp(11px, 2.1cqh, 16px); font-weight: 700;
