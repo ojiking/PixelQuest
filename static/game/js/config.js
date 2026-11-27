@@ -417,7 +417,7 @@ export const BIOMES = {
     grass: 0xa8946e, dirt: 0x8a7656, lane: 0x8a8780, stone: 0x6e6252, edge: 0x6e685e, hillSide: 0x9a845e,
     wall: 0x8a7e6e, wall2: 0x6a5e50, glass: 0x1e1c1a, wood: 0x5a4a3a, leaves: 0x6a6a46, flora: 'none',
     heroLight: .5,                                  // 주인공 따라다니는 빛 (밝은 바닥이 하얗게 날아가지 않게)
-    particles: { kind: 'sand', n: 110, size: .028, color: [.86, .74, .56], speed: 1.6, alpha: .55 },
+    particles: { kind: 'sand', n: 110, size: .028, color: [.66, .54, .38], speed: 1.6, alpha: .45 },
   },
   snow: {
     // 얼어붙은 항구 (docs/art/ref/biome_snow.webp): 차가운 잿빛, 더러운 눈과 진창, 녹슨 컨테이너, 얼음 낀 바다

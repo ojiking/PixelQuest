@@ -9,6 +9,8 @@ import { Chunks, grid, box, cyl, line, h3, vnoise, mixC, shadeC, rgb } from './e
 import { FACES } from './voxel.js';
 import { OBSTACLE } from './config.js';
 import { pick, rand, randi } from './math.js';
+import { paintCar } from './env_models.js';
+import { VoxGrid } from './voxel.js';
 
 const S = 0.1, P = 2;   // 복셀 크기(m), 경계 밖 장식 여백(칸)
 const CROWN = 12;       // 2m 벽 위로 솟는 장식 높이 여유(칸)
@@ -318,7 +320,7 @@ function pDumpster(g, c) {
 function pSlabTop(g, c) {
   const s = c.seed, fz = FRONT(c);
   fillIn(g, c, (x, y, z) => {
-    if (y === c.H - 1) return (h3(x, z, s) < .04 || (x - P + z * 2) % 37 === 0) ? 0x8e8a82 : 0xaaa69e;   // 밝은 윗면 + 가는 금
+    if (y === c.H - 1) return (h3(x, z, s) < .04 || (x - P + z * 2) % 37 === 0) ? 0x7e7a72 : 0x96928a;   // 윗면 (조금 밝게) + 가는 금
     if (y === c.H - 2) return 0x7a766e;
     return (y >> 2) % 2 ? 0x86827a : 0x7a766e;
   });
@@ -341,7 +343,6 @@ function pSkids(g, c) {
     if ((z === fz || x === P || x === P + c.W - 1) && U(x, z) % 7 === 0) col = mixC(col, 0xd0d0c8, .5);   // 랩 반사
     return col;
   });
-  if (snow) for (let x = P; x < P + c.W; x += 3) g.set(x, c.H - 4, fz + 1, 0x8a7652);   // 묶은 끈
 }
 
 // ================================================================ 바이옴 마감: 눈·모래는 가장자리·바닥에 쌓인 더미로만
@@ -355,7 +356,7 @@ function weather(g, c, kind) {
       const edgeD = Math.min(x - P, P + c.W - 1 - x, z - P, fz - z);
       if (edgeD < .5 + vnoise(x * .3, z * .3, s) * 2.5 || (y >= c.H && vnoise(x * .25, z * .25, s + 4) > .7)) g.set(x, y, z, SNOWC[(x + z) % 3]);
     }
-    for (let x = P; x < P + c.W; x++) if (h3(x, 7, s) < .22) { const n = randi(1, 3); for (let k = 1; k <= n; k++) if (g.get(x, c.H - 1 - k, fz + 1) < 0) g.set(x, c.H - 1 - k, fz + 1, 0xa8b6bc); }   // 고드름
+    if (kind !== 'plat') for (let x = P; x < P + c.W; x++) if (h3(x, 7, s) < .22) { const n = randi(1, 3); for (let k = 1; k <= n; k++) if (g.get(x, c.H - 1 - k, fz + 1) < 0) g.set(x, c.H - 1 - k, fz + 1, 0xa8b6bc); }   // 고드름
     drift(g, c, SNOWC, 3);
   } else if (c.biome === 'desert') {
     drift(g, c, SAND, kind === 'wall' ? 5 : 3);
@@ -396,14 +397,95 @@ function vines(g, c, fz) {
   }
 }
 
+// ================================================================ 라운드 3: 개성 있는 1m 발판
+// 차 모델(env_models.js)을 0.045m 복셀로 칠한 뒤 높이를 눌러(squash) 잘라 씀 — 주차된 차와 같은 품질
+const SV = 0.045;
+function carGrid(idx, wreck, squash, x0 = 0, x1 = 88) {
+  const src = new VoxGrid(88, 33, 40); paintCar(src, idx, wreck);
+  const H = Math.ceil(33 * squash), g = new VoxGrid(x1 - x0, H, 40);
+  for (let x = x0; x < x1; x++) for (let y = 0; y < H; y++) for (let z = 0; z < 40; z++) {
+    const c = src.get(x, Math.min(32, Math.floor(y / squash)), z);
+    if (c >= 0) g.set(x - x0, y, z, wreck ? c : (h3(x, y, z) < .25 ? mixC(c, RUST[(x >> 3) % 4], .5) : c));
+  }
+  return g;
+}
+// 도시: 넘어진 실외기 (회색 함체, 옆 루버, 위 큰 팬)
+function pACUnit(g, c) {
+  const s = c.seed, fz = FRONT(c), B = 0x8a8678, cx = P + c.W / 2, cz = P + c.D / 2;
+  fillIn(g, c, (x, y, z) => {
+    const lx = x - P, lz = z - P, edge = lx < 1 || lx >= c.W - 1 || lz < 1 || lz >= c.D - 1;
+    if (y === c.H - 1) { const d = Math.hypot(x + .5 - cx, z + .5 - cz); if (d < 7.5) return d > 6.5 ? 0x4e4c48 : ((Math.round(Math.atan2(z - cz, x - cx) * 2.5) & 1) ? 0x2a2a28 : 0x1a1a18); return edge ? shadeC(B, .75) : shadeC(B, .92); }
+    if (edge) return shadeC(B, .75);
+    if (y >= 2 && y <= 7 && y % 2 === 0) return 0x4e4c48;            // 루버
+    return y < 2 ? mixC(B, RUST[lx % 4], .4) : B;
+  });
+  for (let x = P + 3; x < P + 9; x++) if (h3(x, 3, s) < .6) g.set(x, 8, fz + 1, 0x5a5a56);   // 이름판
+}
+// 도시: 묶어 둔 저지 방벽 2개 (공사장 자재)
+function pJerseyBundle(g, c) {
+  for (let k = 0; k < 2; k++) for (let t = 0; t < 10; t++) for (let y = 0; y < 9; y++) for (let z = P; z < P + c.D; z++) {
+    const half = y < 2 ? 5 : y < 5 ? 5 - (y - 1) * .6 : 2.6;
+    if (Math.abs(t + .5 - 5) > half) continue;
+    const l = z - P; let col = (l >> 3) % 2 ? CONCRETE[0] : CONCRETE[3];
+    if (y >= 3 && ((l + y) % 12) < 6) col = mixC(col, 0x9a4a3a, .55); else if (y >= 3) col = mixC(col, 0xc8c0b0, .25);
+    if (y < 2) col = shadeC(col, .8);
+    g.set(P + k * 10 + t, y, z, col);
+  }
+  for (const z of [P + 5, P + c.D - 6]) for (let x = P; x < P + c.W; x++) for (let y = 0; y < 10; y++) if (g.get(x, y, z) >= 0 && (y === 8 || g.get(x, y + 1, z) < 0)) g.set(x, y + (y === 8 ? 1 : 0), z, 0x8a6a3a);   // 묶은 끈
+}
+// 초원: 쓰러진 벽 덩어리 (들쭉날쭉한 윤곽, 벽돌 단면, 철근)
+function pWallChunk(g, c) {
+  const s = c.seed, fz = FRONT(c), cut = (x, z) => vnoise(x * .25, z * .25, s) * 5;
+  fillIn(g, c, (x, y, z) => {
+    const ed = Math.min(x - P, P + c.W - 1 - x, z - P, fz - z);
+    if (ed < cut(x, z) - 2 && y > 2) return -1;                         // 깨진 윤곽
+    if (y === c.H - 1) return h3(x, z, s) < .1 ? 0x6a665e : vnoise(x * .3, z * .3, s + 2) > .66 ? 0x6a6648 : 0x7e7a72;   // 윗면 (이끼)
+    return y % 4 === 3 ? 0x6a665e : (((x + z) >> 2) + (y >> 2)) % 2 ? 0x7a6a5a : 0x76726a;   // 벽돌·콘크리트 층
+  });
+  for (let i = 0; i < 4; i++) { const x = P + randi(2, c.W - 3), z = P + randi(2, c.D - 3); line(g, x, c.H - 3, z, x + randi(-3, 3), c.H + randi(1, 3), z + randi(-3, 3), RUST[i]); }
+}
+// 초원: 철근이 삐져나온 잔해 무덤
+function pMound(g, c) {
+  const s = c.seed, cx = P + c.W / 2, cz = P + c.D / 2, COL = [0x7a766e, 0x6e6a62, 0x6e4a3a, 0x86827a, 0x5e5a54];
+  for (let x = P - 1; x <= P + c.W; x++) for (let z = P - 1; z <= P + c.D; z++) {
+    const d = Math.hypot((x + .5 - cx) / (c.W / 2), (z + .5 - cz) / (c.D / 2));
+    const hh = Math.min(c.H, Math.floor(c.H * 1.35 * (1 - d * d * .55) + (vnoise(x * .4, z * .4, s) - .5) * 4));
+    for (let y = 0; y < hh; y++) g.set(x, y, z, COL[(((x >> 1) * 3 + (z >> 1) * 5 + (y >> 1)) % 5)]);
+  }
+  for (let i = 0; i < 6; i++) { const x = P + randi(3, c.W - 4), z = P + randi(3, c.D - 4); line(g, x, c.H - 3, z, x + randi(-5, 5), c.H + randi(0, 3), z + randi(-4, 4), RUST[i % 4]); }
+}
+// 초원: 넘어진 콘크리트 화분 (흙이 앞으로 쏟아지고 마른 가지)
+function pPlanter(g, c) {
+  const s = c.seed, fz = FRONT(c);
+  fillIn(g, c, (x, y, z) => {
+    const lx = x - P, inner = lx > 1 && lx < c.W - 2 && y > 1 && y < c.H - 2;
+    if (inner && z > fz - 8) return z === fz - 7 ? 0x3e3428 : -1;      // 앞으로 열린 입구 (옆으로 넘어짐)
+    return y === c.H - 1 ? 0x7e7a72 : ((lx + y) % 9 === 0 ? 0x6a665e : 0x76726a);
+  });
+  for (let x = P + 2; x < P + c.W - 2; x++) for (let z = fz - 6; z <= fz + 2; z++) { const hh = Math.floor(3 - Math.max(0, z - fz) * 1 + vnoise(x * .3, z * .3, s) * 2); for (let y = 2; y < 2 + hh; y++) g.set(x, z > fz ? y - 2 : y, z, (x + y) % 3 ? 0x4a3e30 : 0x56483a); }
+  for (let i = 0; i < 4; i++) { const x = P + randi(4, c.W - 5); line(g, x, 4, fz - 2, x + randi(-4, 4), randi(5, 8), fz + 2, 0x4e4034); }
+}
+// 항구: 눈 덮인 계류 함 / 해치 덮개 (어두운 쇠, 테두리, 손잡이)
+function pHatch(g, c) {
+  const s = c.seed, B = 0x3e4448;
+  fillIn(g, c, (x, y, z) => {
+    const lx = x - P, lz = z - P, rim = lx < 2 || lx >= c.W - 2 || lz < 2 || lz >= c.D - 2;
+    if (y === c.H - 1) return rim ? shadeC(B, 1.15) : vnoise(x * .25, z * .25, s) > .3 ? SNOWC[(x + z) % 3] : 0x4a5054;
+    if (y === c.H - 2 && !rim) return shadeC(B, .7);
+    return y < 3 ? mixC(B, RUST[lx % 4], .35) : (lx % 6 === 0 ? shadeC(B, .85) : B);
+  });
+  for (const hx of [P + 5, P + c.W - 6]) { g.set(hx, c.H, P + c.D / 2, 0x7a7a74); g.set(hx + 1, c.H, P + c.D / 2, 0x7a7a74); }   // 손잡이
+  for (let x = P + 3; x < P + 10; x++) g.set(x, 5, FRONT(c) + 1, 0x8a7a44);   // 바랜 노란 표시
+}
+
 const PAINT = { facade: pFacade, hoarding: pHoarding, carstack: pCarStack, bus: pBus, slabruin: pSlabRuin, containers: pContainers,
-  jersey: pJersey, blockwall: pBlockwall, pipe: pPipe, hazard: pHazard, pallets: pPallets, dumpster: pDumpster, slabtop: pSlabTop, skids: pSkids };
+  jersey: pJersey, acunit: pACUnit, jerseys: pJerseyBundle, wallchunk: pWallChunk, mound: pMound, planter: pPlanter, hatch: pHatch, blockwall: pBlockwall, pipe: pPipe, hazard: pHazard, pallets: pPallets, dumpster: pDumpster, slabtop: pSlabTop, skids: pSkids };
 // 벽 구간 하나 = 한 종류, 바리케이드 줄 하나 = 한 종류
 const KINDS = {
-  city:   { wall: ['facade', 'hoarding', 'carstack'], barrier: ['jersey'], plat: ['dumpster', 'slabtop'] },
-  plains: { wall: ['slabruin'], barrier: ['blockwall', 'jersey'], plat: ['slabtop'] },
+  city:   { wall: ['facade', 'hoarding', 'carstack'], barrier: ['jersey'], plat: ['dumpster', 'acunit', 'jerseys', 'dumpster'] },
+  plains: { wall: ['slabruin'], barrier: ['blockwall', 'jersey'], plat: ['carhull', 'wallchunk', 'mound', 'planter'] },
   desert: { wall: ['containers'], barrier: ['pipe', 'hazard'], plat: ['skids', 'slabtop'] },
-  snow:   { wall: ['containers'], barrier: ['pallets', 'pipe'], plat: ['skids', 'slabtop'] },
+  snow:   { wall: ['containers'], barrier: ['pallets', 'pipe'], plat: ['hatch', 'skids'] },
 };
 
 function paintPiece(ch, kind, biome, x, z, w, d, h, long, seed, type) {
@@ -500,10 +582,10 @@ function bridges(ch, st, biome) {
         if (rail && kk === 1) {
           if (timber) { if (x % 15 === 0 || y === 13) g.set(x, y, k, y === 13 ? 0x8a7652 : 0x4e3e2e); }
           else if (steel) { if (x % 10 === 0 || y === 13 || y === 11) g.set(x, y, k, (x + y) % 9 ? RUST[(x >> 2) % 4] : 0x8a7a44); }
-          else if (y <= 12 && vnoise(x * .1, 1, sg.a) > .35) g.set(x, y, k, CONCRETE[(x >> 4) % 4]);   // 낮은 콘크리트 난간 (부서짐)
+          else { if (y <= 12 && (x % 20 < 3 || y <= 10)) g.set(x, y, k, x % 20 < 3 ? CONCRETE[1] : CONCRETE[(x >> 4) % 4]); if (y === 13) g.set(x, y, k, RUST[(x >> 3) % 4]); }   // 콘크리트 난간 + 녹슨 손잡이 쇠
         }
       }
-      for (let x = 0; x < len; x++) if (vnoise(x * .08, zEdge, sg.a + 3) < .3) for (let y = 9; y < 14; y++) for (let k = 0; k < 4; k++) g.set(x, y, k, -1);   // 난간이 끊긴 곳
+      for (let x = 0; x < len; x++) if (vnoise(x * .08, zEdge, sg.a + 3) < (timber || steel ? .3 : .18)) for (let y = 9; y < 14; y++) for (let k = 0; k < 4; k++) g.set(x, y, k, -1);   // 난간이 끊긴 곳
       ch.add(g, S, sg.a, -1.0, oz, { seed: sg.a });
     }
     // 교각: 상판 아래로 깊이 내려감 (항구는 나무 말뚝이 물속으로)
@@ -527,17 +609,40 @@ function pitWater(ch, st, deck) {
   }
 }
 
+// 쌓아 놓은 폐차 벽: 진짜 차 모델을 눌러 2단으로 쌓고, 뒤는 고철 더미로 메움 (+ 위에 하나 더)
+function carStack(ch, p, seed) {
+  const fill = { W: p.w * 10, H: 20, D: p.d * 10, seed, biome: 'city' };
+  const g = grid(fill.W + 2 * P, 26, fill.D + 2 * P), SCR = [0x3a3634, 0x4a4440, 0x5a3a2a, 0x2e2c2a];
+  box(g, P, 0, P, P + fill.W - 1, 19, P + fill.D - 13, (x, y, z) => SCR[(((x >> 1) + (y >> 1) * 3 + z) % 4)]);   // 뒤쪽 고철
+  for (let x = P; x < P + fill.W; x++) for (let z = P; z < P + fill.D - 13; z++) if (h3(x, z, seed) < .3) g.set(x, 20 + (h3(x, z, seed + 1) < .3 ? 1 : 0), z, pick(SCR));
+  ch.add(g, S, p.x - P * S, 0, p.z - P * S, { seed, bottom: false });
+  const n = Math.max(1, Math.floor(p.w / 4)), off = (p.w - n * 3.96) / 2, zf = p.z + p.d - 1.8;
+  for (let tier = 0; tier < 2; tier++) for (let i = 0; i < n; i++) {
+    const idx = randi(0, 6), car = carGrid(idx, h3(i, tier, seed) < .3, 0.66);
+    ch.add(car, SV, p.x + off + i * 3.96 + (tier ? rand(-.25, .25) : 0), tier * 1.0, zf, { seed: seed + i * 7 + tier });
+  }
+  if (p.w >= 5) ch.add(carGrid(randi(2, 6), true, 0.5), SV, p.x + rand(0, p.w - 4), 2.0, p.z + .3, { seed: seed + 99 });   // 위에 하나 더 (뒤로)
+}
+// 초원 발판: 반으로 잘린 녹슨 차체 (풀숲)
+function carHull(ch, p, seed) {
+  const front = Math.random() < .5, g = carGrid(randi(2, 6), Math.random() < .5, 0.72, front ? 44 : 0, front ? 88 : 44);
+  ch.add(g, SV, p.x + (p.w - 1.98) / 2, 0, p.z + (p.d - 1.8) / 2, { seed });
+  const gg = grid(24, 7, 24);   // 밑동 풀
+  for (let x = 0; x < 24; x++) for (let z = 0; z < 24; z++) { if ((x > 2 && x < 21 && z > 2 && z < 21) || h3(x, z, seed) < .45) continue; const hh = randi(2, 6), col = BLADE[(x + z) % 5]; for (let y = 0; y < hh; y++) gg.set(x + (y > hh * .6 ? (x < 12 ? -1 : 1) : 0), y, z, col); }
+  ch.add(gg, S, p.x - .2, 0, p.z - .2, { seed });
+}
+
 // ---------------------------------------------------------------- 진입점
 // deck: 다리 상판 칸(밑이 비어 있음). 반환: { chunks (핏자국 묻는 장애물), edges (낭떠러지 단면·다리 구조) }
 export function buildObstacles(r, st, biome, deck) {
   const K = KINDS[biome] ?? KINDS.city, ch = new Chunks(8), ed = new Chunks(12);
-  let seed = 1;
+  let seed = 1, lastPlat = null;
   for (const p of rects(st.hmap)) {
     seed += 17;
     if (p.h === 2) {                              // 좁은 골목 벽: 구간 전체가 한 물건
       let kind = pick(K.wall);
       if (biome === 'city' && p.w >= 7 && p.w <= 14 && Math.random() < .35) kind = 'bus';
-      paintPiece(ch, kind, biome, p.x, p.z, p.w, p.d, 2, 'x', seed, 'wall');
+      if (kind === 'carstack') carStack(ch, p, seed); else paintPiece(ch, kind, biome, p.x, p.z, p.w, p.d, 2, 'x', seed, 'wall');
     } else if (p.w === 1 && p.d >= 4 || p.d === 1 && p.w >= 4) {   // 바리케이드 줄: 줄 하나는 같은 종류
       const kind = pick(K.barrier), long = p.w === 1 ? 'z' : 'x', len = long === 'z' ? p.d : p.w;
       const step = kind === 'pipe' ? len : kind === 'pallets' ? 1 : 3;
@@ -548,7 +653,9 @@ export function buildObstacles(r, st, biome, deck) {
       }
       if (long === 'z') rowEnds(ch, biome, p.x, p.z, p.z + p.d, seed);
     } else {                                      // 잔해 더미 (올라설 수 있음)
-      paintPiece(ch, pick(K.plat), biome, p.x, p.z, p.w, p.d, p.h, p.w >= p.d ? 'x' : 'z', seed, 'plat');
+      let kind; do kind = pick(K.plat); while (kind === lastPlat && new Set(K.plat).size > 1);   // 같은 물건이 줄줄이 반복되지 않게
+      lastPlat = kind;
+      if (kind === 'carhull') carHull(ch, p, seed); else paintPiece(ch, kind, biome, p.x, p.z, p.w, p.d, p.h, p.w >= p.d ? 'x' : 'z', seed, 'plat');
     }
   }
   pitEdges(ed, st, biome);

@@ -12,7 +12,7 @@ const C = {
   glass: 0x1e242a, glassL: 0x3a4650, dark: 0x0e0f12, frame: 0x4a3e36,
   wood: 0x7a5a3a, woodD: 0x5a4028, rust: 0x5a3424, rustL: 0x7a4a2e, iron: 0x2e2622,
   ac: 0xa8a294, acD: 0x7a766c, shutter: 0x6e6c68, shutterD: 0x55534f,
-  awn: [[0x8e4a3c, 0xbab098], [0x485a46, 0xbab098], [0x7e6a3e, 0x3a3230]],   // 차양: 30% 채도 낮춤
+  awn: [[0x7a5448, 0xa49c8c], [0x4c5a4a, 0xa49c8c], [0x706448, 0x3a3432]],   // 차양: 채도·밝기를 낮춰 배경에 묻히게
   graffiti: [0x8a5a7a, 0x5a7a7a, 0xb8b0a0, 0x7a6a3a, 0x6a4a5a],
 };
 const SIGN_TEXT = ['BODEGA', 'DELI', 'PAWN SHOP', 'LIQUOR', 'HOTEL', 'PIZZA', 'LAUNDRY', 'GROCERY', 'BAR', 'CHECKS CASHED', 'TATTOO', 'DINER', 'HARDWARE', 'PHARMACY', 'SHOES', 'CAFE'];

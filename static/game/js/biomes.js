@@ -288,12 +288,14 @@ function bush(ch, x, y, z, seed, rr = rand(4, 8), vs = F) {
 }
 // 마른 풀 무더기: 가는 풀잎이 제각각 높이로 기울어짐 (막대 다발처럼 보이지 않게 듬성듬성)
 function grassClump(ch, x, y, z, seed, rr = 4, tall = 6, vs = F) {
-  const n = rr * 2 + 3, g = grid(n, tall + 2, n);
-  for (let xx = 1; xx < n - 1; xx++) for (let zz = 1; zz < n - 1; zz++) {
-    if (Math.hypot(xx - n / 2 + .5, zz - n / 2 + .5) > rr + .3 || h3(xx, zz, seed) < .62) continue;
-    const hgt = Math.max(1, Math.round(tall * (.35 + h3(xx, zz, seed + 1) * .65))), c = DRY[(h3(xx, zz, seed + 2) * DRY.length) | 0];
-    const lx = Math.sign(xx - n / 2 + .5), lz = Math.sign(zz - n / 2 + .5);   // 바깥쪽으로 기울어짐
-    for (let yy = 0; yy < hgt; yy++) { const t = yy / hgt, ox = t > .55 ? lx : 0, oz = t > .8 ? lz : 0; g.set(xx + ox, yy, zz + oz, yy === hgt - 1 ? shadeC(c, 1.12) : c); }
+  // 촘촘한 덤불: 가운데가 높고 바깥 풀잎일수록 낮고 많이 눕는다 (마른 풀 더미)
+  const n = rr * 2 + 7, g = grid(n, tall + 2, n), c0 = n / 2 - .5;
+  for (let xx = 3; xx < n - 3; xx++) for (let zz = 3; zz < n - 3; zz++) {
+    const d = Math.hypot(xx - c0, zz - c0) / (rr + .3);
+    if (d > 1 || h3(xx, zz, seed) < .3) continue;
+    const hgt = Math.max(1, Math.round(tall * (1 - d * .55) * (.6 + h3(xx, zz, seed + 1) * .4))), c = DRY[(h3(xx, zz, seed + 2) * DRY.length) | 0];
+    const dx = xx - c0, dz = zz - c0, len = Math.hypot(dx, dz) || 1, lean = 1 + d * 2.2 + h3(xx, zz, seed + 3);   // 바깥으로 눕는 정도
+    for (let yy = 0; yy < hgt; yy++) { const t = (yy / hgt) ** 1.6; g.set(Math.round(xx + dx / len * lean * t), yy, Math.round(zz + dz / len * lean * t), yy === hgt - 1 ? shadeC(c, 1.12) : yy < 2 ? shadeC(c, .82) : c); }
   }
   ch.add(g, vs, x - n * vs / 2, y, z - n * vs / 2, { seed });
 }
@@ -473,7 +475,7 @@ function groundDecals(ch, plan, isPit) {
       ang += rand(-.6, .6);
       const st = rand(.1, .22), nx = x + Math.cos(ang) * st, nz = Math.max(-4.6, Math.min(5, z + Math.sin(ang) * st));
       q(Math.min(x, nx), Math.min(z, nz), Math.abs(nx - x) + .045, Math.abs(nz - z) + .045, E.crack, .012);
-      if (E.crackGrass && h3(x * 9, z * 9, seed) < E.crackGrass && !isPit(x, z)) grassClump(ch, x, 0, z, (x * 13) | 0, 1, randi(2, 4));
+      if (E.crackGrass && h3(x * 9, z * 9, seed) < E.crackGrass && !isPit(x, z)) grassClump(ch, x, 0, z, (x * 13) | 0, randi(1, 2), randi(3, 5));
       if (depth < 2 && Math.random() < .12) crack(nx, nz, ang + rand(-1.4, 1.4), (steps - i) >> 1, depth + 1);
       x = nx; z = nz;
     }
@@ -483,10 +485,10 @@ function groundDecals(ch, plan, isPit) {
 // 길 위 작은 풀 포기 (균열 사이) / 모래 둔덕 / 눈 더미: 0.1m 복셀
 function groundBits(ch, plan, isPit) {
   const { key, L } = plan;
-  for (let n = 0; n < L * (key === 'plains' ? 2.6 : 1.2); n++) {
+  for (let n = 0; n < L * (key === 'plains' ? 3.4 : 1.2); n++) {
     const x = rand(-12, L + 14), edge = Math.random() < .55, z = edge ? (Math.random() < .5 ? rand(-5, -4.2) : rand(4.7, 7)) : rand(-4, 4.6);
     if (isPit(x, z)) continue;
-    if (key === 'plains') { if (edge || Math.random() < .3) grassClump(ch, x, 0, z, n, edge ? randi(2, 4) : 1, edge ? randi(4, 8) : randi(2, 3)); }
+    if (key === 'plains') { if (edge) { grassClump(ch, x, 0, z, n, randi(3, 6), randi(5, 10)); if (Math.random() < .6) grassClump(ch, x + rand(-.6, .6), 0, z + rand(-.3, .3), n + 1, randi(2, 4), randi(4, 8)); } }
     else if (key === 'desert') {
       if (!edge) continue;
       const g = grid(randi(6, 14), 3, randi(4, 9)); for (let xx = 0; xx < g.w; xx++) for (let zz = 0; zz < g.d; zz++) { const d = Math.hypot((xx + .5) / g.w - .5, (zz + .5) / g.d - .5) * 2; const hgt = Math.floor((1 - d) * 3.4); for (let y = 0; y < hgt; y++) g.set(xx, y, zz, SAND[(xx + zz + y) % 3]); }

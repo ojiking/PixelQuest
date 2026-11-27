@@ -31,7 +31,7 @@ const n2 = (x, y, s) => vnoise(x, y, s);
 
 // ---------------------------------------------------------------- 승용차 (길이 3.96 × 높이 1.35 × 폭 1.8m, 앞 = +x)
 const CAR = [0xc8a030, 0xb8902a, 0x6a6660, 0x7a3a2c, 0x3a4652, 0x4a5240, 0x8a7a62];
-function paintCar(g, i, wreck) {
+export function paintCar(g, i, wreck) {
   const W = 88, D = 40, base = wreck ? 0x2a2420 : CAR[i], seed = i * 7 + 3, taxi = !wreck && i <= 1;
   const GL = 0x1e2630, GL2 = 0x3a4a56;
   const wheels = [16, 71];
@@ -164,7 +164,7 @@ export const ENV_BUILDERS = {
     const C = 0x3e5a3e;
     box(g, 1, 2, 1, 38, 22, 18, (x, y, z) => {
       let c = (x % 6 === 0 && (z === 1 || z === 18)) ? shadeC(C, .75) : C;
-      if (n2(x * .2, y * .2 + z * .1, 6) > .58) c = mixC(c, RUST[(x + y) % 4], .85);
+      if (y < 6) c = mixC(c, RUST[(x >> 2) % 4], .35);                      // 아래쪽만 녹 (얼룩 대신)
       if (y < 5) c = shadeC(c, .8);
       return c;
     });

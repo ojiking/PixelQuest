@@ -17,8 +17,18 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   await page.waitForTimeout(1200);
   await page.keyboard.press('Enter'); await page.waitForTimeout(800);
   const ev = (f, a) => page.evaluate(f, a);
+  // 게임 시간 기준 대기: 그래픽카드 없는 느린 환경에서도 실제 시간 대신 게임 안의 시간이 ms만큼 흐를 때까지 기다림
+  // (메뉴처럼 게임 시간이 멈춘 화면이면 실제 시간 ms×6까지만 기다림)
+  const wait = async ms => {
+    const t0 = await page.evaluate(() => window.__game?.time ?? 0), w0 = Date.now();
+    while (Date.now() - w0 < ms * 6) {
+      await page.waitForTimeout(Math.min(100, ms));
+      const t = await page.evaluate(() => window.__game?.time ?? 0);
+      if (t - t0 >= ms / 1000 || (t === t0 && Date.now() - w0 >= ms)) break;
+    }
+  };
   await ev(() => { window.__game.run.biomes[1] = 'city'; window.__game.loadStage(1); });
-  await page.waitForTimeout(2500);
+  await wait(2500);
   if (errs.length) { console.log(errs); return browser.close(); }
   const reset = () => ev(() => { const g = window.__game, p = g.player; g.items.length = 0; g.props.length = 0; g.traps.length = 0; g.lock = null; g.zoneIdx = g.stage.zones.length;
     for (const e of g.enemies) { e.remove = true; e.dead = true; } p.maxHp = p.hp = 9999; p.facing = 1; p.setState('idle'); p.attack = null; p.weapon = null; p.carry = null;
@@ -31,20 +41,20 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   console.log('car', JSON.stringify(c1));
   for (let i = 0; i < 12 && await ev(() => window.__car.fuse < 0 && !window.__car.wreck); i++) {
     await ev(() => { const p = window.__game.player; p.setState('idle'); p.attack = null; p.facing = 1; p.startAttack('cross'); });
-    await page.waitForTimeout(280);
+    await wait(280);
   }
   console.log(' after punches hp', await ev(() => window.__car.hp), 'fuse', await ev(() => window.__car.fuse.toFixed(2)));
   await ev(() => { window.__game.player.x -= 3; });
-  await page.waitForTimeout(300);
+  await wait(300);
   await page.screenshot({ path: SP + '/61_car_fuse.png' });
-  await page.waitForTimeout(700);
+  await wait(700);
   await page.screenshot({ path: SP + '/62_car_boom.png' });
   console.log(' wreck', await ev(() => window.__car.wreck), 'model', await ev(() => window.__car.model), 'grunt hp', await ev(() => window.__e.dead ? 'dead' : window.__e.hp), 'solid h', await ev(() => window.__game.stage.solid.get(window.__car.x + ',' + window.__car.z)));
   // 연쇄: 두 차를 붙여 놓고 폭발
   const chain = await ev(() => { const g = window.__game; const cs = g.cars(); if (cs.length < 2) return 'n/a'; const a = cs[0], b = cs[1]; const old = { x: b.x, z: b.z };
     b.x = a.x + 5; b.z = a.z; g.explodeCar(a); return { a: a.wreck, bFuse: b.fuse }; });
   console.log(' chain', JSON.stringify(chain));
-  await page.waitForTimeout(1200);
+  await wait(1200);
 
   // 2) 폭주족 돌진
   await reset();
@@ -56,13 +66,16 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     const s = await ev(() => { const b = window.__b, p = window.__game.player; if (p.state === 'down' || p.state === 'hurt') { p.setState('idle'); p.y = 0; } return [b.bikePhase, b.mounted, +b.x.toFixed(1), p.hp]; });
     if (s[0] !== lastPh) { console.log('  phase', s[0], 'x', s[2], 'mounted', s[1]); lastPh = s[0]; }
     if (i === 8) await page.screenshot({ path: SP + '/63_biker.png' });
-    await page.waitForTimeout(100);
+    await wait(100);
   }
   console.log(' player hp', h0, '→', await ev(() => window.__game.player.hp));
   // 강하게 맞으면 낙차 → 오토바이 오브젝트
+  // 앞 단계에서 화면이 오른쪽으로 더 갔을 수 있음 → 순간이동한 자리가 '지나온 화면 밖'으로 정리되지 않게 기준을 되돌림
+  // 앞 돌진 단계에서 무작위로 놓인 차에 부딪혀 스스로 낙차했을 수 있음 → 이 단계는 탄 상태에서 시작
+  await ev(() => { const g = window.__game, b = window.__b; g.camMax = g.camX; if (!b.mounted) { b.mounted = true; b.setState('idle'); b.weapon = null; } g.props = g.props.filter(p => p.kind !== 'moto'); });
   await ev(() => { const g = window.__game, p = g.player, b = window.__b; b.bikePhase = 'rev'; b.bikeT = -99; b.vx = 0; p.x = b.x - 1; p.z = b.z; p.facing = 1; p.setState('idle'); p.attack = null; p.comboIdx = 2; p.startAttack('kick'); window.__dbg = JSON.stringify({bx: b.x, bz: b.z, px: p.x, pz: p.z, st: b.state, ps: p.state, inv: b.invuln}); });
   console.log(await ev(() => window.__dbg));
-  await page.waitForTimeout(500);
+  await wait(500);
   console.log(' after kick mounted', await ev(() => window.__b.mounted), 'motos', await ev(() => window.__game.props.filter(p => p.kind === 'moto').length), 'weapon', await ev(() => window.__b.weapon?.type ?? '-'));
   await page.screenshot({ path: SP + '/64_dismount.png' });
 
@@ -71,12 +84,12 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     p.x = m.x - 0.4; p.z = m.z; p.setState('idle'); p.attack = null; p.weapon = null; g.interact(p);
     const e = g.spawnEnemy('brute', 1); e.x = p.x + 5; e.z = p.z; e.cool = 99; window.__e = e; window.__eh = e.hp; });
   console.log(' carry', await ev(() => window.__game.player.carry?.kind));
-  await page.waitForTimeout(300);
+  await wait(300);
   await page.screenshot({ path: SP + '/65_carry_moto.png' });
   await ev(() => { const g = window.__game, p = g.player; p.facing = 1; g.interact(p); });
-  await page.waitForTimeout(250);
+  await wait(250);
   await page.screenshot({ path: SP + '/66_throw_moto.png' });
-  await page.waitForTimeout(600);
+  await wait(600);
   console.log(' brute hp', await ev(() => `${window.__eh} → ${window.__e.dead ? 'dead' : window.__e.hp}`), 'projectiles', await ev(() => window.__game.projectiles.length));
   console.log('errors', errs.length ? errs : 'none');
   await browser.close();
