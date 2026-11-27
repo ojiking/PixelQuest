@@ -71,7 +71,8 @@ export const ATTACKS = {
   whipF:   { startup: .14, active: .14, recovery: .30, range: [.2, 1.0], depth: .9,  dmg: 1.4, knock: 2.5, zone: 'low',  hitstop: .08, anim: 'hswing', weapon: true, knockdown: true, finisher: true },
   // 화염 분사 (누르고 있기) / 샷건 사격
   flame:    { startup: .08, active: 999, recovery: .15, range: [.2, 1.0], depth: .75, dmg: 1.0, knock: .2, zone: 'all', hitstop: 0, anim: 'flame', weapon: true, hold: true, tick: .1, hitstun: .12, ignite: 3, flame: true },
-  shotgun:  { startup: .10, active: .05, recovery: .48, range: [0, 1.0], depth: 1.0, dmg: 1.0, knock: 11, zone: 'all', hitstop: .12, anim: 'shoot', weapon: true, knockdown: true, shake: .38, shot: true },
+  // 샷건: 어깨에 붙여 조준 → 발사(큰 반동: 상체가 젖혀지고 총구가 튀고 뒤로 밀림) → 펌프 장전(탄피 배출)
+  shotgun:  { startup: .12, active: .05, recovery: .52, range: [0, 1.0], depth: 1.0, dmg: 1.0, knock: 11, zone: 'all', hitstop: .14, anim: 'shoot', weapon: true, knockdown: true, shake: .5, shot: true, recoil: 4.2 },
   // 쌍절곤: 빠른 연타 → 회전 마무리
   nun1:     { startup: .05, active: .07, recovery: .09, range: [.1, 1.0], depth: .5,  dmg: 1.0, knock: .9, zone: 'high', hitstop: .035, anim: 'swing',  weapon: true },
   nun2:     { startup: .05, active: .07, recovery: .09, range: [.1, 1.0], depth: .55, dmg: 1.0, knock: .9, zone: 'mid',  hitstop: .035, anim: 'hslash', weapon: true },

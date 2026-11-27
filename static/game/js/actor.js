@@ -148,7 +148,8 @@ export class Actor {
       a.spawned = true;
       const tip = this.weaponTip(1.15);
       g.muzzleFlash(tip, this.facing);
-      this.vx = -this.facing * 3.2;
+      this.vx = -this.facing * (d.recoil ?? 3.2);      // 반동으로 뒤로 밀림
+      if (this.grounded) this.vy = Math.max(this.vy, 1.6);   // 살짝 들썩
       if (this.weapon) { this.weapon.dur -= 1; if (this.weapon.dur <= 0) this.weapon.empty = true; }
       tryHits(g, this, a);
       return;
@@ -341,6 +342,7 @@ export class Actor {
           T.armF = 1.0 + b; T.handF = 2.0; T.armB = .85 - b; T.handB = 2.15; T.torso = -.06;
           T.legF = .25; T.shinF = -.1; T.legB = -.2; T.shinB = -.15; lift = Math.abs(b) * .3;
         } else { T.armF = .15 + Math.sin(t * 2.2) * .05; T.armB = .1 - Math.sin(t * 2.2) * .05; T.shinF = -.05; }
+        this.gunHold(T, t);
         break;
       case 'walk': {
         const legs = this.legCount();
@@ -363,6 +365,7 @@ export class Actor {
           T.shinF = -Math.max(0, -w) * .9 - .1; T.shinB = -Math.max(0, w) * .9 - .1;
           T.armF = -w * .55; T.armB = w * .55; T.handF = .35 + Math.max(0, w) * .4; T.handB = .35 + Math.max(0, -w) * .4;
         }
+        this.gunHold(T, t);
         break;
       }
       case 'grab': T.armF = T.armB = 1.35; T.handF = T.handB = .45; T.torso = -.12; T.legF = .3; T.legB = -.25; T.shinB = -.2; break;
@@ -502,6 +505,16 @@ export class Actor {
     return n;
   }
 
+  // 양손 총기(샷건·화염 스프레이)는 늘어뜨리지 않고 총구를 앞쪽 아래로 향한 '로우 레디' 자세로 듦
+  gunHold(T, t) {
+    const w = this.weapon?.type;
+    if (w !== 'shotgun' && w !== 'flamer') return;
+    const bob = Math.sin(t * 3) * .03;
+    T.armF = .85 + bob; T.handF = .85; T.grip = -1.82;       // 오른손: 손잡이, 개머리판은 옆구리에 (총구는 거의 수평, 살짝 아래)
+    T.armB = 1.2 + bob; T.handB = .55;                       // 왼손: 앞쪽 펌프를 받침
+    T.torso = -.05;
+  }
+
   attackPose(T) {
     const a = this.attack, d = a.def, ph = this.attackPhase(), t = this.game.time;
     const S = ph === 'startup', A = ph === 'active';
@@ -555,10 +568,24 @@ export class Actor {
         T.armF = 1.3 + j; T.armB = 1.15 + j; T.handF = .1; T.handB = .5; T.grip = -1.5;
         T.torso = -.1; T.legF = .4; T.legB = -.3; T.shinB = -.25; break;
       }
-      case 'shoot': // 샷건: 겨누기 → 반동으로 총구가 들림
-        T.armF = A ? 1.95 : ph === 'recovery' && a.t - d.startup - d.active < .12 ? 1.9 : 1.5;
-        T.armB = T.armF - .15; T.handF = 0; T.handB = .35; T.grip = -1.57;
-        T.torso = A ? .25 : 0; T.head = A ? .15 : 0; T.legF = .45; T.legB = -.35; T.shinB = -.3; break;
+      case 'shoot': { // 샷건: 어깨에 붙여 조준 → 발사 반동 → 펌프 장전
+        const ta = a.t - d.startup;                      // 발사 순간부터 지난 시간
+        T.legF = .5; T.shinF = -.15; T.legB = -.45; T.shinB = -.3;   // 앞발을 내딛고 버티는 자세
+        if (ta < 0) {                                    // 조준: 개머리판을 어깨에, 총열 수평
+          T.armF = 1.78; T.handF = .05; T.grip = -1.83; T.armB = 1.7; T.handB = .2;   // 어깨 높이로 들어 총열 수평
+          T.torso = -.12; T.head = .08;
+        } else if (ta < .16) {                           // 반동: 상체가 젖혀지고 총구가 위로 튐
+          const k = 1 - ta / .16;
+          T.armF = 1.78 + .6 * k; T.handF = .05; T.grip = -1.83 + .2 * k; T.armB = 1.65 + .5 * k; T.handB = .3;
+          T.torso = .1 + .45 * k; T.head = -.25 * k; T.legF = .7; T.shinF = -.05;
+        } else {                                         // 펌프: 왼손을 당겼다 밀며 장전, 탄피 배출
+          const u = Math.min(1, (ta - .16) / .26), pull = Math.sin(u * Math.PI);
+          T.armF = 1.7; T.handF = .1; T.grip = -1.82; T.armB = 1.6 - pull * .45; T.handB = .2 + pull * .7;
+          T.torso = -.05; T.head = .05;
+          if (u > .45 && !a.pumped) { a.pumped = true; this.game.shellEject?.(this); }
+        }
+        break;
+      }
       case 'saw': { // 전기톱: 앞으로 내밀고 덜덜 떨림
         const j = Math.sin(t * 90) * .05;
         T.armF = 1.25 + j; T.armB = 1.1 - j; T.handF = .15; T.handB = .45; T.grip = -1.35;

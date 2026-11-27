@@ -1050,6 +1050,9 @@ export class Game {
   // 샷건 총구 불꽃 + 산탄 궤적
   muzzleFlash(tip, dir) {
     const [x, y, z] = tip;
+    // 큰 총구 섬광 (밝은 덩어리 몇 개) + 총열 끝 충격파
+    for (let i = 0; i < 6; i++) this.debris.spawn(x + dir * (.1 + i * .12), y + (Math.random() - .5) * .1, z, dir * 2, 0, 0, 1, .95, .7, .26 - i * .03, .06, 0);
+    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; this.debris.spawn(x + dir * .15, y, z, dir * 1.5, Math.cos(a) * 3, Math.sin(a) * 3, 1, 1, .85, .05, .1, 0); }
     this.debris.puff(x + dir * .2, y, z, [0xffffff, 0xfff3a0, 0xffb03a], 18, 3, .16, .12, 0);
     for (let i = 0; i < 18; i++) {
       const sp = 26 + Math.random() * 10;
@@ -1058,6 +1061,16 @@ export class Game {
     this.debris.puff(x + dir * .6, y + .1, z, [0x9c9c9c, 0x6a6a6a], 8, 1.2, .2, .7, -0.4);
     this.shake(0.38);
     this.sfx?.('shot');
+  }
+
+  // 펌프 장전: 철컥 소리와 함께 붉은 탄피가 뒤로 튀어 나감, 총구에선 연기
+  shellEject(a) {
+    const f = a.facing, x = a.x + f * .3, y = a.y + 1.25 * a.scale;
+    this.debris.spawn(x, y, a.z + .1, -f * (1.2 + Math.random()), 3.5 + Math.random(), (Math.random() - .5) * .8, .78, .14, .12, .08, 2.2, 1);
+    this.debris.spawn(x, y, a.z + .1, -f * (1.0 + Math.random()), 3.2 + Math.random(), (Math.random() - .5) * .8, .85, .66, .2, .05, 2.2, 1);
+    const tip = a.weaponTip ? a.weaponTip(1.1) : [x + f, y, a.z];
+    this.debris.puff(tip[0], tip[1] + .05, tip[2], [0x8a8a8a, 0x6a6a6a], 4, .5, .16, .9, -0.6);
+    this.sfx?.('pump');
   }
 
   // 화염 분사 입자 (위로 피어오르는 불길)

@@ -184,7 +184,9 @@ export class Player extends Actor {
             break;
           }
         }
-        if (a.def.momentum) {
+        if (a.def.shot) {
+          this.vx *= Math.pow(0.02, dt); this.vz = 0;     // 샷건 반동: 1m 정도 뒤로 미끄러짐
+        } else if (a.def.momentum) {
           this.vx *= Math.pow(0.12, dt);
           this.vz = 0;
         } else if (recovering && !a.air) {
