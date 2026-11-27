@@ -1,6 +1,6 @@
 // 게임 월드: 스테이지 진행, 카메라, 웨이브, 투사체, 폭발, 렌더링
 import { mat4, clamp, rand, randi, sign, shuffle, pick, weightedPick } from './math.js';
-import { CAMERA, GORE_BONUS, CHAPTER, STAGE_HEAL, ZONE_HEAL, EARLY_CHARGER_MAX, HERO_BLAST, HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
+import { CAMERA, LIGHT, GORE_BONUS, CHAPTER, STAGE_HEAL, ZONE_HEAL, EARLY_CHARGER_MAX, HERO_BLAST, HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
 import { Debris, Stains } from './fx.js';
 import { Gibs, bleed } from './gibs.js';
 import { getModel, WEAPON_MODEL } from './models.js';
@@ -192,6 +192,7 @@ export class Game {
   // ------------------------------------------------ 메인 업데이트
   // 실제로 시뮬레이션이 진행됐으면 true (히트스톱 중엔 입력을 보존하기 위해 false)
   update(dt) {
+    this.frameDt = dt;
     if (!this.running) return false;
     if (this.hitstopT > 0) { this.hitstopT -= dt; this.shakeMag *= Math.pow(0.02, dt); return false; }
     this.time += dt;
@@ -761,6 +762,7 @@ export class Game {
   }
 
   explode(x, z, radius, dmg, source, spareTeam = null) {
+    this.flashLight(x, 1.2, z, LIGHT.blast);                    // 폭발 순간 주변이 번쩍
     if (this.stats?.player.fx?.has('pyro')) radius *= 1.25;
     if (source && source.type === 'bomber') {
       source.exploded = true;
@@ -1052,6 +1054,7 @@ export class Game {
   // 샷건 총구 불꽃 + 산탄 궤적
   muzzleFlash(tip, dir) {
     const [x, y, z] = tip;
+    this.flashLight(x + dir * .3, y, z, LIGHT.muzzle);
     // 큰 총구 섬광 (밝은 덩어리 몇 개) + 총열 끝 충격파
     for (let i = 0; i < 6; i++) this.debris.spawn(x + dir * (.1 + i * .12), y + (Math.random() - .5) * .1, z, dir * 2, 0, 0, 1, .95, .7, .26 - i * .03, .06, 0);
     for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; this.debris.spawn(x + dir * .15, y, z, dir * 1.5, Math.cos(a) * 3, Math.sin(a) * 3, 1, 1, .85, .05, .1, 0); }
@@ -1302,7 +1305,7 @@ export class Game {
     mat4.lookAt(this.view, eye, [this.camX + sx * .5, ly, lz], [0, 1, 0]);
     mat4.multiply(this.vp, this.proj, this.view);
     const b = this.stage.biome;
-    r.begin(this.vp, eye, { sky: b.sky, fog: b.fog, fogNear: 34, fogFar: 80 });
+    r.begin(this.vp, eye, { sky: b.sky, fog: b.fog, fogNear: 34, fogFar: 80, light: LIGHT, lights: this.collectLights() });
     this.stains.flush();
     r.drawMesh(this.stage.terrain, IDENT, null, 8, 1, null, true);
     this.drawCity(r);
@@ -1310,7 +1313,9 @@ export class Game {
     for (const t of this.traps) t.draw(r, this);
     for (const p of this.props) p.draw(r, this);
     for (const it of this.items) it.draw(r, this);
+    r.rim = LIGHT.rim;                                    // 캐릭터만 윤곽 빛
     for (const a of this.actors) a.draw(r);
+    r.rim = 0;
     for (const pr of this.projectiles) {
       mat4.identity(M); mat4.translate(M, pr.x, pr.y, pr.z); mat4.rotateZ(M, -pr.spin * sign(pr.vx));
       const key = pr.kind === 'weapon' ? WEAPON_MODEL[pr.weaponType] : pr.kind === 'barrel' || pr.kind === 'moto' ? pr.kind : pr.kind === 'shuriken' ? 'shuriken' : 'brick';
@@ -1338,6 +1343,35 @@ export class Game {
     r.drawInstances(sb, n, 0.3, true);
     this.drawHeroRing(r);
     this.drawRageEyes(r);
+  }
+
+  // ------------------------------------------------ 불빛 (광원은 불만)
+  // 순간 불빛 추가: 폭발·총구 섬광 등 (life초 동안 사그라듦)
+  flashLight(x, y, z, def) { (this.flashes ||= []).push({ x, y, z, r: def.r, k: def.k, t: def.life, life: def.life }); }
+  // 이번 프레임에 그릴 불빛 목록 (화면 근처, 가까운 것 우선 최대 8개)
+  collectLights() {
+    const out = [], F = LIGHT.fire, near = x => Math.abs(x - this.camX) < this.viewHalf + 6;
+    if (this.flashes) {
+      for (let i = this.flashes.length - 1; i >= 0; i--) {
+        const f = this.flashes[i];
+        f.t -= this.frameDt || 1 / 60;
+        if (f.t <= 0) { this.flashes.splice(i, 1); continue; }
+        if (near(f.x)) out.push({ x: f.x, y: f.y, z: f.z, r: f.r, k: f.k * (f.t / f.life), c: F });
+      }
+    }
+    for (const c of this.stage.solids || []) {                     // 불타는 차 (일렁임)
+      if (!c.car || !(c.burnT > 0)) continue;
+      const cx = c.x + c.len / 2, cz = c.z + c.dep / 2;
+      if (near(cx)) out.push({ x: cx, y: 1.6, z: cz, r: LIGHT.car.r, k: LIGHT.car.k * Math.min(1, c.burnT / 2) * (0.85 + 0.15 * Math.sin(this.time * 17 + cx)), c: F });
+    }
+    for (const a of this.actors) {                                 // 불붙은 캐릭터·화염 스프레이
+      if (a.remove || a.hidden) continue;
+      if (a.burnT > 0 && near(a.x)) out.push({ x: a.x, y: a.y + 1, z: a.z, r: LIGHT.burn.r, k: LIGHT.burn.k * (0.8 + 0.2 * Math.sin(this.time * 23 + a.x)), c: F });
+      if (a.flaming > 0) a.flaming -= this.frameDt || 1 / 60;
+      if (a.flaming > 0 && a.weaponTip) { const p = a.weaponTip(1.6); out.push({ x: p[0], y: p[1], z: p[2], r: LIGHT.flame.r, k: LIGHT.flame.k * (0.85 + 0.15 * Math.random()), c: F }); }
+    }
+    out.sort((p, q) => Math.abs(p.x - this.camX) - Math.abs(q.x - this.camX));
+    return out.slice(0, 8);
   }
 
   // 배트 풀스윙 잔상: 배트 끝 궤적을 따라 하얀 줄무늬 입자

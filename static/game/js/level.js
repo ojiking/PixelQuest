@@ -1,6 +1,6 @@
 // 블록 지형 생성 + 스테이지 구성(전투 구역, 오브젝트, 함정 배치)
 import { BIOMES, ENEMY_CURVE, WAVE_CURVE, ENEMIES, LANE, TRAPS } from './config.js';
-import { hash3, hexToRgb, FACES, MeshBuilder } from './voxel.js';
+import { hash3, hexToRgb, FACES, MeshBuilder, faceAO } from './voxel.js';
 import { rand, randi, weightedPick } from './math.js';
 import { Prop, SpikeTrap, Item } from './props.js';
 import { rollWeapon } from './game.js';
@@ -155,8 +155,9 @@ function buildTerrain(r, L, biome, seed, hmap) {
         for (const f of FACES) {
           if (f.n[1] === -1) continue;
           if (w.get(x + f.n[0], y + f.n[1], z + f.n[2]) !== AIR) continue;
-          if (f.n[1] === 1) mb.quad(f, x, y, z, 1, 1, 1, bl.top);
-          else mb.quad(f, x, y, z, 1, 1, 1, bl.side, bl.stripC ?? bl.side, bl.strip ?? 0);
+          const ao = faceAO(w, x, y, z, f, (gx, gy, gz) => w.get(gx, gy, gz) !== AIR);   // 블록 틈새 그늘
+          if (f.n[1] === 1) mb.quad(f, x, y, z, 1, 1, 1, bl.top, bl.top, 0, ao);
+          else mb.quad(f, x, y, z, 1, 1, 1, bl.side, bl.stripC ?? bl.side, bl.strip ?? 0, ao);
         }
       }
     }

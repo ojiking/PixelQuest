@@ -63,21 +63,21 @@ export class MeshBuilder {
 // origin: 복셀 좌표 기준 로컬 원점
 // 앰비언트 오클루전: 면의 각 꼭짓점 주변(면 바깥쪽 층)의 이웃 3칸이 막혀 있는 정도로 어둡게 → 틈새·안쪽 모서리에 부드러운 그늘
 const AO_LEVEL = [0.52, 0.7, 0.86, 1];
-function faceAO(grid, x, y, z, f) {
+export function faceAO(grid, x, y, z, f, solid = (gx, gy, gz) => grid.get(gx, gy, gz) >= 0) {
   const a = f.n[0] ? 0 : f.n[1] ? 1 : 2, u = (a + 1) % 3, v = (a + 2) % 3;
   const out = [1, 1, 1, 1];
   for (let i = 0; i < 4; i++) {
     const c = f.c[i], p = [x + f.n[0], y + f.n[1], z + f.n[2]];
     const du = [0, 0, 0], dv = [0, 0, 0]; du[u] = c[u] ? 1 : -1; dv[v] = c[v] ? 1 : -1;
-    const s1 = grid.get(p[0] + du[0], p[1] + du[1], p[2] + du[2]) >= 0 ? 1 : 0;
-    const s2 = grid.get(p[0] + dv[0], p[1] + dv[1], p[2] + dv[2]) >= 0 ? 1 : 0;
-    const cc = grid.get(p[0] + du[0] + dv[0], p[1] + du[1] + dv[1], p[2] + du[2] + dv[2]) >= 0 ? 1 : 0;
+    const s1 = solid(p[0] + du[0], p[1] + du[1], p[2] + du[2]) ? 1 : 0;
+    const s2 = solid(p[0] + dv[0], p[1] + dv[1], p[2] + dv[2]) ? 1 : 0;
+    const cc = solid(p[0] + du[0] + dv[0], p[1] + du[1] + dv[1], p[2] + du[2] + dv[2]) ? 1 : 0;
     out[i] = AO_LEVEL[s1 && s2 ? 0 : 3 - (s1 + s2 + cc)];
   }
   return out;
 }
 
-// opts.ao: 앰비언트 오클루전 사용 (고밀도 캐릭터 모델용)
+// 앰비언트 오클루전은 기본으로 켬 (opts.ao === false 면 끔)
 export function meshGrid(renderer, grid, size, origin = [0, 0, 0], opts = null) {
   const mb = new MeshBuilder();
   const voxels = [];
@@ -92,7 +92,7 @@ export function meshGrid(renderer, grid, size, origin = [0, 0, 0], opts = null) 
         let exposed = false;
         for (const f of FACES) {
           if (grid.get(x + f.n[0], y + f.n[1], z + f.n[2]) >= 0) continue;
-          mb.quad(f, px, py, pz, size, size, size, rgb, rgb, 0, opts?.ao ? faceAO(grid, x, y, z, f) : null);
+          mb.quad(f, px, py, pz, size, size, size, rgb, rgb, 0, opts?.ao === false ? null : faceAO(grid, x, y, z, f));
           exposed = true;
         }
         if (exposed) voxels.push(px + size / 2, py + size / 2, pz + size / 2, rgb[0], rgb[1], rgb[2]);

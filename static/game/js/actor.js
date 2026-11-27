@@ -159,7 +159,7 @@ export class Actor {
     // 화염 분사: 매 프레임 불길 입자, 일정 간격마다 판정과 연료 소모
     if (d.flame) {
       const tip = this.weaponTip(1.05);
-      g.flameSpray(tip, this.facing, dt);
+      g.flameSpray(tip, this.facing, dt); this.flaming = 0.1;   // 화염 스프레이 불빛
     }
     if (d.tick) {
       // 전기톱: 일정 간격마다 판정을 새로 해서 계속 갈아냄

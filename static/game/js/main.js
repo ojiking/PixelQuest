@@ -188,9 +188,10 @@ function renderLabUI() {
     <button class="btn small" data-lab="infinite">내구도: <b>${L.infinite ? '무한' : '정상'}</b> (3)</button>
     <button class="btn small" data-lab="rage">피 뒤집어쓰기 → 광폭 (4)</button>
     <button class="btn small" data-lab="puddle">발밑에 피 웅덩이 (5)</button>
+    <button class="btn small" data-lab="light">조명: <b>${game.r.lightMode ? '새 조명' : '예전'}</b> (7)</button>
     <button class="btn small" data-lab="model">뱀돌이 모델: <b>${game.player.modelKey === 'player_v1' ? '예전' : '새 모델'}</b> (6)</button>
     <button class="btn small ghost" data-lab="exit">나가기</button>`;
-  if (IS_MOBILE) labUI.innerHTML = labUI.innerHTML.replace(/ \([123456]\)/g, '');
+  if (IS_MOBILE) labUI.innerHTML = labUI.innerHTML.replace(/ \([1234567]\)/g, '');
   labTags.innerHTML = L.slots.map((s, i) => `<span data-i="${i}">${WEAPONS[s.type].name}</span>`).join('');
 }
 function labOption(k) {
@@ -199,6 +200,7 @@ function labOption(k) {
   if (k === 'attack') L.attack = !L.attack;
   if (k === 'count') { L.count = L.count === 1 ? 3 : L.count === 3 ? 0 : 1; for (const e of game.enemies.filter(e => !e.dead).slice(L.count)) { e.dead = true; e.remove = true; game.releaseToken(e); } }
   if (k === 'infinite') L.infinite = !L.infinite;
+  if (k === 'light') game.r.lightMode = game.r.lightMode ? 0 : 1;   // 새/예전 조명 비교 (틈새 그늘은 모델에 구워져 있어 그대로)
   if (k === 'model') {   // 새/예전 뱀돌이 모델 바꿔 보기 (선택은 브라우저에 저장 → 본 게임에도 적용)
     const p = game.player, key = p.modelKey === 'player_v1' ? 'player' : 'player_v1';
     try { localStorage.setItem('pq_hero_model', key === 'player_v1' ? 'v1' : 'v2'); } catch {}
@@ -440,7 +442,7 @@ addEventListener('keydown', e => {
     else if (mode === 'hub' && !panel) act('start');
   }
   if (mode === 'perk' && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) choosePerk(+e.code.slice(5) - 1);
-  if (mode === 'run' && game.run?.lab && ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].includes(e.code)) labOption(['attack', 'count', 'infinite', 'rage', 'puddle', 'model'][+e.code.slice(5) - 1]);
+  if (mode === 'run' && game.run?.lab && ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7'].includes(e.code)) labOption(['attack', 'count', 'infinite', 'rage', 'puddle', 'model', 'light'][+e.code.slice(5) - 1]);
 });
 
 // ------------------------------------------------------------ HUD

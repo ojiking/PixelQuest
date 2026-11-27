@@ -6,10 +6,33 @@ uniform vec3 uLight;
 uniform vec3 uFogColor;
 uniform vec2 uFog;
 uniform vec3 uCam;
+uniform float uLightMode;              // 0 = 예전 조명, 1 = 새 조명
+uniform vec3 uSky, uGround, uSun;      // 하늘·땅 환경광, 해
+uniform vec4 uPL[8];                   // 불빛: xyz 위치, w 반경
+uniform vec4 uPLC[8];                  // 불빛 색(세기 포함)
+uniform int uPLN;
+uniform float uRim;                    // 가장자리 빛 (캐릭터만)
 vec3 shade(vec3 col, vec3 n, vec3 world) {
   float d = max(dot(n, uLight), 0.0);
-  float side = abs(n.z) > 0.5 ? 0.92 : 1.0;   // 면마다 밝기 차이 → 블록 느낌
-  col *= (0.52 + 0.55 * d) * side;
+  if (uLightMode < 0.5) {
+    float side = abs(n.z) > 0.5 ? 0.92 : 1.0;   // 면마다 밝기 차이 → 블록 느낌
+    col *= (0.52 + 0.55 * d) * side;
+  } else {
+    float side = abs(n.z) > 0.5 ? 0.94 : 1.0;
+    vec3 lit = (mix(uGround, uSky, n.y * 0.5 + 0.5) + uSun * d) * side;   // 하늘·땅 환경광 + 따뜻한 해
+    for (int i = 0; i < 8; i++) {                                          // 불빛
+      if (i >= uPLN) break;
+      vec3 lv = uPL[i].xyz - world;
+      float dist = max(length(lv), 0.001);
+      float a = clamp(1.0 - dist / uPL[i].w, 0.0, 1.0);
+      lit += uPLC[i].rgb * a * a * (max(dot(n, lv / dist), 0.0) * 0.75 + 0.25);
+    }
+    col *= lit;
+    if (uRim > 0.0) {                                                      // 윤곽 빛
+      float r = 1.0 - max(dot(n, normalize(uCam - world)), 0.0);
+      col += uRim * r * r * r * vec3(1.0, 0.94, 0.84);
+    }
+  }
   float dist = length(world - uCam);
   float f = clamp((dist - uFog.x) / (uFog.y - uFog.x), 0.0, 1.0);
   // 낭떠러지: 아래로 내려갈수록 칠흑같이 어두워짐
@@ -151,6 +174,9 @@ export class Renderer {
     this.canvas = canvas;
     this.mesh = link(gl, VS, FS);
     this.inst = link(gl, IVS, IFS);
+    this.lightMode = 1;    // 1 = 새 조명(환경광·불빛·윤곽 빛), 0 = 예전 조명
+    this.rim = 0;          // 다음에 그리는 메시의 윤곽 빛 세기 (캐릭터를 그릴 때만 켬)
+    this.plBuf = new Float32Array(32); this.plcBuf = new Float32Array(32);
     this.pixelScale = 3;   // 기본값 (config.js CAMERA.pixelScale로 덮어씀)
     this.instCap = 20000;
     this._buildCube();
@@ -249,6 +275,13 @@ export class Renderer {
       gl.uniform3fv(prog.u.uFogColor, env.fog);
       gl.uniform2f(prog.u.uFog, env.fogNear, env.fogFar);
       gl.uniform3fv(prog.u.uCam, cam);
+      gl.uniform1f(prog.u.uLightMode, this.lightMode);
+      if (env.light) { gl.uniform3fv(prog.u.uSky, env.light.sky); gl.uniform3fv(prog.u.uGround, env.light.ground); gl.uniform3fv(prog.u.uSun, env.light.sun); }
+      const ls = this.lightMode ? (env.lights || []) : [], n = Math.min(8, ls.length);
+      for (let i = 0; i < n; i++) { const l = ls[i]; this.plBuf.set([l.x, l.y, l.z, l.r], i * 4); this.plcBuf.set([l.c[0] * l.k, l.c[1] * l.k, l.c[2] * l.k, 0], i * 4); }
+      gl.uniform1i(prog.u.uPLN, n);
+      if (n) { gl.uniform4fv(prog.u['uPL[0]'], this.plBuf); gl.uniform4fv(prog.u['uPLC[0]'], this.plcBuf); }
+      gl.uniform1f(prog.u.uRim, 0);
     }
     this.current = null;
   }
@@ -259,6 +292,7 @@ export class Renderer {
     if (this.current !== pr) { gl.useProgram(pr.p); this.current = pr; }
     gl.uniformMatrix4fv(pr.u.uModel, false, model);
     gl.uniform4fv(pr.u.uTint, tint || NO_TINT);
+    if (pr.u.uRim) gl.uniform1f(pr.u.uRim, this.lightMode ? this.rim : 0);
     gl.uniform1f(pr.u.uTex, tex);
     gl.uniform1f(pr.u.uAlpha, alpha);
     gl.uniform4fv(pr.u.uSplat, splat || NO_SPLAT);

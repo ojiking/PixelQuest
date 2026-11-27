@@ -5,6 +5,8 @@ import { VoxGrid, meshGrid } from './voxel.js';
 import { heroModelKey, getModel, WEAPON_MODEL } from './models.js';
 import { makeSign } from './city.js';
 import { ENEMIES, TROPHIES } from './config.js';
+// 아지트(실내): 전등 아래 따뜻한 빛, 바닥 반사는 나무색
+const HIDEOUT_LIGHT = { sky: [.55, .55, .58], ground: [.42, .34, .26], sun: [.58, .5, .4] };
 import { Actor, PART_ORDER } from './actor.js';
 
 const M = mat4.create(), PM = mat4.create(), TMP = [0, 0, 0], TMP2 = [0, 0, 0];
@@ -207,7 +209,7 @@ export class Hideout {
     mat4.perspective(this.proj, 38 * Math.PI / 180, aspect, 0.5, 60);
     mat4.lookAt(this.view, this.eye, [0, 1.75, -1.0], [0, 1, 0]);
     mat4.multiply(this.vp, this.proj, this.view);
-    r.begin(this.vp, this.eye, { sky: [0.05, 0.05, 0.07], fog: [0.05, 0.05, 0.07], fogNear: 30, fogFar: 60 });
+    r.begin(this.vp, this.eye, { sky: [0.05, 0.05, 0.07], fog: [0.05, 0.05, 0.07], fogNear: 30, fogFar: 60, light: HIDEOUT_LIGHT });
     this.put(m.floor, 0, 0, 0);
     this.put(m.back, 0, 0, -3.2);
     this.put(m.left, -7.2, 0, -3.2);
