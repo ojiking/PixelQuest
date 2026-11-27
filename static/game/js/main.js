@@ -182,7 +182,10 @@ $('stage').appendChild(labTags);
 
 function renderLabUI() {
   const L = game.lab;
-  labUI.innerHTML = `<div class="lt">무기방 <span class="dim">개발자 전용</span></div>
+  // 휴대폰: 화면 위쪽 가운데에 [옵션] 버튼만 두고 눌러서 펼침 (조이스틱·공격 버튼을 가리지 않게)
+  const open = !IS_MOBILE || L.open;
+  labUI.classList.toggle('open', !!open);
+  labUI.innerHTML = (IS_MOBILE ? `<button class="btn small labtoggle" data-lab="toggle">🔧 무기방 옵션 ${L.open ? '▲ 접기' : '▼'}</button>` : '') + (!open ? '' : `<div class="lt">무기방 <span class="dim">개발자 전용</span></div><div class="labopts">
     <button class="btn small" data-lab="attack">적 공격: <b>${L.attack ? '켬' : '끔'}</b> (1)</button>
     <button class="btn small" data-lab="count">적 수: <b>${L.count}</b> (2)</button>
     <button class="btn small" data-lab="infinite">내구도: <b>${L.infinite ? '무한' : '정상'}</b> (3)</button>
@@ -191,13 +194,14 @@ function renderLabUI() {
     <button class="btn small" data-lab="light">조명: <b>${game.r.lightMode ? '새 조명' : '예전'}</b> (7)</button>
     <button class="btn small" data-lab="hq">그림자·후처리: <b>${game.r.hq ? '켬' : '끔'}</b> (8)</button>
     <button class="btn small" data-lab="model">뱀돌이 모델: <b>${game.player.modelKey === 'player_v1' ? '예전' : '새 모델'}</b> (6)</button>
-    <button class="btn small ghost" data-lab="exit">나가기</button>`;
+    <button class="btn small ghost" data-lab="exit">나가기</button></div>`);
   if (IS_MOBILE) labUI.innerHTML = labUI.innerHTML.replace(/ \([12345678]\)/g, '');
   labTags.innerHTML = L.slots.map((s, i) => `<span data-i="${i}">${WEAPONS[s.type].name}</span>`).join('');
 }
 function labOption(k) {
   const L = game.lab;
   if (!game.run?.lab || !L) return;
+  if (k === 'toggle') L.open = !L.open;   // 휴대폰: 옵션 패널 펼치기/접기
   if (k === 'attack') L.attack = !L.attack;
   if (k === 'count') { L.count = L.count === 1 ? 3 : L.count === 3 ? 0 : 1; for (const e of game.enemies.filter(e => !e.dead).slice(L.count)) { e.dead = true; e.remove = true; game.releaseToken(e); } }
   if (k === 'infinite') L.infinite = !L.infinite;

@@ -178,6 +178,14 @@ h3 small { color: var(--bot); }
   background: rgba(10, 12, 18, .72); border: 2px solid #556; padding: 8px; border-radius: 6px; font-size: 12px; }
 #labui .lt { color: var(--accent); font-weight: 700; margin-bottom: 2px; }
 #labui .btn.small { text-align: left; }
+#labui .labopts { display: flex; flex-direction: column; gap: 5px; }
+/* 휴대폰: 위쪽 가운데의 작은 [옵션] 버튼 → 펼치면 3열 작은 버튼 (오른쪽 아래 공격 버튼·왼쪽 아래 조이스틱을 가리지 않음) */
+.mobile #labui { left: 50%; right: auto; top: 1.5cqh; transform: translateX(-50%); background: none; border: none; padding: 0; align-items: center; gap: 4px; max-width: 62cqw; }
+.mobile #labui .lt { display: none; }
+.mobile #labui .btn.small { font-size: 11px; padding: 4px 7px; box-shadow: 0 2px 0 #111; border-width: 2px; white-space: nowrap; }
+.mobile #labui .btn.ghost { background: #2a2e38; }
+.mobile #labui .labtoggle { opacity: .85; }
+.mobile #labui .labopts { display: grid; grid-template-columns: repeat(3, auto); gap: 4px; background: rgba(10, 12, 18, .78); border: 2px solid #556; border-radius: 6px; padding: 5px; }
 #labtags { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
 #labtags span { position: absolute; left: 0; top: 0; font-size: 11px; color: #e8e2d4; background: rgba(10, 12, 18, .6); padding: 0 4px; border-radius: 3px; white-space: nowrap; text-shadow: 1px 1px 0 #000; }
 #labtags span.held { color: var(--accent); border: 1px solid var(--accent); }
