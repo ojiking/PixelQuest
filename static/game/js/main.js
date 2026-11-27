@@ -235,6 +235,7 @@ function leaveLab() {
 }
 labUI.addEventListener('click', e => { const t = e.target.closest('[data-lab]'); if (t) { playSfx('ui'); labOption(t.dataset.lab); } });
 // 진열대 무기 이름표를 무기 위에 붙임
+const LAB_TAG_NEAR = 3;   // 무기방 이름표를 보여 주는 거리(m)
 function placeLabTags() {
   if (!game.run?.lab || !game.lab) return;
   const st = $('stage'), W = st.clientWidth, H = st.clientHeight, v = game.vp;
@@ -242,9 +243,11 @@ function placeLabTags() {
     const s = game.lab.slots[+el.dataset.i], y = 1.0;
     const cx = v[0] * s.x + v[4] * y + v[8] * s.z + v[12], cy = v[1] * s.x + v[5] * y + v[9] * s.z + v[13], cw = v[3] * s.x + v[7] * y + v[11] * s.z + v[15];
     const sx = (cx / cw * 0.5 + 0.5) * W, sy = (1 - (cy / cw * 0.5 + 0.5)) * H;
-    el.style.display = sx < -60 || sx > W + 60 ? 'none' : '';
-    el.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, -100%)`;
-    el.classList.toggle('held', game.player.weapon?.type === s.type);
+    // 이름표는 뱀돌이 근처(LAB_TAG_NEAR m 안) 무기와 든 무기만 → 한 줄로 겹쳐 읽을 수 없던 문제. 이웃끼리는 위아래로 엇갈리게
+    const held = game.player.weapon?.type === s.type, near = Math.abs(s.x - game.player.x) < LAB_TAG_NEAR;
+    el.style.display = (!near && !held) || sx < -60 || sx > W + 60 ? 'none' : '';
+    el.style.transform = `translate(${sx}px, ${sy - (+el.dataset.i % 2) * 16}px) translate(-50%, -100%)`;
+    el.classList.toggle('held', held);
   }
 }
 

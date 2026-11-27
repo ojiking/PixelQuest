@@ -13,6 +13,8 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color: var(--ink); font-family: var(--font); }
 /* 16:9 고정 게임 화면 (남는 부분은 검은 띠) */
 #stage { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(100vw, calc(100vh * 16 / 9)); height: min(100vh, calc(100vw * 9 / 16)); overflow: hidden; background: #000; container-type: size; }
+/* 휴대폰 브라우저: 100vh는 주소창 밑까지 포함해 화면 위쪽(체력바·무기방 옵션)이 가려짐 → 실제 보이는 높이(dvh) 기준 */
+@supports (height: 100dvh) { #stage { width: min(100vw, calc(100dvh * 16 / 9)); height: min(100dvh, calc(100vw * 9 / 16)); } }
 #view { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
 .hidden { display: none !important; }
 b { color: var(--accent); }
