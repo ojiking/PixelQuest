@@ -565,11 +565,13 @@ export class Actor {
       case 'batswing': { // 야구 배트 풀스윙. 배트 방향 θ = armF + handF + grip (0 = 정면 수평, 1.57 = 위, 3.14 = 뒤)
         const big = d.big ? 1.15 : 1;
         // 세 자세: 장전(배트를 뒷어깨 위로, 앞발 들기) → 임팩트(팔을 뻗고 배트 수평) → 마무리(반대 어깨 위로 감김)
-        const LOAD = { armF: 2.55 * big, handF: .95, th: 2.35, armB: 2.3, handB: 1.1, twist: .95 * big, torso: .18, head: -.05, legF: .75, shinF: -1.05, legB: -.08, shinB: -.2 };
-        const HIT = { armF: 1.45, handF: .05, th: 0, armB: 1.35, handB: .25, twist: -.15, torso: -.28, head: .1, legF: .6, shinF: -.08, legB: -.55, shinB: -.25 };
-        const FOL = { armF: 2.45, handF: 1.05, th: 2.95, armB: 2.1, handB: 1.0, twist: -.7 * big, torso: -.12, head: .05, legF: .5, shinF: -.1, legB: -.6, shinB: -.45 };
-        const mix = (A0, B0, u) => { for (const k in A0) { const v = A0[k] + (B0[k] - A0[k]) * u; if (k === 'th') T.grip = v - (T.armF + T.handF); else T[k] = v; } };
-        const set = P0 => { for (const k in P0) if (k !== 'th') T[k] = P0[k]; T.grip = P0.th - (P0.armF + P0.handF); };
+        // 두 손은 항상 손잡이를 함께 잡음 (armB/handB = armF/handF). twist .42 = 완전한 옆모습 → 옆모습 근처에서만 비틀어 배트가 계속 보이게
+        const LOAD = { armF: 1.95, handF: 1.65, th: 1.95 * big, twist: .85, torso: .16, head: -.05, legF: .75, shinF: -1.05, legB: -.08, shinB: -.2 };
+        const HIT = { armF: 1.5, handF: .08, th: 0, twist: .42, torso: -.28, head: .1, legF: .6, shinF: -.08, legB: -.55, shinB: -.25 };
+        const FOL = { armF: 1.35, handF: .4, th: .25, twist: -.6 * big, torso: -.18, head: .05, legF: .5, shinF: -.1, legB: -.6, shinB: -.45 };   // 마무리: 위로 쳐들지 않고 가슴 높이에서 수평으로 계속 돌아 몸 뒤로 감김
+        const both = () => { T.armB = T.armF; T.handB = T.handF; };
+        const mix = (A0, B0, u) => { for (const k in A0) { const v = A0[k] + (B0[k] - A0[k]) * u; if (k === 'th') T.grip = v - (T.armF + T.handF); else T[k] = v; } both(); };
+        const set = P0 => { for (const k in P0) if (k !== 'th') T[k] = P0[k]; T.grip = P0.th - (P0.armF + P0.handF); both(); };
         if (S) { set(LOAD); this.poseRate = 16; }                   // 천천히 감아 올림 (예비 동작이 보이게)
         else if (A) {                                                // 임팩트 구간: 순식간에 휘두름
           const u = Math.min(1, (a.t - d.startup) / d.active);
