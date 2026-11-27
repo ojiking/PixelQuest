@@ -23,7 +23,9 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   await ev(() => { const g = window.__game; g.stage.hmap.clear(); g.items.length = 0; g.props.length = 0; g.traps.length = 0; g.player.maxHp = g.player.hp = 9999; g.bot.koT = 999; g.bot.setState('ko'); g.bot.x = -3; });
   // 적 처치 → 조각들
   await ev(() => { const g = window.__game; const e = g.spawnEnemy('grunt', 1); e.x = 8; e.z = 0; g.kill(e, { dir: 1, knock: 2 }); });
-  await page.waitForTimeout(2500);
+  // 머리는 축구공처럼 오래 튀고 굴러가므로 멈출 때까지 기다림 (최대 8초)
+  for (let i = 0; i < 16; i++) { await page.waitForTimeout(500); if (await page.evaluate(() => { const l = window.__game.gibs.list; return l.length > 0 && l.every(x => x.rest); })) break; }
+  console.log('gibs:', await page.evaluate(() => window.__game.gibs.list.map(x => x.part + (x.rest ? 'R' : '')).join(' ')));
   for (const want of ['leg', 'arm', 'head']) {
     const r = await ev(want => {
       const g = window.__game, p = g.player;

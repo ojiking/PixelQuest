@@ -1,5 +1,5 @@
 import { Actor } from './actor.js';
-import { PLAYER, WEAPONS, LIMB_WEAPONS } from './config.js';
+import { PLAYER, WEAPONS, LIMB_WEAPONS, BERSERK } from './config.js';
 
 const FIST_COMBO = ['jab', 'cross', 'kick'];
 const FIST_COMBO4 = ['jab', 'cross', 'elbow', 'kick'];
@@ -11,6 +11,8 @@ export class Player extends Actor {
     this.st8 = stats;                        // 정비소 업그레이드
     this.spd = PLAYER.speed * stats.speedMul;
     this.zspd = PLAYER.zSpeed * stats.speedMul;
+    this.baseSpd = this.spd; this.baseZspd = this.zspd;
+    this.rage = 0; this.berserk = false; this.rageCd = 0;   // 광폭 게이지·광폭 상태·재충전 대기
     this.wpow = stats.wpow; this.wspd = stats.wspd; this.backMul = stats.backMul;
     this.otgAll = stats.otg; this.dashLv = stats.dashLv;
     this.comboIdx = 0;
@@ -59,6 +61,50 @@ export class Player extends Actor {
   perk(id) { return this.game.run.perks.has(id); }
   get combo() { return this.heldDef()?.combo ?? (this.st8.combo4 ? FIST_COMBO4 : FIST_COMBO); }
 
+  // 피칠갑 광폭화: 몸에 피가 묻을 때마다 게이지(rage 0~1)가 오르고, 다 차면 광폭. 무기방에서도 똑같이 동작
+  addBlood(k, amt) {
+    super.addBlood(k, amt);
+    if (!this.berserk && !(this.rageCd > 0) && !this.dead) this.rage = Math.min(1, this.rage + amt * BERSERK.gain);
+  }
+  enterBerserk() {
+    const g = this.game;
+    this.berserk = true; this.berserkT = BERSERK.duration; this.berserkMax = BERSERK.maxTime; this.steamT = 0; this.rage = 1;
+    for (const k in this.parts) if (this.parts[k].alive) super.addBlood(k, 1);   // 진입 순간 온몸이 피로 물듦
+    g.sfx?.('rage'); g.shake(.35);
+    g.texts.add(this.x, this.y + 2.5, this.z, '광폭화', 'rage');
+    g.debris.puff(this.x, this.y + 1.2, this.z, [0xffffff, 0xd8d8d8, 0xbfbfbf], 26, 2.4, .14, .8, -0.7);
+    g.stat?.('berserk');
+  }
+  updateBerserk(dt) {
+    const g = this.game;
+    if (this.berserk) {
+      this.berserkT -= dt; this.berserkMax -= dt;
+      if (this.berserkT <= 0 || this.berserkMax <= 0 || this.dead) {
+        this.berserk = false; this.rage = 0; this.rageCd = BERSERK.cooldown;
+        g.debris.puff(this.x, this.y + 1.2, this.z, [0xbfbfbf, 0x8f8f8f], 10, 1.2, .12, .6, -0.5);
+      }
+    } else {
+      this.rageCd = Math.max(0, (this.rageCd || 0) - dt);
+      if (this.rage >= 1 && !this.dead) this.enterBerserk();
+      else this.rage = Math.max(0, this.rage - BERSERK.decay * dt);
+    }
+    const m = this.berserk ? BERSERK.moveSpeed : 1;
+    this.spd = this.baseSpd * m; this.zspd = this.baseZspd * m;
+    if (this.berserk) {
+      this.steamT -= dt;
+      if (this.steamT <= 0 && !this.hidden) {           // 몸에서 하얀 김이 피어오름
+        this.steamT = 0.07;
+        g.debris.puff(this.x + (Math.random() - .5) * .5, this.y + 0.9 + Math.random() * 0.9, this.z, [0xffffff, 0xe6e6e6, 0xcfcfcf], 2, .5, .1, .7, -1.2);
+      }
+    }
+  }
+  // 광폭 중 적을 죽이면 시간이 조금 늘어남 (한 번의 광폭은 최대 maxTime초)
+  feedRage() {
+    if (!this.berserk) return;
+    this.berserkT = Math.min(this.berserkT + BERSERK.feedTime, this.berserkMax);
+    for (const k in this.parts) if (this.parts[k].alive) super.addBlood(k, .1);
+  }
+
   update(dt) {
     const g = this.game, inp = g.input;
     if (inp.pressed('KeyJ')) this.buffer = 0.3;
@@ -71,6 +117,7 @@ export class Player extends Actor {
     const tap = this.doubleTap(inp);
     const wantDash = inp.pressed('KeyI') || tap !== 0;
 
+    this.updateBerserk(dt);
     this.physics(dt);
     if (this.state === 'ko') { this.pose(dt); return; }
     if (this.updateCommon(dt)) { this.pose(dt); return; }

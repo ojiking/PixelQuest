@@ -3,7 +3,7 @@ import { Renderer } from './gl.js';
 import { Input } from './input.js';
 import { Texts } from './fx.js';
 import { Game } from './game.js';
-import { PERKS, UPGRADES, WEAPONS, BOT, HEAT, TROPHIES, TROPHY_SLOTS } from './config.js';
+import { PERKS, UPGRADES, WEAPONS, BOT, HEAT, TROPHIES, TROPHY_SLOTS, BERSERK } from './config.js';
 import { Hideout } from './hideout.js';
 import { STAGE_COUNT } from './level.js';
 import { loadMeta, saveMeta, resetMeta, computeStats, upgradeCost, buyUpgrade, level, botLevel, heatMax, mergeRunStats, toggleEquip, unlocked } from './meta.js';
@@ -184,8 +184,9 @@ function renderLabUI() {
     <button class="btn small" data-lab="attack">적 공격: <b>${L.attack ? '켬' : '끔'}</b> (1)</button>
     <button class="btn small" data-lab="count">적 수: <b>${L.count}</b> (2)</button>
     <button class="btn small" data-lab="infinite">내구도: <b>${L.infinite ? '무한' : '정상'}</b> (3)</button>
+    <button class="btn small" data-lab="rage">피 뒤집어쓰기 → 광폭 (4)</button>
     <button class="btn small ghost" data-lab="exit">나가기</button>`;
-  if (IS_MOBILE) labUI.innerHTML = labUI.innerHTML.replace(/ \([123]\)/g, '');
+  if (IS_MOBILE) labUI.innerHTML = labUI.innerHTML.replace(/ \([1234]\)/g, '');
   labTags.innerHTML = L.slots.map((s, i) => `<span data-i="${i}">${WEAPONS[s.type].name}</span>`).join('');
 }
 function labOption(k) {
@@ -194,6 +195,7 @@ function labOption(k) {
   if (k === 'attack') L.attack = !L.attack;
   if (k === 'count') { L.count = L.count === 1 ? 3 : L.count === 3 ? 0 : 1; for (const e of game.enemies.filter(e => !e.dead).slice(L.count)) { e.dead = true; e.remove = true; game.releaseToken(e); } }
   if (k === 'infinite') L.infinite = !L.infinite;
+  if (k === 'rage') { const p = game.player; if (!p.berserk) { p.rageCd = 0; p.enterBerserk(); } }   // 바로 광폭 (대기 시간 무시)
   if (k === 'exit') { leaveLab(); showTitle(); return; }
   renderLabUI();
 }
@@ -428,7 +430,7 @@ addEventListener('keydown', e => {
     else if (mode === 'hub' && !panel) act('start');
   }
   if (mode === 'perk' && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) choosePerk(+e.code.slice(5) - 1);
-  if (mode === 'run' && game.run?.lab && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) labOption(['attack', 'count', 'infinite'][+e.code.slice(5) - 1]);
+  if (mode === 'run' && game.run?.lab && ['Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(e.code)) labOption(['attack', 'count', 'infinite', 'rage'][+e.code.slice(5) - 1]);
 });
 
 // ------------------------------------------------------------ HUD
@@ -458,6 +460,12 @@ function updateHud(dt) {
   setWidth('hp-player', p.hp / p.maxHp);
   setWidth('hp-bot', b.hp / b.maxHp);
   setText('hp-player-t', `${Math.max(0, Math.ceil(p.hp))} / ${p.maxHp}`);
+  {  // 광폭 게이지: 평소엔 채워지는 양, 광폭 중엔 남은 양(마를 때까지)
+    const rg = p.berserk ? p.berserkT / BERSERK.duration : p.rage;
+    setWidth('rage-fill', Math.max(0, Math.min(1, rg)));
+    const rb = $('rage-bar'); rb.classList.toggle('on', !!p.berserk); rb.classList.toggle('full', !!p.berserk); rb.classList.toggle('cd', p.rageCd > 0);
+    $('rage-vig').style.opacity = p.berserk ? String(BERSERK.vignette * (0.8 + 0.2 * Math.sin(performance.now() / 160))) : '0';
+  }
   setText('weapon', p.carry?.kind === 'barrel' ? '폭탄 드럼통 (J/L 던지기)' : p.carry?.kind === 'moto' ? '오토바이 (J/L 던지기 — 폭발!)' : p.carry ? (p.carry.limb ? `${CARRY_NAME[p.carry.part] ?? '조각'} (${p.carry.dur}) J 휘두르기 · L 던지기` : `${CARRY_NAME[p.carry.part] ?? '조각'} 들고 있음 (J/L 던지기)`) : p.weapon ? `${WEAPONS[p.weapon.type].name} (${WEAPONS[p.weapon.type].ammo ? '탄 ' : WEAPONS[p.weapon.type].fuel ? '연료 ' : ''}${p.weapon.dur})` : '맨손');
   setText('bot-lv', `${botLevel(meta)} ${BOT.classes[game.stats.bot.cls].name}`);
   setText('tactic', b.state === 'ko' ? `수리 중 ${Math.ceil(b.koT)}s` : game.rescuePending ? '구조 중!' : b.tacticDef.name);

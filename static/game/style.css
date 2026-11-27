@@ -44,6 +44,16 @@ b { color: var(--accent); }
 .label { font-size: 13px; margin-bottom: 3px; text-shadow: 2px 2px 0 #000; }
 .bar { position: relative; height: 16px; background: #2a1a1a; border: 3px solid var(--edge); box-shadow: 0 0 0 2px #4a4a4a; }
 .bar.small { height: 10px; }
+/* 광폭 게이지 (흰색 — 피 색과 구분) */
+.bar.rage { height: 6px; margin-top: 4px; width: 70%; border-width: 2px; box-shadow: 0 0 0 1px #4a4a4a; background: #1a1a1a; }
+.fill.r { background: linear-gradient(#ffffff, #b8b8b8); }
+.bar.rage.full { box-shadow: 0 0 0 1px #4a4a4a, 0 0 8px 2px rgba(255,255,255,.8); }
+.bar.rage.cd .fill.r { background: #555; }
+.bar.rage.on .fill.r { animation: ragepulse .35s infinite alternate; }
+@keyframes ragepulse { from { filter: brightness(1); } to { filter: brightness(1.6); } }
+.ftext.rage { color: #fff; font-size: 13px; letter-spacing: 2px; text-shadow: 1px 1px 0 #000, 0 0 6px rgba(255,255,255,.9); }
+/* 광폭 중 화면 가장자리 붉은 기운 */
+#rage-vig { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .4s; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(170,0,15,.8) 100%); }
 .bar.big { height: 18px; }
 .fill { height: 100%; width: 100%; transition: width .12s steps(6); }
 .fill.p { background: linear-gradient(#7af08f, var(--hp)); }

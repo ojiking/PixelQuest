@@ -1,6 +1,6 @@
 // 모든 캐릭터(플레이어/동료/적)의 공통 기반: 물리, 상태, 공격 진행, 절차적 애니메이션, 부위 렌더링
 import { mat4, clamp } from './math.js';
-import { BLOOD, GRAVITY, LANE, ATTACKS, WEAPONS, LIMB_WEAPONS, FLEX } from './config.js';
+import { BLOOD, BERSERK, GRAVITY, LANE, ATTACKS, WEAPONS, LIMB_WEAPONS, FLEX } from './config.js';
 import { hexToRgb } from './voxel.js';
 import { getModel, WEAPON_MODEL } from './models.js';
 import { tryHits } from './combat.js';
@@ -127,6 +127,7 @@ export class Actor {
     const hd = d.weapon ? this.heldDef() : null;
     if (hd?.slow) spd /= hd.slow;
     if (hd && this.wspd) spd *= this.wspd;
+    if (this.berserk) spd *= BERSERK.atkSpeed;           // 광폭화: 공격 속도↑
     a.t += dt * spd;
     const s = d.startup, e = s + d.active;
     if (a.t >= s && (a.t < e || !a.activated)) {

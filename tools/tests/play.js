@@ -12,6 +12,7 @@ const RUNS = +(process.env.RUNS || 3), MAXMIN = +(process.env.MAXMIN || 20);
   if (process.env.META) await page.addInitScript(m => { localStorage.setItem('pixelquest_meta_v1', m); }, process.env.META);
   await page.goto('http://game.test/index.html'); await page.waitForTimeout(1200);
   await page.addScriptTag({ path: path.join(__dirname, 'bot.js') });
+  await page.evaluate(() => { window.__rage = { max: 0, on: 0, n: 0, gt: 0, was: false }; setInterval(() => { const g = window.__game, p = g?.player, R = window.__rage; if (!p || p.rage == null || !g.running) return; R.gt += 0.25; R.max = Math.max(R.max, p.rage); if (p.berserk) R.on += 0.25; if (p.berserk && !R.was) R.n++; R.was = p.berserk; }, 250); });
   await page.keyboard.press('Enter');
   const t0 = Date.now(); let runs = 0, shot = 0, lastShot = 0;
   const results = [];
@@ -35,6 +36,8 @@ const RUNS = +(process.env.RUNS || 3), MAXMIN = +(process.env.MAXMIN || 20);
   }
   const log = await page.evaluate(() => window.__log);
   fs.writeFileSync(`${SP}/play_log.json`, JSON.stringify({ results, log, errs }, null, 1));
+  const rage = await page.evaluate(() => window.__rage);
+  console.log('berserk: count', rage.n, '| seconds in berserk', rage.on, '/ playing', rage.gt, '| max gauge', rage.max.toFixed(2));
   console.log(JSON.stringify({ results, deaths: log.deaths, dmg: log.dmg, zone: log.zone, stuck: log.stuck, perfTail: log.perf.slice(-4), errs: errs.slice(0, 5) }, null, 1));
   await browser.close();
 })();

@@ -26,6 +26,7 @@ export function rollWeapon(exclude = []) {
 }
 const IDENT = mat4.create();
 const M = mat4.create();
+const RAGE_M1 = mat4.create(), RAGE_M2 = mat4.create();
 
 export class Game {
   constructor(renderer, input, texts, hooks) {
@@ -566,6 +567,7 @@ export class Game {
   kill(v, h) {
     if (v.team === 'hero') return this.heroDown(v, h);
     v.dead = true;
+    if (h?.attacker === this.player) this.player.feedRage?.();   // 광폭 중 처치 → 광폭 연장
     v.interrupt();
     v.setState('dying');
     v.vx = h.dir * Math.max(3, h.knock) * 1.1; v.vy = 6; v.y = Math.max(v.y, 0.01); v.grounded = false;
@@ -1334,6 +1336,28 @@ export class Game {
     for (const pr of this.projectiles) add(pr.x, pr.z, 0.25);
     r.drawInstances(sb, n, 0.3, true);
     this.drawHeroRing(r);
+    this.drawRageEyes(r);
+  }
+
+  // 광폭화 중 하얀 눈빛 (빨강 대신 흰색으로 — 피범벅이어도 눈에 띄게)
+  drawRageEyes(r) {
+    const p = this.player;
+    if (!p?.berserk || p.hidden || !p.parts.head?.alive) return;
+    p.rootMatrix(RAGE_M1); p.partMatrix('head', RAGE_M1, RAGE_M2);
+    // 머리 모델(6칸) 기준 눈 위치: 앞면(x) 3.6칸, 높이 3.5칸, 좌우 -1.5 / +2.5칸 (V = 0.09m)
+    const V = 0.09, s = p.model.headS ?? 6, ex = (s / 2 + 0.6) * V, ey = 3.5 * V, z1 = (2.5 - (s + 2) / 2) * V, z2 = (s - 0.5 - (s + 2) / 2) * V;
+    this.eyeBuf ??= new Float32Array(2 * 7); this.eyeGlow ??= new Float32Array(10 * 7);
+    const b = this.eyeBuf, gb = this.eyeGlow, fl = 0.85 + Math.sin(this.time * 18) * 0.15, pt = [0, 0, 0];
+    let n = 0;
+    [z1, z2].forEach((z, i) => {
+      mat4.point(pt, RAGE_M2, ex, ey, z);
+      b.set([pt[0], pt[1], pt[2], 0.11, 1, 1, 1], i * 7);                                   // 눈 (선명한 흰색)
+      gb.set([pt[0], pt[1], pt[2], 0.26 * fl, 1, 1, 1], n++ * 7);                           // 번지는 빛
+      for (let k = 1; k <= 4; k++)                                                          // 뒤로 흩날리는 눈빛 꼬리
+        gb.set([pt[0] - p.facing * (0.09 * k + 0.03), pt[1] + 0.012 * k, pt[2], 0.09 * (1 - k * 0.17) * fl, 1, 1, 1], n++ * 7);
+    });
+    r.drawInstances(gb, n, 0.4, true);
+    r.drawInstances(b, 2, 1, true);
   }
 
   // 피범벅이 된 주인공 발밑의 흰 고리 (피와 같은 색이 되어 위치를 놓치지 않게)

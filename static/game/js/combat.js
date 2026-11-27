@@ -1,5 +1,5 @@
 // 판정 / 데미지 / 부위 파괴 규칙
-import { WEAPONS, FIST_SEVER, BLOOD } from './config.js';
+import { WEAPONS, FIST_SEVER, BLOOD, BERSERK } from './config.js';
 import { sign } from './math.js';
 
 // 공격 zone별로 맞는 부위 확률 (torso = 부위 피해 없음)
@@ -46,6 +46,10 @@ function buildHit(att, d, v) {
   if (!held && att.blade) { mode = 'cut'; sever = 2.2; }
   if (d.sever) sever = d.sever; // 공격형 볼트의 절단 블레이드
   dmg *= att.power;
+  if (att.berserk) {                                           // 피칠갑 광폭화: 피해↑, 맨주먹·발로도 부위를 뜯어냄
+    dmg *= BERSERK.power;
+    if (!held && !d.weapon && !att.carry) { mode = 'cut'; sever = Math.max(sever, BERSERK.fistSever); }
+  }
   if (d.finisher && att.perk('finisher')) dmg *= 1.4;
   if (held && att.wpow) dmg *= att.wpow;                       // 무기 숙련
   if (d.anim === 'dashAtk' && att.dashLv) dmg *= 1 + 0.25 * att.dashLv; // 대쉬 숙련
