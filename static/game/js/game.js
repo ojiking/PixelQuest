@@ -1,6 +1,6 @@
 // 게임 월드: 스테이지 진행, 카메라, 웨이브, 투사체, 폭발, 렌더링
 import { mat4, clamp, rand, randi, sign, shuffle, pick, weightedPick } from './math.js';
-import { CAMERA, LIGHT, GORE_BONUS, CHAPTER, STAGE_HEAL, ZONE_HEAL, EARLY_CHARGER_MAX, HERO_BLAST, HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS } from './config.js';
+import { CAMERA, LIGHT, GORE_BONUS, CHAPTER, STAGE_HEAL, ZONE_HEAL, EARLY_CHARGER_MAX, HERO_BLAST, HEAT, BLOOD, BIOMES, BOT, LANE, WEAPONS, ENEMIES, LIMB_WEAPONS, limbKind, TRAPS, HEAD_KILL, BOSS_DEATH } from './config.js';
 import { Debris, Stains } from './fx.js';
 import { Gibs, bleed } from './gibs.js';
 import { getModel, WEAPON_MODEL } from './models.js';
@@ -193,6 +193,13 @@ export class Game {
   // ------------------------------------------------ 메인 업데이트
   // 실제로 시뮬레이션이 진행됐으면 true (히트스톱 중엔 입력을 보존하기 위해 false)
   update(dt) {
+    // 슬로우 모션 (보스 처치): 실제 시간으로 줄어들고, 마지막 30% 동안 서서히 원래 속도로
+    if (this.bannerLater && (this.bannerLater.t -= dt) <= 0) { this.banner(this.bannerLater.text, 2.2); this.bannerLater = null; }   // 슬로우 모션이 끝난 뒤 알림
+    if (this.slowT > 0) {
+      this.slowT -= dt;
+      const f = Math.max(0, this.slowT) / BOSS_DEATH.time;
+      dt *= f < .3 ? 1 - (1 - this.slowK) * (f / .3) : this.slowK;
+    }
     this.frameDt = dt;
     if (!this.running) return false;
     if (this.hitstopT > 0) { this.hitstopT -= dt; this.shakeMag *= Math.pow(0.02, dt); return false; }
@@ -536,6 +543,8 @@ export class Game {
   }
 
   severPart(v, k, dir, h = {}) {
+    // 머리 즉사는 체력이 HEAD_KILL.hpFrac 이하일 때만 (그 전엔 머리가 버팀: 체력이 남았는데 갑자기 죽지 않게)
+    if (k === 'head' && !v.dead && v.hp > v.maxHp * HEAD_KILL.hpFrac) { v.parts.head.hp = Math.max(1, v.parts.head.max * 0.05); return; }
     v.severPart(k, dir, h);
     if (h.attacker === this.player) this.backsplash(v, this.player, BLOOD.backsplash * 2);   // 절단: 크게 되튐
     if (v.mounted && /^(leg|shin)/.test(k)) this.dismount(v, dir);
@@ -594,7 +603,7 @@ export class Game {
     for (let i = 0; i < pieces; i++) {
       this.items.push(new Item('scrap', null, v.x, v.z, { y: 1, vy: rand(4, 7), vx: rand(-2, 2), value: n / pieces }));
     }
-    if (v.isBoss) { this.banner('철거반장 격파!', 2.5); this.hitstop(0.35); this.shake(0.6); }
+    if (v.isBoss) this.bossDeath(v, h);
     // 샷건으로 처치: 산산조각 (부위가 사방으로 멀리 날아감)
     if (h.mode === 'blast' && v.destructible && !v.remove) {
       v.blastApart(h.dir);
@@ -1258,6 +1267,20 @@ export class Game {
 
   // ------------------------------------------------ 연출
   hitstop(t) { this.hitstopT = Math.max(this.hitstopT, t); }
+  slowmo(time, k) { this.slowT = time; this.slowK = k; }
+  // 보스 처치: 슬로우 모션 속에서 온몸이 산산조각 (부위가 사방으로 날아가고 몸통이 터짐) + 피 분수
+  bossDeath(v, h) {
+    this.bannerLater = { text: `${v.def.name} 격파`, t: BOSS_DEATH.time };   // 알림은 슬로우 모션이 끝난 뒤 (산산조각 나는 장면을 가리지 않게)
+    this.slowmo(BOSS_DEATH.time, BOSS_DEATH.scale);
+    this.shake(0.6);
+    if (v.mounted) this.dismount(v, h.dir, true);
+    if (v.destructible && !v.remove) {
+      const dir = h.dir || 1;
+      for (let i = 0; i < BOSS_DEATH.bleed; i++) this.bleed(v.x + rand(-.4, .4), v.y + rand(.6, 2.2) * v.scale, v.z + rand(-.2, .2), i % 2 ? dir : -dir, 60);
+      v.blastApart(dir);
+      if (h.attacker === this.player) this.goreBonus(v, 'shatter');
+    }
+  }
   shake(m) { this.shakeMag = Math.max(this.shakeMag, m); }
   banner(text, dur = 2) { this.hooks.banner(text, dur); }
   say(a, text) { this.texts.add(a.x, a.y + 2.5 * a.scale, a.z, text, 'say'); }
