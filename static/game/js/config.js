@@ -251,6 +251,8 @@ export const RENDER = {
   // 피 강조 (배경 팔레트는 그대로 두고 피만 또렷하게): k 피 색 밝기, floor 그늘·어두운 바닥에서도 남기는 최소 밝기(피 색 대비), wet 위를 향한 핏자국의 젖은 윤기
   // 바이옴마다 BIOMES[*].blood = { k, floor, wet } 배율로 조정
   blood: { k: 1, floor: .5, wet: .05 },
+  // 레트로 브라운관 효과 (무기방 9번으로 켜고 끔, 선택은 브라우저에 저장): 주사선 수(화면 높이당)·세기, 화면 휨, 색 번짐, RGB 격자, 깜빡임
+  crt: { lines: 260, scan: .42, curve: .055, aberr: .35, mask: .07, flicker: .012 },
   mobile: { dprMax: 1.5, shadowSize: 2048, msaa: 4 },   // 휴대폰·태블릿 설정 (사양 좋은 폰 기준)
 };
 

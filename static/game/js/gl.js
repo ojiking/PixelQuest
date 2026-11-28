@@ -238,32 +238,54 @@ uniform vec4 uGrade;       // x 대비, y 채도, z 비네트, w 빛 번짐 세�
 uniform vec4 uVig;         // 주인공 중심 비네트: xy 중심(화면 uv), z 밝게 남는 반경, w 완전히 어두워지는 반경 (화면 높이 기준)
 uniform vec3 uLift;        // 그늘 색 (아주 살짝 따뜻하게)
 uniform float uOn;
+uniform vec4 uCRT;         // 레트로 브라운관: x 켜짐, y 주사선 세기, z 화면 휨, w 색 번짐
+uniform vec3 uCRT2;        // x 주사선 수(화면 높이당), y RGB 격자 세기, z 깜빡임 세기
+uniform float uTime;
 out vec4 o;
 float lin(float d) { float z = d * 2.0 - 1.0; return 2.0 * uNF.x * uNF.y / (uNF.y + uNF.x - z * (uNF.y - uNF.x)); }
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 void main() {
-  vec3 c = texture(uScene, vUV).rgb;
+  vec2 uv = vUV, cc = vUV * 2.0 - 1.0;
+  if (uCRT.x > 0.5) {
+    // 브라운관 화면 휨: 가장자리로 갈수록 바깥으로 부풀어 둥근 화면처럼, 휜 바깥은 검게
+    cc += cc * (cc.yx * cc.yx) * uCRT.z;
+    uv = cc * 0.5 + 0.5;
+    if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) { o = vec4(0.0, 0.0, 0.0, 1.0); return; }
+  }
+  vec3 c = texture(uScene, uv).rgb;
+  if (uCRT.x > 0.5 && uCRT.w > 0.0) {   // 색 번짐: 가장자리에서 빨강·파랑이 살짝 어긋남
+    vec2 off = (uv - 0.5) * uCRT.w * 0.012;
+    c.r = texture(uScene, uv + off).r; c.b = texture(uScene, uv - off).b;
+  }
   if (uOn > 0.5) {
     // 윤곽선: 이웃 픽셀이 훨씬 가까우면(물체 경계 바깥쪽) 어둡게 → 실루엣이 또렷하게
-    float d0 = lin(texture(uDepth, vUV).r), edge = 0.0;
+    float d0 = lin(texture(uDepth, uv).r), edge = 0.0;
     for (int i = 0; i < 4; i++) {
       vec2 off = (i == 0 ? vec2(1, 0) : i == 1 ? vec2(-1, 0) : i == 2 ? vec2(0, 1) : vec2(0, -1)) * uPx * uOutline.y;
-      float dn = lin(texture(uDepth, vUV + off).r);
+      float dn = lin(texture(uDepth, uv + off).r);
       float gap = d0 - dn;
       if (gap > max(0.25, d0 * uOutline.z)) edge = max(edge, clamp(1.0 - dn / uOutline.w, 0.0, 1.0));
     }
     c *= 1.0 - uOutline.x * edge;
-    c += texture(uBloom, vUV).rgb * uGrade.w;
+    c += texture(uBloom, uv).rgb * uGrade.w;
     float l = dot(c, vec3(0.299, 0.587, 0.114));
     c = mix(vec3(l), c, uGrade.y);                                    // 채도
     c = (c - 0.5) * uGrade.x + 0.5;                                   // 대비
     c += uLift * (1.0 - smoothstep(0.0, 0.45, l));                    // 그늘을 살짝 따뜻하게
-    vec2 q = vUV - 0.5;
     // 비네트: 주인공 중심에서 멀수록 어둡게 (시선이 주인공에게 모이게). 화면 높이 기준 거리
-    vec2 dq = (vUV - uVig.xy) * vec2(uPx.y / uPx.x, 1.0);
+    vec2 dq = (uv - uVig.xy) * vec2(uPx.y / uPx.x, 1.0);
     c *= 1.0 - uGrade.z * smoothstep(uVig.z, uVig.w, length(dq));
-    c += (hash(gl_FragCoord.xy) - 0.5) / 255.0;                       // 띠 무늬 방지
   }
+  if (uCRT.x > 0.5) {
+    float sl = 0.5 + 0.5 * cos(uv.y * uCRT2.x * 6.2831853);              // 주사선 (가로줄)
+    c *= mix(1.0, 0.5 + 0.5 * sl, uCRT.y) * (1.0 + uCRT.y * 0.3);         // 어두워진 만큼 밝기 보정
+    float m = mod(floor(gl_FragCoord.x), 3.0);                            // RGB 형광 점 격자
+    c *= mix(vec3(1.0), m < 1.0 ? vec3(1.12, 0.94, 0.94) : m < 2.0 ? vec3(0.94, 1.12, 0.94) : vec3(0.94, 0.94, 1.12), uCRT2.y);
+    vec2 e = smoothstep(vec2(0.0), vec2(0.08), 1.0 - abs(cc));            // 둥근 모서리 쪽 어둡게
+    c *= e.x * e.y;
+    c *= 1.0 - uCRT2.z * (0.5 + 0.5 * sin(uTime * 55.0));                 // 미세한 깜빡임
+  }
+  c += (hash(gl_FragCoord.xy) - 0.5) / 255.0;                         // 띠 무늬 방지
   o = vec4(clamp(c, 0.0, 1.0), 1.0);
 }`;
 
@@ -331,7 +353,8 @@ export class Renderer {
     this.pComp = link(gl, PVS, COMP_FS);
     this.emptyVao = gl.createVertexArray();
     this.lightMode = 1;    // 1 = 새 조명(환경광·불빛·윤곽 빛·그림자), 0 = 예전 조명
-    this.hq ??= 1;          // 1 = 고품질 파이프라인(그림자·후처리), 0 = 끔 (무기방 비교용)
+    this.hq ??= 1;
+    try { this.crt = localStorage.getItem('pq_crt') === '1' ? 1 : 0; } catch { this.crt = 0; }   // 레트로 브라운관 효과 (무기방 9번, 브라우저에 저장)          // 1 = 고품질 파이프라인(그림자·후처리), 0 = 끔 (무기방 비교용)
     this.rim = 0;          // 다음에 그리는 메시의 윤곽 빛 세기 (캐릭터를 그릴 때만 켬)
     this.plBuf = new Float32Array(32); this.plcBuf = new Float32Array(32);
     this.pixelScale = 1;   // 기본값 (config.js CAMERA.pixelScale로 덮어씀)
@@ -572,8 +595,9 @@ export class Renderer {
     const L = [-0.42, 0.85, 0.55], ll = Math.hypot(...L);
     this.sunDir = [L[0] / ll, L[1] / ll, L[2] / ll];
     const hq = this.hq && this.lightMode;
-    const T = hq ? this._targets(W, H) : null;
-    const post = hq && T.ok;
+    const wantPost = hq || this.crt;                 // 브라운관 효과는 그림자·후처리를 꺼도 따로 동작
+    const T = wantPost ? this._targets(W, H) : null;
+    const post = wantPost && T.ok;
     const shadowOn = hq && this.shadowOK && cfg.shadowSize > 0;
 
     // 1) 그림자 맵: 불투명한 메시·입체 파편만 (반투명 안개막·평면 표시는 제외)
@@ -650,7 +674,11 @@ export class Renderer {
       const vc = env.vigCenter ?? [0.5, 0.5];
       gl.uniform4f(u.uVig, vc[0], vc[1], g.vigInner, g.vigOuter);
       gl.uniform3fv(u.uLift, g.lift);
-      gl.uniform1f(u.uOn, 1);
+      gl.uniform1f(u.uOn, hq ? 1 : 0);
+      const C = cfg.crt, ln = Math.max(120, Math.min(C.lines, H / 2.2));   // 줄이 너무 가늘면 물결무늬가 생겨 화면 높이에 맞춰 줄 수 제한
+      gl.uniform4f(u.uCRT, this.crt ? 1 : 0, C.scan, C.curve, C.aberr);
+      gl.uniform3f(u.uCRT2, ln, C.mask, C.flicker);
+      gl.uniform1f(u.uTime, performance.now() / 1000);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.bindTexture(gl.TEXTURE_2D, null);
       gl.enable(gl.DEPTH_TEST);
