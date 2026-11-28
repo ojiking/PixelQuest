@@ -65,7 +65,11 @@ export class Player extends Actor {
   // 피칠갑 광폭화: 몸에 피가 묻을 때마다 게이지(rage 0~1)가 오르고, 다 차면 광폭. 무기방에서도 똑같이 동작
   addBlood(k, amt) {
     super.addBlood(k, amt);
-    if (!this.berserk && !(this.rageCd > 0) && !this.dead) this.rage = Math.min(1, this.rage + amt * BERSERK.gain);
+    if (this.berserk || this.rageCd > 0 || this.dead) return;
+    // 한꺼번에 피를 뒤집어써도(무기로 적이 터질 때 수백 방울) 게이지는 일정 속도 이상 오르지 않게: 초당 상한만큼 쌓이는 예산에서 씀
+    const add = Math.min(amt * BERSERK.gain, this.rageBudget ?? BERSERK.maxRate);
+    this.rageBudget = (this.rageBudget ?? BERSERK.maxRate) - add;
+    this.rage = Math.min(1, this.rage + add);
   }
   enterBerserk() {
     const g = this.game;
@@ -86,6 +90,7 @@ export class Player extends Actor {
       }
     } else {
       this.rageCd = Math.max(0, (this.rageCd || 0) - dt);
+      this.rageBudget = Math.min(BERSERK.maxRate * BERSERK.burst, (this.rageBudget ?? BERSERK.maxRate) + BERSERK.maxRate * dt);   // 초당 상한 예산 (조금은 모아 둘 수 있음)
       if (this.rage >= 1 && !this.dead) this.enterBerserk();
       else this.rage = Math.max(0, this.rage - BERSERK.decay * dt);
     }
