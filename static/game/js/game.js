@@ -404,10 +404,12 @@ export class Game {
       e.lastPX = e.x; e.lastPZ = e.z;
       const t = e.target;
       const far = !t || Math.hypot(t.x - e.x, t.z - e.z) > 2.5;
-      e.stuckT = moved < 0.01 && far && e.state !== 'attack' && e.state !== 'down' ? (e.stuckT || 0) + dt : 0;
+      // 공격 차례(토큰)를 기다리며 일부러 거리를 두고 맴도는 적은 '막힘'으로 보지 않음 (예전엔 이 적들이 몇 초마다 순간이동했음)
+      const waiting = (e.def.ai === 'brawler' || e.def.ai === 'shield') && !e.tokenTarget && !off;   // 토큰을 쓰는 AI만
+      e.stuckT = moved < 0.01 && far && !waiting && e.state !== 'attack' && e.state !== 'down' ? (e.stuckT || 0) + dt : 0;
       // 걷고는 있는데 다가오지 못함 (벽·낭떠러지 건너편에서 제자리걸음)
       const dT = t ? Math.hypot(t.x - e.x, (t.z - e.z) * 1.5) : 0;
-      if (!far || e.state === 'attack' || e.state === 'down' || e.grabbedBy || dT < (e.bestD ?? 1e9) - 0.4) { e.bestD = dT; e.noProgT = 0; }
+      if (!far || waiting || e.state === 'attack' || e.state === 'down' || e.grabbedBy || dT < (e.bestD ?? 1e9) - 0.4) { e.bestD = dT; e.noProgT = 0; }
       else e.noProgT = (e.noProgT || 0) + dt;
       const kiter = e.def.ai === 'kiter' && e.hasArms() && !off;   // 거리를 두는 적은 제외
       if (e.offT > 3.5 || e.stuckT > 5 || (!kiter && e.noProgT > 4.5)) {
