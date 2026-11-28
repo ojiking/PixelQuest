@@ -417,7 +417,7 @@ export class Game {
         if (!this.reachable(s.x, this.player.x, s.z)) s = this.stage.safeSpot(L.cx - side * (this.viewHalf - 1.5), this.player.z);
         this.debris.puff(e.x, e.y + 0.5, e.z, [0x9c958a, 0x7a7266], 8, 1.5, .14, .35, -0.3);
         e.x = s.x; e.z = s.z; e.y = this.floorAt(s.x, s.z); e.vx = e.vy = e.vz = 0;
-        if (e.goItem) { e.goItem.claimed = 'blocked'; e.goItem = null; }
+        if (e.goItem) { (e.goItem.gib ?? e.goItem).claimed = 'blocked'; e.goItem = null; }
         e.offT = 0; e.stuckT = 0;
       }
     }
@@ -578,8 +578,9 @@ export class Game {
     if (v.mounted) this.dismount(v, h.dir, true);
     if (v.grabbedBy) this.releaseGrab(v.grabbedBy);
     if (v.weapon) this.dropWeapon(v);
+    if (v.carry && v !== this.player) this.dropCarry(v);   // 적이 들고 있던 머리통 등은 떨어뜨림
     if (v.blocks) this.dropShield(v);
-    if (v.goItem) { v.goItem.claimed = null; v.goItem = null; }
+    if (v.goItem) { const gi = v.goItem.gib ?? v.goItem; if (gi.claimed === v) gi.claimed = null; v.goItem = null; }
     this.releaseToken(v);
     this.run.kills++;
     if (h.explosion) { this.stat('blast'); this.goreBonus(v, 'blast'); }
@@ -979,7 +980,7 @@ export class Game {
 
   startGrab(p, e) {
     e.interrupt(); this.releaseToken(e);
-    if (e.goItem) { e.goItem.claimed = null; e.goItem = null; }
+    if (e.goItem) { (e.goItem.gib ?? e.goItem).claimed = null; e.goItem = null; }
     p.interrupt();
     p.grabbing = e; p.grabT = 0; p.knees = 0;
     e.grabbedBy = p; e.facing = -p.facing; e.vx = e.vz = 0;

@@ -843,6 +843,7 @@ export class Actor {
     }
     g.gibs.spurt(this, k, h.mode === 'saw' ? 0.9 : 0.5);
     if ((k === 'armF' || k === 'handF') && this.weapon) g.dropWeapon(this);
+    if ((k === 'armF' || k === 'handF') && this.carry && this.team === 'enemy') g.dropCarry(this);   // 적이 들고 있던 머리통도 떨어뜨림
     if ((k === 'armB' || k === 'handB') && this.blocks) g.dropShield(this);
   }
 

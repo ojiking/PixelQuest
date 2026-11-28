@@ -124,7 +124,7 @@ export const ATTACKS = {
 // ---------------- 적 ----------------
 // 생김새 = 행동 원칙: 모델(외형)마다 고유 AI와 공격을 가집니다.
 export const ENEMIES = {
-  grunt:   { name: '골목 깡패',    model: 'grunt',   hp: 38,  speed: 2.3,  scale: 1,    ai: 'brawler', attacks: ['ePunch'],                    scrap: [1, 2], pickup: true, armed: { chance: .22, types: ['pipe', 'bat', 'machete', 'whip', 'nunchaku'] } },
+  grunt:   { name: '골목 깡패',    model: 'grunt',   hp: 38,  speed: 2.3,  scale: 1,    ai: 'brawler', attacks: ['ePunch'],                    scrap: [1, 2], pickup: true, pickHead: true, armed: { chance: .22, types: ['pipe', 'bat', 'machete', 'whip', 'nunchaku'] } },
   charger: { name: '돌격 헬멧',    model: 'charger', hp: 60,  speed: 1.7,  scale: 1.08, ai: 'charger', attacks: ['eCharge'],                   scrap: [2, 3] },
   thrower: { name: '벽돌 배달부',  model: 'thrower', hp: 32,  speed: 2.0,  scale: 1,    ai: 'kiter',   attacks: ['eThrow'],                    scrap: [1, 3] },
   brute:   { name: '철거 덩치',    model: 'brute',   hp: 130, speed: 1.35, scale: 1.3,  ai: 'brawler', attacks: ['eSlam', 'ePunch'],           scrap: [3, 5], poise: 14, pickup: true, armed: { chance: .35, types: ['sledge', 'pipe', 'axe', 'chain', 'flail'] } },
@@ -356,6 +356,10 @@ export const FLEX = {
 };
 
 // 집어 든 신체 부위를 무기로 휘두르기 (몸통/상·하반신은 던지기만)
+// 기본 졸개(골목 깡패)가 잘린 머리통을 주워 들고 휘두름: 유저가 적을 보고 '신체 조각도 주울 수 있다'를 배우게 + 막장성
+export const HEAD_PICKUP = {
+  range: 5,         // 이 거리(m) 안의 멈춰 있는 머리통을 찾아감 (무기보다 먼저 노림)
+};
 export const LIMB_WEAPONS = {
   head: { name: '머리통', dmg: 9,  reach: .25, dur: 5, sever: 1.0, knock: 1.3, mode: 'knock', combo: ['swing', 'swing', 'smash'] },
   arm:  { name: '팔',     dmg: 9,  reach: .45, dur: 7, sever: .8,  knock: 1.1, mode: 'knock', combo: ['swing', 'swing', 'smash'] },

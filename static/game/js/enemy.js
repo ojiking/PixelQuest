@@ -1,6 +1,6 @@
 // 적 — 외형(타입)마다 고유 AI. 부위가 파괴되면 행동이 바뀜 (팔 없음 → 발차기, 다리 없음 → 돌진 불가)
 import { Actor } from './actor.js';
-import { ENEMIES, ATTACKS, LANE, WEAPONS } from './config.js';
+import { ENEMIES, ATTACKS, LANE, WEAPONS, LIMB_WEAPONS, HEAD_PICKUP } from './config.js';
 import { clamp, rand } from './math.js';
 import { weaponOk } from './game.js';
 
@@ -34,9 +34,22 @@ export class Enemy extends Actor {
   }
 
   // 근처에 떨어진 무기를 찾아 주우러 감 (전기톱 제외)
+  // 기본 졸개(pickHead)는 잘린 머리통을 먼저 노림 → 유저가 '시체 조각도 주워 쓸 수 있다'는 걸 적을 보고 배움 (무기방에서도 동작)
   seekWeapon() {
-    if (!this.def.pickup || this.mounted || this.weapon || !this.hasArms() || this.goItem || this.game.run.lab) return;
+    if (!this.def.pickup || this.mounted || this.weapon || this.carry || !this.hasArms() || this.goItem) return;
     const g = this.game;
+    if (this.def.pickHead) {
+      let head = null, hd = HEAD_PICKUP.range;
+      for (const gb of g.gibs.list) {
+        if (!gb.rest || gb.part !== 'head' || gb.claimed) continue;
+        const fl = g.floorAt(gb.pos[0], gb.pos[2]);
+        if (fl < -50 || fl > this.y + 0.4) continue;
+        const d = Math.hypot(gb.pos[0] - this.x, (gb.pos[2] - this.z) * 1.3);
+        if (d < hd) { head = gb; hd = d; }
+      }
+      if (head) { head.claimed = this; this.goItem = { gib: head }; this.goItemT = 0; return; }
+    }
+    if (g.run.lab) return;                                       // 무기방: 진열 무기는 줍지 않음
     let best = null, bd = 4.5;
     for (const it of g.items) {
       if (it.kind !== 'weapon' || it.type === 'chainsaw' || WEAPONS[it.type].noPickup || it.claimed || it.remove || it.vy !== 0) continue;
@@ -52,6 +65,7 @@ export class Enemy extends Actor {
   updatePickup(dt = 1 / 60) {
     const it = this.goItem;
     if (!it) return false;
+    if (it.gib) return this.updateHeadPickup(it.gib, dt);
     if (it.remove || this.weapon || !this.hasArms()) { if (it.claimed === this) it.claimed = null; this.goItem = null; return false; }
     // 3초 안에 못 주우면 포기 (그 무기는 다시 노리지 않음)
     this.goItemT = (this.goItemT || 0) + dt;
@@ -69,10 +83,33 @@ export class Enemy extends Actor {
     return true;
   }
 
+  // 잘린 머리통을 주우러 감 → 들고 무기처럼 휘두름 (뱀돌이와 같은 신체 무기 규칙)
+  updateHeadPickup(gb, dt) {
+    const g = this.game;
+    const lost = !g.gibs.list.includes(gb) || !gb.rest || this.weapon || this.carry || !this.hasArms();
+    this.goItemT = (this.goItemT || 0) + dt;
+    if (lost || this.goItemT > 3) { if (gb.claimed === this) gb.claimed = lost ? null : 'blocked'; this.goItem = null; return false; }
+    if (Math.hypot(gb.pos[0] - this.x, gb.pos[2] - this.z) < 0.6) {
+      gb.claimed = null;
+      this.carry = g.gibs.take(gb);
+      this.carry.limb = 'head'; this.carry.local = null; this.carry.dur = LIMB_WEAPONS.head.dur;
+      this.goItem = null;
+      g.texts.add(this.x, 2.3 * this.scale, this.z, '머리통을 주웠다', 'hurt');
+      g.sfx?.('pickup');
+      return false;
+    }
+    this.moveToward(gb.pos[0], gb.pos[2], this.def.speed * 1.2);
+    this.facing = gb.pos[0] > this.x ? 1 : -1;
+    return true;
+  }
+
   onHitLanded(v, d) {
     if (d.weapon && this.weapon) {
       this.weapon.dur -= 1;
       if (this.weapon.dur <= 0) this.game.breakWeapon(this);
+    } else if (d.weapon && this.carry?.limb) {
+      this.carry.dur -= 1;
+      if (this.carry.dur <= 0) this.game.breakCarry(this);
     }
   }
 
@@ -166,8 +203,8 @@ export class Enemy extends Actor {
   // 팔/다리가 없으면 쓸 수 있는 공격으로 대체
   doAttack(key) {
     // 무기를 들고 있으면 무기로 휘두름 (덩치의 내려찍기는 유지)
-    if (this.weapon && this.hasArms() && !['eSlam', 'eCharge', 'eFuse', 'eShuriken', 'eSlash', 'eBash', 'eSawRush', 'eSawSweep'].includes(key)) {
-      const horiz = ['bat', 'chain', 'machete', 'whip'].includes(this.weapon.type);
+    if ((this.weapon || this.carry?.limb) && this.hasArms() && !['eSlam', 'eCharge', 'eFuse', 'eShuriken', 'eSlash', 'eBash', 'eSawRush', 'eSawSweep'].includes(key)) {
+      const horiz = !!this.weapon && ['bat', 'chain', 'machete', 'whip'].includes(this.weapon.type);
       key = horiz ? 'eWeaponH' : 'eWeapon';
     }
     const d = ATTACKS[key];
