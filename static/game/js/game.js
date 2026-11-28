@@ -431,7 +431,10 @@ export class Game {
       }
     }
     if (L.idleT > 25) {
-      for (const e of alive) { if (!e.dead) this.run.kills++; e.dead = true; e.remove = true; this.releaseToken(e); }
+      for (const e of alive) {
+        if (e.isBoss && !e.dead) continue;   // 보스는 절대 지우지 않음 (위의 순간이동으로 화면 안에 데려옴)
+        if (!e.dead) this.run.kills++; e.dead = true; e.remove = true; this.releaseToken(e);
+      }
       L.idleT = 0;
     }
   }
@@ -485,6 +488,9 @@ export class Game {
 
   // ------------------------------------------------ 피해 / 사망
   onDamage(v, dmg, h, back) {
+    // 실제로 싸우고 있으면(적이 맞거나 주인공이 맞음) '진행 막힘' 강제 해제 타이머를 되돌림
+    // (예전엔 적 수가 25초간 안 바뀌면 지워서, 오래 걸리는 보스전에서 보스가 체력이 남은 채 사라졌음)
+    if (this.lock && (v.team === 'enemy' || h.attacker?.team === 'enemy')) this.lock.idleT = 0;
     if (h.ignite) return; // 화염 지속 피해 숫자는 생략 (화면이 지저분해짐)
     const cls = v.team === 'hero' ? 'hurt' : (dmg >= 18 ? 'crit' : '');
     this.texts.add(v.x, v.y + 1.9 * v.scale, v.z, String(dmg), cls);
