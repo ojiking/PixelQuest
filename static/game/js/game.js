@@ -1348,6 +1348,17 @@ export class Game {
   }
 
   // ------------------------------------------------ 렌더링
+  // 주인공 가슴 높이의 화면 위치(uv, 왼쪽 아래 0,0) → 비네트 중심. 부드럽게 따라가서 화면이 출렁이지 않게
+  heroScreenUV() {
+    const p = this.player, v = this.vp;
+    if (!p) return [0.5, 0.5];
+    const x = p.x, y = (p.y || 0) + 1.0, z = p.z;
+    const cx = v[0] * x + v[4] * y + v[8] * z + v[12], cy = v[1] * x + v[5] * y + v[9] * z + v[13], cw = v[3] * x + v[7] * y + v[11] * z + v[15];
+    const u = Math.min(0.85, Math.max(0.15, cx / cw * 0.5 + 0.5)), w = Math.min(0.85, Math.max(0.15, cy / cw * 0.5 + 0.5));
+    const k = Math.min(1, (this.frameDt || 1 / 60) * 6);
+    this.vigUV = this.vigUV ? [this.vigUV[0] + (u - this.vigUV[0]) * k, this.vigUV[1] + (w - this.vigUV[1]) * k] : [u, w];
+    return this.vigUV;
+  }
   render() {
     const r = this.r;
     this.aspect = r.resize();
@@ -1358,7 +1369,7 @@ export class Game {
     mat4.lookAt(this.view, eye, [this.camX + sx * .5, ly, lz], [0, 1, 0]);
     mat4.multiply(this.vp, this.proj, this.view);
     const b = this.stage.biome;
-    r.begin(this.vp, eye, { sky: b.sky, fog: b.fog, fogNear: b.fogNear ?? 34, fogFar: b.fogFar ?? 80, hfog: b.hfog, light: b.light ?? LIGHT, lights: this.collectLights(), near: 0.3, far: 140, focus: [this.camX, 0, -1.5], blood: b.blood });
+    r.begin(this.vp, eye, { sky: b.sky, fog: b.fog, fogNear: b.fogNear ?? 34, fogFar: b.fogFar ?? 80, hfog: b.hfog, light: b.light ?? LIGHT, lights: this.collectLights(), near: 0.3, far: 140, focus: [this.camX, 0, -1.5], blood: b.blood, vigCenter: this.heroScreenUV() });
     this.stains.flush();
     r.drawMesh(this.stage.terrain, IDENT, null, 8, 1, null, true);
     this.drawBiome(r);

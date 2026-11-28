@@ -246,7 +246,8 @@ export const RENDER = {
   outline: { k: .42, px: 1.2, rel: .045, fade: 60 },   // 윤곽선: 세기, 두께(CSS px), 경계로 볼 상대 깊이 차, 이 거리(m)부터 사라짐
   bloom: .9,              // 빛 번짐 세기 (불·동전·눈빛처럼 아주 밝은 곳만)
   bloomThreshold: .9,     // 이 밝기 이상만 번짐 (피부·밝은 모래는 번지지 않게)
-  grade: { contrast: 1.07, saturation: 1.02, vignette: .32, lift: [.012, .006, 0] },   // 대비·채도·가장자리 어둡게·그늘 색
+  // 대비·채도·그늘 색, vignette: 주인공에서 멀수록 어두워지는 세기(0~1), vigInner/vigOuter: 밝게 남는 반경 / 가장 어두워지는 반경 (화면 높이 = 1)
+  grade: { contrast: 1.07, saturation: 1.02, vignette: .55, vigInner: .28, vigOuter: 1.05, lift: [.012, .006, 0] },
   // 피 강조 (배경 팔레트는 그대로 두고 피만 또렷하게): k 피 색 밝기, floor 그늘·어두운 바닥에서도 남기는 최소 밝기(피 색 대비), wet 위를 향한 핏자국의 젖은 윤기
   // 바이옴마다 BIOMES[*].blood = { k, floor, wet } 배율로 조정
   blood: { k: 1, floor: .5, wet: .05 },

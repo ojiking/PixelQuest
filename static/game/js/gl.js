@@ -235,6 +235,7 @@ uniform vec2 uPx;          // 화면 한 픽셀(uv)
 uniform vec2 uNF;          // 카메라 near·far
 uniform vec4 uOutline;     // x 세기, y 두께(px), z 상대 깊이 차, w 사라지는 거리(m)
 uniform vec4 uGrade;       // x 대비, y 채도, z 비네트, w 빛 번짐 세기
+uniform vec4 uVig;         // 주인공 중심 비네트: xy 중심(화면 uv), z 밝게 남는 반경, w 완전히 어두워지는 반경 (화면 높이 기준)
 uniform vec3 uLift;        // 그늘 색 (아주 살짝 따뜻하게)
 uniform float uOn;
 out vec4 o;
@@ -258,7 +259,9 @@ void main() {
     c = (c - 0.5) * uGrade.x + 0.5;                                   // 대비
     c += uLift * (1.0 - smoothstep(0.0, 0.45, l));                    // 그늘을 살짝 따뜻하게
     vec2 q = vUV - 0.5;
-    c *= 1.0 - uGrade.z * pow(clamp(length(q * vec2(1.0, 0.8)) * 1.35, 0.0, 1.0), 2.4);   // 비네트
+    // 비네트: 주인공 중심에서 멀수록 어둡게 (시선이 주인공에게 모이게). 화면 높이 기준 거리
+    vec2 dq = (vUV - uVig.xy) * vec2(uPx.y / uPx.x, 1.0);
+    c *= 1.0 - uGrade.z * smoothstep(uVig.z, uVig.w, length(dq));
     c += (hash(gl_FragCoord.xy) - 0.5) / 255.0;                       // 띠 무늬 방지
   }
   o = vec4(clamp(c, 0.0, 1.0), 1.0);
@@ -644,6 +647,8 @@ export class Renderer {
       const o = cfg.outline, g = cfg.grade;
       gl.uniform4f(u.uOutline, o.k, Math.max(1, o.px * dpr), o.rel, o.fade);
       gl.uniform4f(u.uGrade, g.contrast, g.saturation, g.vignette, cfg.bloom);
+      const vc = env.vigCenter ?? [0.5, 0.5];
+      gl.uniform4f(u.uVig, vc[0], vc[1], g.vigInner, g.vigOuter);
       gl.uniform3fv(u.uLift, g.lift);
       gl.uniform1f(u.uOn, 1);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
