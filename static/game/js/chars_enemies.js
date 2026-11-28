@@ -80,28 +80,25 @@ const TOR_B = { X: 12, TH: 12, D: 22, inset: y => y <= 1 ? 3 : y <= 4 ? 2 : y <=
 // =====================================================================================
 function grunt(r) {
   const skin = SK.tan, HO = 0x5a5654, HOt = tone(HO, .18, .08, .9, 1.08), STR = 0xf2eee4, TEE = 0x2a2828;
-  // 머리 + 후드
+  // 머리: 후드를 벗어 목 뒤로 넘긴 기본 졸개 (후드를 뒤집어쓴 모습은 너무 위압적이라 바꿈)
+  // 헝클어진 짧은 검은 머리 + 덜 험악한 얼굴(꾹 다문 입), 목덜미에 두툼하게 접힌 후드
+  const HAIR = 0x221a14, HAIRL = 0x342820;
   const hd = headGrid(); const s = hd.s;
-  faceBase(s, { skin, stub: 0x4a3424, mouth: 'grit', brow: 0x1a100a, cranium: 3, beardH: 2 });
-  for (let z = 3; z <= 14; z++) for (let y = 6; y <= 9; y++) for (let x = 15; x <= 18; x++) mul(s, x, y, z, y >= 8 ? .6 : .8);   // 후드 그늘에 묻힌 이마·눈
-  // 후드: 얼굴보다 한참 큰 매끈한 천 덩어리(주름은 줄무늬 명암), 얼굴 앞으로 2칸 더 나와 얼굴이 어두운 구멍 안에 들어앉음
-  const cloth = (x, y, z) => shade(HO, 1 + Math.sin(y * .8 + Math.abs(z - 8.5) * .35) * .05 - (x < 8 ? .06 : 0) + (hash3(x, y, z) < .08 ? -.06 : 0));
-  const inFace = (x, y, z) => x >= 13 && y <= 9 && z >= 3 && z <= 14;
-  ell(s, 11.6, 8.8, 8.5, 8.6, 10.2, 9.4, cloth, (x, y, z) => !inFace(x, y, z) && s.get(x, y, z) < 0 && y >= 0);
-  ell(s, 7.5, 13.5, 8.5, 5.2, 5.4, 6.2, cloth, (a, b, c) => s.get(a, b, c) < 0);                         // 둥글게 뒤로 늘어진 정수리 (뾰족하지 않게)
-  ell(s, 9.5, 1.2, 8.5, 8.2, 2.6, 11.2, cloth, (a, b, c) => !inFace(a, b, c) && a < 16 && s.get(a, b, c) < 0);   // 어깨까지 흘러내린 천
-  // 얼굴 구멍: 안쪽 안감은 아주 어둡게, 가장 바깥 테두리는 밝게 → 어두운 틀이 얼굴을 감쌈
-  for (let y = 0; y <= 12; y++) for (let z = 0; z <= 17; z++) {
-    let fx = -1; for (let x = 21; x >= 13; x--) if (s.get(x, y, z) >= 0) { fx = x; break; }
-    if (fx < 0) continue;
-    const opening = (z >= 3 && z <= 14 && y <= 9);
-    if (opening) continue;
-    const edge = (z === 2 || z === 15) && y <= 10 || (y === 10 || y === 11) && z >= 2 && z <= 15;
-    if (edge) { s.set(fx, y, z, shade(HO, 1.3)); for (let x = 15; x < fx; x++) if (s.get(x, y, z) >= 0) s.set(x, y, z, 0x1a1818); }
+  faceBase(s, { skin, stub: 0x4a3424, mouth: 'frown', brow: 0x1a100a, cranium: 3, beardH: 1,
+    scalp: (x, y, z) => hash3(x, y, z) < .3 ? HAIRL : HAIR });
+  for (let z = 3; z <= 14; z++) for (let x = 7; x <= 16; x++) if (s.get(x, 9, z) >= 0 && (x <= 9 || z <= 3 || z >= 14)) s.set(x, 9, z, HAIR);   // 이마 위·옆머리
+  for (let y = 4; y <= 8; y++) for (const z of [3, 14]) { s.set(10, y, z, HAIR); s.set(9, y, z, HAIR); }           // 구레나룻
+  for (let y = 2; y <= 8; y++) for (let z = 4; z <= 13; z++) if (s.get(7, y, z) >= 0) s.set(7, y, z, HAIR);         // 뒷머리
+  for (let k = 0; k < 40; k++) {                                                                                  // 삐죽삐죽 헝클어진 머리끝
+    const x = 8 + Math.floor(hash3(k, 4, 1) * 9), z = 4 + Math.floor(hash3(k, 5, 2) * 10);
+    let top = -1; for (let y = 16; y >= 9; y--) if (s.get(x, y, z) >= 0) { top = y; break; }
+    if (top >= 9 && hash3(k, 6, 3) < .7) s.set(x, top + 1, z, hash3(k, 7, 4) < .5 ? HAIR : HAIRL);
   }
-  for (let z = 3; z <= 14; z++) for (let x = 15; x <= 19; x++) if (s.get(x, 10, z) >= 0 && s.get(x, 9, z) < 0) s.set(x, 10, z, 0x161414);   // 챙 밑면 그늘
-  for (let y = 0; y <= 10; y++) for (const z of [3, 14]) for (let x = 16; x <= 19; x++) if (s.get(x, y, z) < 0 && x >= 18) s.set(x, y, z, 0x1a1818);   // 얼굴 양옆 어두운 틈
-  for (let x = 0; x <= 19; x++) for (let y = 11; y <= 21; y++) recolor(s, x, y, 8, shade(HO, .78));   // 가운데 솔기
+  for (let z = 6; z <= 11; z++) if (s.get(18, 10, z) < 0 && s.get(17, 10, z) >= 0) s.set(18, 10, z, HAIR);         // 앞머리 한 칸 내려옴
+  // 벗어 넘긴 후드: 목 뒤에 두툼하게 접힌 천 (옆에서 보면 뒤로 불룩한 덩어리 → 실루엣 유지)
+  const cloth = (x, y, z) => shade(HO, 1 + Math.sin(x * .9 + Math.abs(z - 8.5) * .4) * .06 + (hash3(x, y, z) < .08 ? -.06 : 0));
+  ell(s, 5.2, 1.6, 8.5, 4.6, 3.4, 8.8, cloth, (x, y, z) => s.get(x, y, z) < 0);
+  ell(s, 4.4, 3.4, 8.5, 2.8, 2.2, 6.2, (x, y, z) => shade(HO, .82), (x, y, z) => s.get(x, y, z) < 0);              // 접힌 안쪽 그늘
   // 몸통: 열린 후드 집업 + 검은 티 + 목걸이 체인 + 허리 체인
   const T = { X: 10, TH: 9, D: 18 }; const tg = torsoGrid(T); const t = tg.s;
   torsoShape(t, T, (rg, x, y, z) => {
